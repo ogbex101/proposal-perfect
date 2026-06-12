@@ -200,6 +200,7 @@ export const generateProposal = createServerFn({ method: "POST" })
         ProposalSchema,
         `You write human, high-converting freelance proposals. Hard rules:
 - No greeting. No "Hi". Start directly with the hook.
+- DO NOT parrot or restate the job post. Echo the client's stated needs only lightly — at most ~30% of the proposal may reflect their requirements; the other ~70% must be YOUR original interpretation, insight, approach, and value they did NOT explicitly ask for. Show you understand the problem more deeply than they described it. Never copy the client's wording verbatim.
 - Forbidden phrases (NEVER use any of these or close variants):
 ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 - Use the assigned HOOK: "${hook.name}" — ${hook.description}

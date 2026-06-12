@@ -31,6 +31,7 @@ import { LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { getProfile, updateProfile, type Credential } from "@/lib/profile.functions";
 import { generateProfileSections } from "@/lib/ai.functions";
 import { AvatarUploader } from "@/components/AvatarUploader";
+import { NichePicker } from "@/components/NichePicker";
 import { CustomHooksPanel, CustomStrategiesPanel } from "@/components/CustomHooksStrategies";
 import { listSubProfiles, upsertSubProfile, deleteSubProfile, type SubProfile } from "@/lib/sub-profile.functions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -527,14 +528,33 @@ function SettingsPage() {
             Add up to 10 niches (e.g. "Full-Stack Developer", "Video Editor"). Enable them to AI-generate your bio, story, and skills.
           </p>
           <div className="mt-4 space-y-3">
-            <TagList
-              label="Your niches"
-              items={niches}
-              placeholder="e.g. React Developer, Video Editor…"
-              onChange={(next) => {
-                if (next.length <= 10) setNiches(next);
-              }}
-            />
+            <div className="space-y-3">
+              <Label>Your niches ({niches.length}/10)</Label>
+              <NichePicker
+                selected={niches}
+                max={10}
+                onAdd={(n) => setNiches([...niches, n])}
+              />
+              {niches.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {niches.map((n) => (
+                    <span
+                      key={n}
+                      className="flex items-center gap-1.5 rounded-full border border-line/60 bg-sidebar px-2.5 py-0.5 text-xs text-white"
+                    >
+                      {n}
+                      <button
+                        onClick={() => setNiches(niches.filter((x) => x !== n))}
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label={`Remove ${n}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
             {niches.length > 0 && (
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Enable niches for AI generation:</Label>
