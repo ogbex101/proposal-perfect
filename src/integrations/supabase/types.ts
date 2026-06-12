@@ -92,6 +92,45 @@ export type Database = {
         }
         Relationships: []
       }
+      generated_portfolios: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          is_published: boolean
+          job_excerpt: string | null
+          niche: string | null
+          slug: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          id?: string
+          is_published?: boolean
+          job_excerpt?: string | null
+          niche?: string | null
+          slug: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          is_published?: boolean
+          job_excerpt?: string | null
+          niche?: string | null
+          slug?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       portfolio_items: {
         Row: {
           created_at: string
