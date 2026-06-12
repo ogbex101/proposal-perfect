@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateText, Output } from "ai";
+import { generateObject } from "ai";
 import { z } from "zod";
 import { FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 
@@ -17,6 +17,10 @@ function handleAiError(err: unknown): never {
   const msg = err instanceof Error ? err.message : String(err);
   if (msg.includes("429")) throw new Error("Rate limit hit. Please wait a moment and try again.");
   if (msg.includes("402")) throw new Error("AI credits exhausted. Please add credits to continue.");
+  // Surface schema validation errors clearly so they're easier to debug
+  if (msg.toLowerCase().includes("schema") || msg.toLowerCase().includes("parse")) {
+    throw new Error("AI response formatting error — please try again.");
+  }
   throw new Error(msg);
 }
 
@@ -42,13 +46,13 @@ export const analyzeJob = createServerFn({ method: "POST" })
       const model = await getModel();
       const hookList = HOOKS.map((h) => `- ${h.id}: ${h.name} — ${h.description}`).join("\n");
       const strategyList = STRATEGIES.map((s) => `- ${s.id}: ${s.name} — ${s.description}`).join("\n");
-      const { experimental_output } = await generateText({
+      const { object } = await generateObject({
         model,
-        experimental_output: Output.object({ schema: AnalysisSchema }),
+        schema: AnalysisSchema,
         system: `You analyze freelance job posts. Be specific, never generic. Interpret, don't repeat. Choose the single best matching hook id and strategy id from these exact lists:\nHOOKS:\n${hookList}\nSTRATEGIES:\n${strategyList}`,
         prompt: `Analyze this job post:\n\n${data.jobDescription}`,
       });
-      return experimental_output;
+      return object;
     } catch (err) {
       handleAiError(err);
     }
@@ -66,13 +70,13 @@ export const generateMilestones = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const model = await getModel();
-      const { experimental_output } = await generateText({
+      const { object } = await generateObject({
         model,
-        experimental_output: Output.object({ schema: MilestonesSchema }),
+        schema: MilestonesSchema,
         system: `Create 2-4 sensible project milestones. Each has a short title and a one-sentence deliverable description. If a budget is given, distribute amounts realistically; otherwise omit amount.`,
         prompt: `Job:\n${data.jobDescription}\n\nBudget: ${data.budget || "not provided"}`,
       });
-      return experimental_output.milestones;
+      return object.milestones;
     } catch (err) {
       handleAiError(err);
     }
@@ -138,13 +142,13 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
         : "";
       const analysisBlock = data.analysis ? `Job analysis:\n${JSON.stringify(data.analysis, null, 2)}` : "";
 
-      const { experimental_output } = await generateText({
+      const { object } = await generateObject({
         model,
-        experimental_output: Output.object({ schema: ProposalSchema }),
+        schema: ProposalSchema,
         system,
         prompt: `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}`,
       });
-      return experimental_output;
+      return object;
     } catch (err) {
       handleAiError(err);
     }
@@ -160,13 +164,13 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const model = await getModel();
-      const { experimental_output } = await generateText({
+      const { object } = await generateObject({
         model,
-        experimental_output: Output.object({ schema: ConversionSchema }),
+        schema: ConversionSchema,
         system: `You write professional, human follow-up replies for a freelancer to send to a client. Three distinct options, each 2-5 sentences, each addressing what the client said and moving toward a close. No "Hi". No "Let me know if you have questions". No fluff.`,
         prompt: `Client said:\n"${data.clientMessage}"\n\nGive me 3 reply options.`,
       });
-      return experimental_output.options;
+      return object.options;
     } catch (err) {
       handleAiError(err);
     }
