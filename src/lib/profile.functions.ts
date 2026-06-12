@@ -2,6 +2,21 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
+// Signed URLs are required because the workspace blocks public buckets.
+// Our storage SELECT policies allow signing for everyone, so this works for
+// both the owner (in-app) and anonymous visitors (public portfolio page).
+const SIGNED_URL_TTL = 60 * 60 * 24 * 7; // 7 days
+
+async function signAvatar(
+  supabase: import("@supabase/supabase-js").SupabaseClient,
+  value: string | null | undefined,
+): Promise<string | null> {
+  if (!value) return null;
+  if (/^https?:\/\//.test(value)) return value; // legacy/public or external URL
+  const { data } = await supabase.storage.from("avatars").createSignedUrl(value, SIGNED_URL_TTL);
+  return data?.signedUrl ?? null;
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type Credential = {
@@ -46,7 +61,9 @@ const profileUpdateSchema = z.object({
   brands_worked: z.array(z.string().max(100)).max(50).optional(),
   default_length: z.enum(["brief", "robust", "explanatory"]).optional(),
   default_plan: z.boolean().optional(),
-  avatar_url: z.string().url().nullable().optional(),
+  // avatar_url now holds a storage PATH (e.g. "<uid>/avatar.jpg"), not a URL,
+  // because the bucket is private and we sign on read.
+  avatar_url: z.string().max(500).nullable().optional(),
 });
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
@@ -67,7 +84,9 @@ export const getProfile = createServerFn({ method: "GET" })
       .eq("user_id", context.userId);
 
     const isAdmin = (roles ?? []).some((r) => r.role === "admin");
-    return { profile, isAdmin };
+    // avatar_url stores a storage PATH (private bucket); sign it for display.
+    const avatarSignedUrl = await signAvatar(context.supabase, profile?.avatar_url);
+    return { profile, isAdmin, avatarSignedUrl };
   });
 
 export const updateProfile = createServerFn({ method: "POST" })
@@ -187,7 +206,9 @@ export const enhanceAvatar = createServerFn({ method: "POST" })
       context.userId,
       enhancedDataUrl,
     );
-    return { publicUrl, path };
+    // previewDataUrl renders instantly in the browser without waiting on the
+    // (cached) public storage URL.
+    return { publicUrl, path, previewDataUrl: enhancedDataUrl };
   });
 
 // ─── AI: Generate a professional avatar from scratch (no photo) ───────────────
@@ -205,7 +226,7 @@ export const generateAvatar = createServerFn({ method: "POST" })
       context.userId,
       generatedDataUrl,
     );
-    return { publicUrl, path };
+    return { publicUrl, path, previewDataUrl: generatedDataUrl };
   });
 
 // ─── Custom Hooks ─────────────────────────────────────────────────────────────
