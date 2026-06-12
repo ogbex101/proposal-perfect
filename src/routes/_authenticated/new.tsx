@@ -34,6 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-constants";
+import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { analyzeJob, generateProposal, generateMilestones, type JobAnalysis } from "@/lib/ai.functions";
 import { saveProposal } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
@@ -79,6 +80,19 @@ function NewProposal() {
 
   const portfolioQuery = useQuery({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
   const portfolio = portfolioQuery.data ?? [];
+
+  const customHooksQuery = useQuery({ queryKey: ["custom-hooks"], queryFn: () => listCustomHooks() });
+  const customStrategiesQuery = useQuery({ queryKey: ["custom-strategies"], queryFn: () => listCustomStrategies() });
+
+  // Merged hook/strategy lists: built-in first, then user's custom ones
+  const allHooks = [
+    ...HOOKS,
+    ...(customHooksQuery.data ?? []).map((h) => ({ id: `custom_hook_${h.id}`, name: `★ ${h.name}`, description: h.content })),
+  ];
+  const allStrategies = [
+    ...STRATEGIES,
+    ...(customStrategiesQuery.data ?? []).map((s) => ({ id: `custom_strat_${s.id}`, name: `★ ${s.name}`, description: s.content })),
+  ];
 
   // Compose the effective job description from whichever input method is active.
   const effectiveJob = useMemo(() => {
@@ -298,7 +312,7 @@ function NewProposal() {
                   <Select value={hookId} onValueChange={setHookId}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {HOOKS.map((h) => (
+                      {allHooks.map((h) => (
                         <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -308,7 +322,7 @@ function NewProposal() {
                   <Select value={strategyId} onValueChange={setStrategyId}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {STRATEGIES.map((s) => (
+                      {allStrategies.map((s) => (
                         <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                       ))}
                     </SelectContent>
