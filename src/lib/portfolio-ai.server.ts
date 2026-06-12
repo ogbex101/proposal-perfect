@@ -2,7 +2,7 @@
 // description + the freelancer's profile, using the Lovable AI gateway (the
 // same server-side provider the proposal features use).
 
-import { generateText, Output } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
 
 const MODEL = "google/gemini-3-flash-preview";
@@ -26,27 +26,27 @@ export type PortfolioProfileInput = {
 // AI-authored portions only. Everything factual (name, story, skills,
 // credentials, brands, contact) comes straight from the profile.
 const CopySchema = z.object({
-  niche: z.string().describe("The freelancer's positioning for THIS job, e.g. 'Conversion-focused Webflow Designer'. 2-5 words."),
-  tagline: z.string().describe("One punchy sentence under the name. Specific, benefit-led, no buzzwords."),
-  aboutClient: z.string().describe("2-3 sentences speaking directly to this client about their situation and what they need, inferred from the job post. Second person ('you')."),
+  niche: z.string(),
+  tagline: z.string(),
+  aboutClient: z.string(),
   whatIDo: z.array(z.object({
-    title: z.string().describe("A service/offering relevant to this job. 2-4 words."),
-    description: z.string().describe("One concrete sentence about the outcome it delivers."),
+    title: z.string(),
+    description: z.string(),
   })).min(3).max(5),
   projects: z.array(z.object({
-    title: z.string().describe("A realistic, specific project name relevant to this job."),
-    description: z.string().describe("2 sentences: what the project was and the measurable result. Concrete and credible, not generic."),
-    tags: z.array(z.string()).min(2).max(4).describe("Short tech/skill tags."),
-    imageKeywords: z.string().describe("3-5 comma-free space-separated visual keywords describing a photo for this project, e.g. 'modern ecommerce website dashboard'."),
+    title: z.string(),
+    description: z.string(),
+    tags: z.array(z.string()).min(2).max(4),
+    imageKeywords: z.string(),
   })).min(3).max(4),
   testimonials: z.array(z.object({
-    quote: z.string().describe("A realistic 1-2 sentence client testimonial relevant to this kind of work. Specific, not gushing."),
-    author: z.string().describe("A plausible full name."),
-    role: z.string().describe("Their role + company type, e.g. 'Founder, DTC skincare brand'."),
+    quote: z.string(),
+    author: z.string(),
+    role: z.string(),
   })).min(2).max(3),
   faqs: z.array(z.object({
-    question: z.string().describe("A real question THIS client would ask before hiring."),
-    answer: z.string().describe("A confident, specific 1-3 sentence answer."),
+    question: z.string(),
+    answer: z.string(),
   })).min(4).max(6),
 });
 
@@ -84,16 +84,44 @@ Rules:
 - "aboutClient" must reference specifics from the job post so it feels personal.
 
 FREELANCER PROFILE:
-${profileBlock}`;
+${profileBlock}
 
-    const { experimental_output } = await generateText({
+CRITICAL: Your entire response must be a single valid JSON object — no markdown, no code fences, no commentary before or after. Start with { and end with }.
+
+Return a JSON object with this exact shape:
+{
+  "niche": "...",
+  "tagline": "...",
+  "aboutClient": "...",
+  "whatIDo": [{"title": "...", "description": "..."}, ...],
+  "projects": [{"title": "...", "description": "...", "tags": ["...", "..."], "imageKeywords": "..."}, ...],
+  "testimonials": [{"quote": "...", "author": "...", "role": "..."}, ...],
+  "faqs": [{"question": "...", "answer": "..."}, ...]
+}`;
+
+    const { text } = await generateText({
       model,
-      experimental_output: Output.object({ schema: CopySchema }),
       system,
       prompt: `Here is the job the client posted. Tailor the portfolio to win it:\n\n${jobDescription}`,
     });
-    if (!experimental_output) throw new Error("AI did not return structured portfolio data. Please try again.");
-    return experimental_output;
+
+    const cleaned = text
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```\s*$/, "")
+      .trim();
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(cleaned);
+    } catch {
+      throw new Error("AI returned malformed JSON. Please try again.");
+    }
+
+    const parsed = CopySchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new Error("AI response did not match the expected format. Please try again.");
+    }
+    return parsed.data;
   } catch (err) {
     handleAiError(err);
   }
