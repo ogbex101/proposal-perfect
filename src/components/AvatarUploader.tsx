@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Camera, Loader2, Sparkles, Upload, Wand2 } from "lucide-react";
+import { Camera, Loader2, Sparkles, Trash2, Upload, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +10,9 @@ interface AvatarUploaderProps {
   currentUrl: string | null | undefined;
   userName?: string | null;
   bio?: string | null;
-  onUploadComplete: (publicUrl: string) => void;
+  onUploadComplete: (path: string) => void;
+  /** Called when the user clears / removes the picture */
+  onClear?: () => void;
 }
 
 // Derive the storage object path ("<uid>/avatar.jpg") from a public avatar URL.
@@ -27,20 +29,26 @@ export function AvatarUploader({
   userName,
   bio,
   onUploadComplete,
+  onClear,
 }: AvatarUploaderProps) {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  // Local preview: starts from currentUrl so it persists across sessions without extra fetches
+  const [preview, setPreview] = useState<string | null>(currentUrl ?? null);
+  // Track if we've cleared so we don't re-hydrate from currentUrl after a clear
+  const [cleared, setCleared] = useState(false);
   // Storage path of the current avatar — set on upload, or derived from currentUrl.
   const [uploadedPath, setUploadedPath] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const displayUrl = preview ?? currentUrl;
+  // Show the signed URL when no local preview exists (i.e., page reload scenario)
+  const displayUrl = cleared ? null : (preview ?? currentUrl);
   const activePath = uploadedPath ?? pathFromPublicUrl(currentUrl);
   const initial = (userName?.trim().charAt(0) ?? "U").toUpperCase();
   const busy = uploading || enhancing || generating;
+  const hasImage = !!displayUrl;
 
   async function handleFile(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -52,13 +60,13 @@ export function AvatarUploader({
       return;
     }
 
-    // Local preview immediately
+    // Show local preview immediately
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
+    setCleared(false);
     setUploading(true);
 
     try {
-      // Get signed upload URL from server
       const { signedUrl, token, path } = await getAvatarUploadUrl({
         data: {
           fileName: file.name,
@@ -66,7 +74,6 @@ export function AvatarUploader({
         },
       });
 
-      // Upload directly to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .uploadToSignedUrl(signedUrl.split("avatars/")[1] ?? "", token, file, {
@@ -77,10 +84,8 @@ export function AvatarUploader({
       if (uploadError) throw new Error(uploadError.message);
 
       setUploadedPath(path);
-      // Keep showing the local file (the bucket is private, so the public URL
-      // would not load). We persist the storage PATH; the parent signs it.
       onUploadComplete(path);
-      toast.success("Profile picture updated");
+      toast.success("Profile picture updated — click Save to keep it.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
       setPreview(null);
@@ -108,12 +113,10 @@ export function AvatarUploader({
     setEnhancing(true);
     const toastId = toast.loading("Enhancing your photo with AI…");
     try {
-      // Runs entirely server-side: the server reads your photo from storage,
-      // sends it to the AI image model, and saves the enhanced result back.
       const { path, previewDataUrl } = await enhanceAvatar({ data: { path: activePath } });
       setUploadedPath(path);
-      // Show the returned image bytes immediately; persist the storage path.
       if (previewDataUrl) setPreview(previewDataUrl);
+      setCleared(false);
       onUploadComplete(path);
       toast.success("Professional headshot ready! Save to keep it.", { id: toastId });
     } catch (err) {
@@ -132,6 +135,7 @@ export function AvatarUploader({
       });
       setUploadedPath(path);
       if (previewDataUrl) setPreview(previewDataUrl);
+      setCleared(false);
       onUploadComplete(path);
       toast.success("AI profile picture ready! Save to keep it.", { id: toastId });
     } catch (err) {
@@ -139,6 +143,14 @@ export function AvatarUploader({
     } finally {
       setGenerating(false);
     }
+  }
+
+  function handleClear() {
+    setPreview(null);
+    setUploadedPath(null);
+    setCleared(true);
+    onClear?.();
+    toast.info("Profile picture cleared — click Save to apply.");
   }
 
   return (
@@ -212,7 +224,7 @@ export function AvatarUploader({
           variant="outline"
           size="sm"
           onClick={handleEnhance}
-          disabled={busy || !displayUrl}
+          disabled={busy || !hasImage}
           className="border-gold/40 text-gold hover:bg-gold/10"
         >
           {enhancing ? (
@@ -237,6 +249,19 @@ export function AvatarUploader({
           )}
           Generate AI photo
         </Button>
+
+        {hasImage && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClear}
+            disabled={busy}
+            className="border-destructive/40 text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+            Clear resource
+          </Button>
+        )}
       </div>
     </div>
   );
