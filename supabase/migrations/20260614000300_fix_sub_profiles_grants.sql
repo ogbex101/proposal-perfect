@@ -1,3 +1,6 @@
+-- Ensure sub_profiles table exists (idempotent) and has correct grants.
+-- This migration fixes cases where the table was created without GRANT statements.
+
 CREATE TABLE IF NOT EXISTS public.sub_profiles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -34,3 +37,7 @@ DO $$ BEGIN
       WITH CHECK (auth.uid() = user_id);
   END IF;
 END $$;
+
+-- Ensure niches column exists on profiles (idempotent)
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS niches text[] DEFAULT '{}';
