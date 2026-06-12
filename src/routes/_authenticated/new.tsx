@@ -39,8 +39,7 @@ import { analyzeJob, generateProposal, generateMilestones, type JobAnalysis } fr
 import { saveProposal } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
-import { ProfilePickerDialog } from "@/components/FreelancerProfileManager";
-import type { FreelancerProfile } from "@/lib/freelancer-profiles.functions";
+type FreelancerProfile = { id: string; label: string };
 import { saveItem } from "@/lib/saved.functions";
 import { copyText, downloadTxt, downloadPdf } from "@/lib/export";
 
@@ -82,9 +81,6 @@ function NewProposal() {
   } | null>(null);
   const [showExplain, setShowExplain] = useState(true);
 
-  // Profile picker — shown before saving a proposal
-  const [profilePickerOpen, setProfilePickerOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"save" | "template" | null>(null);
   const [chosenProfile, setChosenProfile] = useState<FreelancerProfile | null>(null);
 
   const portfolioQuery = useQuery({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
@@ -237,24 +233,11 @@ function NewProposal() {
   }
 
   function requestSave() {
-    setPendingAction("save");
-    setProfilePickerOpen(true);
+    saveMutation.mutate(undefined);
   }
 
   function requestSaveTemplate() {
-    setPendingAction("template");
-    setProfilePickerOpen(true);
-  }
-
-  function handleProfileChosen(profile: FreelancerProfile) {
-    setChosenProfile(profile);
-    setProfilePickerOpen(false);
-    if (pendingAction === "save") {
-      saveMutation.mutate(profile);
-    } else if (pendingAction === "template") {
-      saveTemplateMutation.mutate();
-    }
-    setPendingAction(null);
+    saveTemplateMutation.mutate();
   }
 
   return (
@@ -516,12 +499,6 @@ function NewProposal() {
             />
           )}
 
-          <ProfilePickerDialog
-            open={profilePickerOpen}
-            onClose={() => { setProfilePickerOpen(false); setPendingAction(null); }}
-            onConfirm={handleProfileChosen}
-            title="Which profile do you want to use for this proposal?"
-          />
         </div>
       </div>
     </div>
