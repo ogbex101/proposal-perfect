@@ -38,6 +38,7 @@ import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { analyzeJob, generateProposal, generateMilestones, type JobAnalysis } from "@/lib/ai.functions";
 import { saveProposal } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
+import { PortfolioPicker } from "@/components/PortfolioPicker";
 import { saveItem } from "@/lib/saved.functions";
 import { copyText, downloadTxt, downloadPdf } from "@/lib/export";
 
@@ -66,6 +67,7 @@ function NewProposal() {
   const [length, setLength] = useState<LengthId>("robust");
   const [includePlan, setIncludePlan] = useState(true);
   const [selectedPortfolio, setSelectedPortfolio] = useState<string[]>([]);
+  const [portfolioLink, setPortfolioLink] = useState<string | null>(null);
   const [budget, setBudget] = useState("");
   const [useMilestones, setUseMilestones] = useState(false);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -139,6 +141,14 @@ function NewProposal() {
       const items = portfolio
         .filter((p) => selectedPortfolio.includes(p.id))
         .map((p) => ({ title: p.title, url: p.url, description: p.description }));
+      // Prepend the tailored AI/saved/pasted portfolio link, if one was chosen.
+      if (portfolioLink) {
+        items.unshift({
+          title: "Portfolio",
+          url: portfolioLink,
+          description: "A portfolio tailored to this job.",
+        });
+      }
       return generateProposal({
         data: {
           jobDescription: effectiveJob,
@@ -358,10 +368,17 @@ function NewProposal() {
                 onCheckedChange={setIncludePlan}
               />
 
+              {/* AI / saved / pasted portfolio for this job */}
+              <PortfolioPicker
+                jobDescription={effectiveJob}
+                currentLink={portfolioLink}
+                onLinkChange={setPortfolioLink}
+              />
+
               {/* Portfolio selection */}
               <div>
                 <Label className="annotation mb-2 block !text-muted-foreground">
-                  Portfolio · up to 3
+                  Additional portfolio links · up to 3
                 </Label>
                 {portfolio.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
