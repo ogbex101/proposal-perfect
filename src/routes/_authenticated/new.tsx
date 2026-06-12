@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { analyzeJob, generateProposal, generateMilestones, type JobAnalysis } from "@/lib/ai.functions";
+import { getProposalAnalytics } from "@/lib/proposals.functions";
 import { saveProposal } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
@@ -85,6 +86,8 @@ function NewProposal() {
 
   const portfolioQuery = useQuery({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
   const portfolio = portfolioQuery.data ?? [];
+  const analyticsQuery = useQuery({ queryKey: ["proposal-analytics"], queryFn: () => getProposalAnalytics() });
+  const analytics = analyticsQuery.data;
 
   const customHooksQuery = useQuery({ queryKey: ["custom-hooks"], queryFn: () => listCustomHooks() });
   const customStrategiesQuery = useQuery({ queryKey: ["custom-strategies"], queryFn: () => listCustomStrategies() });
@@ -330,6 +333,13 @@ function NewProposal() {
         <div className="space-y-6">
           <CropCard glow="gold" className="p-5">
             <Eyebrow>Configure</Eyebrow>
+            {analytics && analytics.bestHook && (
+              <div className="mt-3 rounded-md border border-gold/25 bg-gold/[0.06] p-3">
+                <p className="text-xs font-medium text-gold">
+                  💡 Based on your history, <strong>"{HOOKS.find((h) => h.id === analytics.bestHook)?.name ?? analytics.bestHook}"</strong> has the best response rate ({analytics.hookStats.find((h) => h.id === analytics.bestHook)?.responseRate ?? 0}%).
+                </p>
+              </div>
+            )}
             <div className="mt-4 space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Hook">

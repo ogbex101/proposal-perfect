@@ -10,6 +10,9 @@ import {
   Loader2,
   PenLine,
   X,
+  CheckCircle2,
+  Clock,
+  MinusCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,6 +39,7 @@ import {
   listProposals,
   getProposal,
   deleteProposal,
+  markProposalResponse,
 } from "@/lib/proposals.functions";
 import { copyText, downloadTxt, downloadPdf } from "@/lib/export";
 
@@ -52,6 +56,10 @@ type Row = {
   job_description: string;
   length: string;
   content: string;
+  hook: string | null;
+  strategy: string | null;
+  client_responded: boolean | null;
+  responded_at: string | null;
   created_at: string;
 };
 
@@ -89,6 +97,17 @@ function HistoryPage() {
       toast.success("Proposal deleted");
     },
     onError: (e: Error) => toast.error(e.message || "Could not delete"),
+  });
+
+  const respond = useMutation({
+    mutationFn: ({ id, responded }: { id: string; responded: boolean | null }) =>
+      markProposalResponse({ data: { id, responded } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["proposals"] });
+      qc.invalidateQueries({ queryKey: ["proposal-analytics"] });
+      toast.success("Response status updated");
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not update"),
   });
 
   const closeViewer = () => {
@@ -163,12 +182,22 @@ function HistoryPage() {
                 onClick={() => setOpenId(r.id)}
               >
                 <p className="truncate text-sm font-medium text-white">{label(r)}</p>
-                <p className="annotation mt-0.5 !text-muted-foreground">
-                  {r.length} · {new Date(r.created_at).toLocaleDateString(undefined, {
+                <p className="annotation mt-0.5 flex items-center gap-2 !text-muted-foreground">
+                  <span>{r.length} · {new Date(r.created_at).toLocaleDateString(undefined, {
                     year: "numeric",
                     month: "short",
                     day: "numeric",
-                  })}
+                  })}</span>
+                  {r.client_responded === true && (
+                    <span className="flex items-center gap-0.5 text-[10px] font-medium text-emerald-400">
+                      <CheckCircle2 className="h-3 w-3" /> Responded
+                    </span>
+                  )}
+                  {r.client_responded === false && (
+                    <span className="flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground">
+                      <MinusCircle className="h-3 w-3" /> No response
+                    </span>
+                  )}
                 </p>
               </button>
               <div className="flex shrink-0 items-center gap-1">
@@ -238,38 +267,75 @@ function HistoryPage() {
           </div>
 
           {active && (
-            <div className="flex flex-wrap items-center gap-2 border-t border-line/60 px-6 py-4">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  await copyText(active.content);
-                  toast.success("Copied to clipboard");
-                }}
-              >
-                <Copy className="mr-1.5 h-4 w-4" /> Copy
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => downloadTxt(label(active), active.content)}
-              >
-                <FileText className="mr-1.5 h-4 w-4" /> .txt
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => downloadPdf(label(active), active.content)}
-              >
-                <FileDown className="mr-1.5 h-4 w-4" /> PDF
-              </Button>
-              <Button
-                size="sm"
-                className="ml-auto bg-gold text-primary-foreground hover:bg-gold-bright"
-                onClick={closeViewer}
-              >
-                <X className="mr-1.5 h-4 w-4" /> Close
-              </Button>
+            <div className="border-t border-line/60 px-6 py-4 space-y-3">
+              {/* Response tracking */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">Did the client respond?</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={respond.isPending}
+                  onClick={() => respond.mutate({ id: active.id, responded: true })}
+                  className={active.client_responded === true ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-400" : ""}
+                >
+                  <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                  Yes, they replied
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={respond.isPending}
+                  onClick={() => respond.mutate({ id: active.id, responded: false })}
+                  className={active.client_responded === false ? "border-line/60 bg-sidebar text-muted-foreground" : ""}
+                >
+                  <Clock className="mr-1.5 h-3.5 w-3.5" />
+                  Not yet
+                </Button>
+                {active.client_responded !== null && (
+                  <button
+                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    onClick={() => respond.mutate({ id: active.id, responded: null })}
+                    disabled={respond.isPending}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Export / actions */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    await copyText(active.content);
+                    toast.success("Copied to clipboard");
+                  }}
+                >
+                  <Copy className="mr-1.5 h-4 w-4" /> Copy
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => downloadTxt(label(active), active.content)}
+                >
+                  <FileText className="mr-1.5 h-4 w-4" /> .txt
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => downloadPdf(label(active), active.content)}
+                >
+                  <FileDown className="mr-1.5 h-4 w-4" /> PDF
+                </Button>
+                <Button
+                  size="sm"
+                  className="ml-auto bg-gold text-primary-foreground hover:bg-gold-bright"
+                  onClick={closeViewer}
+                >
+                  <X className="mr-1.5 h-4 w-4" /> Close
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
