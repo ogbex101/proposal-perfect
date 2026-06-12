@@ -144,6 +144,14 @@ export async function enhanceImage(sourceDataUrl: string): Promise<string> {
 }
 
 /**
+ * Generate an image from an arbitrary prompt (used for portfolio project shots).
+ * Returns a base64 data URL.
+ */
+export async function generateImagePrompted(prompt: string): Promise<string> {
+  return callGateway(prompt);
+}
+
+/**
  * Generate a professional headshot from scratch (no source photo).
  */
 export async function generateImage(name?: string, bio?: string): Promise<string> {
