@@ -36,7 +36,7 @@ const CopySchema = z.object({
   projects: z.array(z.object({
     title: z.string(),
     description: z.string(),
-    tags: z.array(z.string()).min(2).max(4),
+    tags: z.array(z.string()).max(4),
     imageKeywords: z.string(),
   })).max(4),
   testimonials: z.array(z.object({

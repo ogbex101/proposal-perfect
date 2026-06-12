@@ -511,6 +511,7 @@ function SettingsPage() {
         </CropCard>
 
         {/* ── Save bar ── */}
+
         <div className="flex justify-end">
           <Button
             className="bg-gold text-primary-foreground hover:bg-gold-bright"
@@ -525,6 +526,294 @@ function SettingsPage() {
             Save changes
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SubProfilesPanel() {
+  const qc = useQueryClient();
+  const { subs, activeSubId, setActiveSubId } = useActiveProfile();
+  const [editTarget, setEditTarget] = useState<Partial<SubProfile> | null>(null);
+  const [toDelete, setToDelete] = useState<SubProfile | null>(null);
+
+  const save = useMutation({
+    mutationFn: (d: Parameters<typeof upsertSubProfile>[0]["data"]) =>
+      upsertSubProfile({ data: d }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sub-profiles"] });
+      setEditTarget(null);
+      toast.success("Sub-profile saved");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteSubProfile({ data: { id } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sub-profiles"] });
+      setToDelete(null);
+      toast.success("Sub-profile deleted");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const EMPTY_SUB: Partial<SubProfile> = {
+    label: "",
+    name: null,
+    bio: null,
+    my_story: null,
+    skills: [],
+    credentials: [],
+    brands_worked: [],
+    avatar_url: null,
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Switcher */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">Active profile:</span>
+        <Select
+          value={activeSubId ?? "head"}
+          onValueChange={(v) => setActiveSubId(v === "head" ? null : v)}
+        >
+          <SelectTrigger className="h-8 w-48 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="head">Head Profile (main)</SelectItem>
+            {subs.map((s) => (
+              <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* List */}
+      <div className="space-y-2">
+        {subs.map((s) => (
+          <div key={s.id} className="flex items-center justify-between rounded-lg border border-line/60 px-3 py-2">
+            <div>
+              <p className="text-sm font-medium text-white">{s.label}</p>
+              {s.bio && <p className="text-xs text-muted-foreground truncate max-w-[260px]">{s.bio}</p>}
+            </div>
+            <div className="flex gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-white"
+                onClick={() => setEditTarget(s)}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                onClick={() => setToDelete(s)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        ))}
+        {subs.length === 0 && (
+          <p className="text-xs text-muted-foreground">No sub-profiles yet.</p>
+        )}
+      </div>
+
+      {subs.length < 9 && (
+        <Button variant="outline" size="sm" className="w-full border-dashed"
+          onClick={() => setEditTarget({ ...EMPTY_SUB })}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" /> Add sub-profile
+        </Button>
+      )}
+
+      {/* Edit dialog */}
+      <SubDialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
+        <SubDialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <SubDialogHeader>
+            <SubDialogTitle>{editTarget?.id ? "Edit sub-profile" : "New sub-profile"}</SubDialogTitle>
+          </SubDialogHeader>
+          {editTarget && (
+            <SubProfileForm
+              value={editTarget}
+              onChange={setEditTarget}
+            />
+          )}
+          <SubDialogFooter>
+            <Button variant="ghost" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button
+              className="bg-gold text-primary-foreground hover:bg-gold-bright"
+              disabled={save.isPending || !editTarget?.label?.trim()}
+              onClick={() => {
+                if (!editTarget?.label?.trim()) return;
+                save.mutate({
+                  id: editTarget.id,
+                  label: editTarget.label,
+                  name: editTarget.name || null,
+                  bio: editTarget.bio || null,
+                  my_story: editTarget.my_story || null,
+                  skills: editTarget.skills ?? [],
+                  credentials: editTarget.credentials ?? [],
+                  brands_worked: editTarget.brands_worked ?? [],
+                  avatar_url: editTarget.avatar_url || null,
+                });
+              }}
+            >
+              {save.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </SubDialogFooter>
+        </SubDialogContent>
+      </SubDialog>
+
+      {/* Delete confirm */}
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{toDelete?.label}"?</AlertDialogTitle>
+            <AlertDialogDescription>This sub-profile will be permanently removed.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => toDelete && remove.mutate(toDelete.id)}
+            >Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function SubProfileForm({
+  value,
+  onChange,
+}: {
+  value: Partial<SubProfile>;
+  onChange: (v: Partial<SubProfile>) => void;
+}) {
+  const [skillDraft, setSkillDraft] = useState("");
+  const [brandDraft, setBrandDraft] = useState("");
+
+  return (
+    <div className="space-y-4 py-2">
+      <div className="space-y-1.5">
+        <Label>Persona label <span className="text-destructive">*</span></Label>
+        <Input
+          value={value.label ?? ""}
+          onChange={(e) => onChange({ ...value, label: e.target.value })}
+          placeholder="e.g. Video Editor, Web Dev Persona…"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Name <span className="text-xs text-muted-foreground">(leave blank to use head profile)</span></Label>
+        <Input
+          value={value.name ?? ""}
+          onChange={(e) => onChange({ ...value, name: e.target.value || null })}
+          placeholder="Override name…"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Bio <span className="text-xs text-muted-foreground">(leave blank to inherit)</span></Label>
+        <Textarea
+          rows={3}
+          value={value.bio ?? ""}
+          onChange={(e) => onChange({ ...value, bio: e.target.value || null })}
+          placeholder="Short professional bio for this persona…"
+          className="resize-none"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>My Story <span className="text-xs text-muted-foreground">(leave blank to inherit)</span></Label>
+        <Textarea
+          rows={4}
+          value={value.my_story ?? ""}
+          onChange={(e) => onChange({ ...value, my_story: e.target.value || null })}
+          placeholder="Origin story for this persona…"
+          className="resize-none"
+        />
+      </div>
+      {/* Skills */}
+      <div className="space-y-2">
+        <Label>Skills <span className="text-xs text-muted-foreground">(leave empty to inherit)</span></Label>
+        <div className="flex gap-2">
+          <Input
+            value={skillDraft}
+            onChange={(e) => setSkillDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const v = skillDraft.trim();
+                if (v && !(value.skills ?? []).includes(v)) {
+                  onChange({ ...value, skills: [...(value.skills ?? []), v] });
+                  setSkillDraft("");
+                }
+              }
+            }}
+            placeholder="e.g. Motion Graphics…"
+            className="flex-1"
+          />
+          <Button variant="outline" size="sm" onClick={() => {
+            const v = skillDraft.trim();
+            if (v && !(value.skills ?? []).includes(v)) {
+              onChange({ ...value, skills: [...(value.skills ?? []), v] });
+              setSkillDraft("");
+            }
+          }} disabled={!skillDraft.trim()}>
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        {(value.skills ?? []).length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {(value.skills ?? []).map((sk) => (
+              <span key={sk} className="flex items-center gap-1.5 rounded-full border border-line/60 bg-sidebar px-2.5 py-0.5 text-xs text-white">
+                {sk}
+                <button onClick={() => onChange({ ...value, skills: (value.skills ?? []).filter((s) => s !== sk) })} className="text-muted-foreground hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Brands */}
+      <div className="space-y-2">
+        <Label>Brands worked with <span className="text-xs text-muted-foreground">(leave empty to inherit)</span></Label>
+        <div className="flex gap-2">
+          <Input
+            value={brandDraft}
+            onChange={(e) => setBrandDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const v = brandDraft.trim();
+                if (v && !(value.brands_worked ?? []).includes(v)) {
+                  onChange({ ...value, brands_worked: [...(value.brands_worked ?? []), v] });
+                  setBrandDraft("");
+                }
+              }
+            }}
+            placeholder="e.g. Nike, Shopify…"
+            className="flex-1"
+          />
+          <Button variant="outline" size="sm" onClick={() => {
+            const v = brandDraft.trim();
+            if (v && !(value.brands_worked ?? []).includes(v)) {
+              onChange({ ...value, brands_worked: [...(value.brands_worked ?? []), v] });
+              setBrandDraft("");
+            }
+          }} disabled={!brandDraft.trim()}>
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        {(value.brands_worked ?? []).length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {(value.brands_worked ?? []).map((b) => (
+              <span key={b} className="flex items-center gap-1.5 rounded-full border border-line/60 bg-sidebar px-2.5 py-0.5 text-xs text-white">
+                {b}
+                <button onClick={() => onChange({ ...value, brands_worked: (value.brands_worked ?? []).filter((x) => x !== b) })} className="text-muted-foreground hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
