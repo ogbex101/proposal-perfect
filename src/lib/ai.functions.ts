@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateText, Output } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
 import { FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 
@@ -20,22 +20,40 @@ function handleAiError(err: unknown): never {
   throw new Error(msg);
 }
 
-// Use generateText + Output.object (compatible with the Lovable AI gateway).
-// generateObject uses a different protocol that the gateway does not support.
-async function structured<T>(
-  schema: z.ZodType<T>,
-  system: string,
-  prompt: string,
-): Promise<T> {
+/**
+ * Plain-text JSON approach: ask the model for raw JSON, strip any markdown
+ * fences the model might add, then parse + validate against the Zod schema.
+ * This works with every gateway/model — no SDK structured-output features needed.
+ */
+async function structured<T>(schema: z.ZodType<T>, system: string, prompt: string): Promise<T> {
   const model = await getModel();
-  const { experimental_output } = await generateText({
+
+  const { text } = await generateText({
     model,
-    experimental_output: Output.object({ schema }),
-    system,
+    system:
+      system +
+      "\n\nCRITICAL: Your entire response must be a single valid JSON object — no markdown, no code fences, no commentary before or after. Start with { and end with }.",
     prompt,
   });
-  if (!experimental_output) throw new Error("AI did not return structured data. Please try again.");
-  return experimental_output as T;
+
+  // Strip ```json ... ``` or ``` ... ``` wrappers the model sometimes adds anyway
+  const cleaned = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/, "")
+    .trim();
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(cleaned);
+  } catch {
+    throw new Error("AI returned malformed JSON. Please try again.");
+  }
+
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error("AI response did not match the expected format. Please try again.");
+  }
+  return parsed.data;
 }
 
 // ---------- Analyze Job ----------
@@ -63,7 +81,25 @@ export const analyzeJob = createServerFn({ method: "POST" })
       const strategyList = STRATEGIES.map((s) => `- ${s.id}: ${s.name} — ${s.description}`).join("\n");
       return await structured(
         AnalysisSchema,
-        `You analyze freelance job posts. Be specific, never generic. Interpret, don't repeat. Choose the single best matching hook id and strategy id from these exact lists:\nHOOKS:\n${hookList}\nSTRATEGIES:\n${strategyList}`,
+        `You analyze freelance job posts. Be specific, never generic. Interpret, don't repeat.
+Choose the single best matching hook id and strategy id from these exact lists:
+HOOKS:
+${hookList}
+STRATEGIES:
+${strategyList}
+
+Return a JSON object with these exact keys:
+{
+  "summary": "...",
+  "painPoint": "...",
+  "hiddenNeeds": "...",
+  "technicalDifficulties": [{"title": "...", "explanation": "..."}],
+  "recommendedApproach": "...",
+  "suggestedHookId": "<exact id from list>",
+  "hookReason": "...",
+  "suggestedStrategyId": "<exact id from list>",
+  "strategyReason": "..."
+}`,
         `Analyze this job post:\n\n${data.jobDescription}`,
       );
     } catch (err) {
@@ -87,7 +123,16 @@ export const generateMilestones = createServerFn({ method: "POST" })
     try {
       const result = await structured(
         MilestonesSchema,
-        `Create 2-4 sensible project milestones. Each has a short title and a one-sentence deliverable description. If a budget is given, distribute amounts realistically; otherwise omit amount.`,
+        `Create 2-4 sensible project milestones. Each has a short title and a one-sentence deliverable description. If a budget is given, distribute amounts realistically; otherwise omit amount.
+
+Return a JSON object with this exact shape:
+{
+  "milestones": [
+    {"title": "...", "description": "...", "amount": "..."},
+    ...
+  ]
+}
+Omit "amount" if no budget was given.`,
         `Job:\n${data.jobDescription}\n\nBudget: ${data.budget || "not provided"}`,
       );
       return result.milestones;
@@ -141,16 +186,6 @@ export const generateProposal = createServerFn({ method: "POST" })
       const strategy = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0];
       const length = LENGTHS.find((l) => l.id === data.length) ?? LENGTHS[1];
 
-      const system = `You write human, high-converting freelance proposals. Hard rules:
-- No greeting. No "Hi". Start directly with the hook.
-- Forbidden phrases (NEVER use any of these or close variants):
-${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
-- Use the assigned HOOK: "${hook.name}" — ${hook.description}
-- Use the assigned STRATEGY: "${strategy.name}" — ${strategy.description}
-- Target length: ~${length.target} characters (${length.name}).
-- Structure: Hook paragraph. ${data.portfolioItems.length > 0 && data.length !== "brief" ? "Portfolio paragraph with 2-3 links and one-line relevance for each. " : ""}Deliverables (2-4 sentences about outcomes, not steps). One non-obvious advice/warning sentence. ${data.includePlan ? "2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a simple list. " : ""}One open-ended question. Specific call to action.
-- Return ONLY the content field as the finished proposal text, ready to paste. The explanation field is for the freelancer (why this hook, why this strategy, why this question worked).`;
-
       const portfolioBlock = data.portfolioItems.length
         ? `Portfolio to weave in:\n${data.portfolioItems.map((p) => `- ${p.title} (${p.url}): ${p.description}`).join("\n")}`
         : "No portfolio items provided.";
@@ -163,7 +198,24 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 
       return await structured(
         ProposalSchema,
-        system,
+        `You write human, high-converting freelance proposals. Hard rules:
+- No greeting. No "Hi". Start directly with the hook.
+- Forbidden phrases (NEVER use any of these or close variants):
+${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
+- Use the assigned HOOK: "${hook.name}" — ${hook.description}
+- Use the assigned STRATEGY: "${strategy.name}" — ${strategy.description}
+- Target length: ~${length.target} characters (${length.name}).
+- Structure: Hook paragraph. ${data.portfolioItems.length > 0 && data.length !== "brief" ? "Portfolio paragraph with 2-3 links and one-line relevance for each. " : ""}Deliverables (2-4 sentences about outcomes, not steps). One non-obvious advice/warning sentence. ${data.includePlan ? "2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a simple list. " : ""}One open-ended question. Specific call to action.
+
+Return a JSON object with this exact shape:
+{
+  "content": "<the full proposal text, ready to paste>",
+  "explanation": {
+    "hook": "<why this hook works for this job>",
+    "strategy": "<why this strategy works for this job>",
+    "question": "<why this closing question works>"
+  }
+}`,
         `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}`,
       );
     } catch (err) {
@@ -183,7 +235,12 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
     try {
       const result = await structured(
         ConversionSchema,
-        `You write professional, human follow-up replies for a freelancer to send to a client. Three distinct options, each 2-5 sentences, each addressing what the client said and moving toward a close. No "Hi". No "Let me know if you have questions". No fluff.`,
+        `You write professional, human follow-up replies for a freelancer to send to a client. Three distinct options, each 2-5 sentences, each addressing what the client said and moving toward a close. No "Hi". No "Let me know if you have questions". No fluff.
+
+Return a JSON object with this exact shape:
+{
+  "options": ["reply 1 text", "reply 2 text", "reply 3 text"]
+}`,
         `Client said:\n"${data.clientMessage}"\n\nGive me 3 reply options.`,
       );
       return result.options;
