@@ -242,6 +242,7 @@ function SettingsPage() {
             <AvatarUploader
               currentUrl={avatarUrl}
               userName={name || profile?.email}
+              bio={bio}
               onUploadComplete={(url) => setAvatarUrl(url)}
             />
           </div>
