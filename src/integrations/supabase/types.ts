@@ -38,6 +38,60 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_hooks: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      custom_strategies: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       portfolio_items: {
         Row: {
           created_at: string
@@ -76,31 +130,55 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
+          bio: string | null
+          brands_worked: string[]
           created_at: string
+          credentials: Json
           default_length: string
           default_plan: boolean
           email: string | null
           id: string
+          my_story: string | null
           name: string | null
+          phone: string | null
+          skills: string[]
           updated_at: string
+          whatsapp: string | null
         }
         Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          brands_worked?: string[]
           created_at?: string
+          credentials?: Json
           default_length?: string
           default_plan?: boolean
           email?: string | null
           id: string
+          my_story?: string | null
           name?: string | null
+          phone?: string | null
+          skills?: string[]
           updated_at?: string
+          whatsapp?: string | null
         }
         Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          brands_worked?: string[]
           created_at?: string
+          credentials?: Json
           default_length?: string
           default_plan?: boolean
           email?: string | null
           id?: string
+          my_story?: string | null
           name?: string | null
+          phone?: string | null
+          skills?: string[]
           updated_at?: string
+          whatsapp?: string | null
         }
         Relationships: []
       }
