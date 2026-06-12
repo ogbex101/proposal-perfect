@@ -12,6 +12,9 @@ import {
   GraduationCap,
   Briefcase,
   Zap,
+  Users,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,6 +29,26 @@ import { LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { getProfile, updateProfile, type Credential } from "@/lib/profile.functions";
 import { AvatarUploader } from "@/components/AvatarUploader";
 import { CustomHooksPanel, CustomStrategiesPanel } from "@/components/CustomHooksStrategies";
+import { listSubProfiles, upsertSubProfile, deleteSubProfile, type SubProfile } from "@/lib/sub-profile.functions";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog as SubDialog,
+  DialogContent as SubDialogContent,
+  DialogHeader as SubDialogHeader,
+  DialogTitle as SubDialogTitle,
+  DialogFooter as SubDialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useActiveProfile } from "@/hooks/use-active-profile";
 
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -470,6 +493,20 @@ function SettingsPage() {
             <Button variant="outline" size="sm" disabled>
               Change
             </Button>
+          </div>
+        </CropCard>
+
+        {/* ── 11 · Sub Profiles ── */}
+        <CropCard className="p-6">
+          <Eyebrow index="11">
+            <Users className="inline h-3 w-3 mr-1" />
+            sub profiles
+          </Eyebrow>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Create up to 9 additional personas. Each inherits from your head profile for any field left blank.
+          </p>
+          <div className="mt-4">
+            <SubProfilesPanel />
           </div>
         </CropCard>
 
