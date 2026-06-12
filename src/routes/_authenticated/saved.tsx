@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { HOOKS, STRATEGIES } from "@/lib/proposal-constants";
 import { listSaved, saveItem, deleteSaved } from "@/lib/saved.functions";
 import { copyText } from "@/lib/export";
+import { listGeneratedPortfolios } from "@/lib/portfolio-generate.functions";
 
 export const Route = createFileRoute("/_authenticated/saved")({
   component: SavedPage,
@@ -57,6 +58,8 @@ function SavedPage() {
     queryFn: () => listSaved(),
   });
   const saved = (data ?? []) as Saved[];
+
+  const portfoliosQuery = useQuery({ queryKey: ["generated-portfolios"], queryFn: () => listGeneratedPortfolios() });
 
   const [viewing, setViewing] = useState<Saved | null>(null);
 
@@ -120,6 +123,7 @@ function SavedPage() {
           <TabsTrigger value="library">Saved library</TabsTrigger>
           <TabsTrigger value="hooks">Hooks</TabsTrigger>
           <TabsTrigger value="strategies">Strategies</TabsTrigger>
+          <TabsTrigger value="portfolios">Portfolios</TabsTrigger>
         </TabsList>
 
         {/* Saved library */}
@@ -253,6 +257,48 @@ function SavedPage() {
               );
             })}
           </div>
+        </TabsContent>
+        {/* Portfolios */}
+        <TabsContent value="portfolios">
+          {portfoliosQuery.isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            </div>
+          ) : (portfoliosQuery.data ?? []).length === 0 ? (
+            <EmptyState
+              icon={Briefcase}
+              title="No generated portfolios yet"
+              description="Generate a portfolio from the New Proposal page to see it here."
+            />
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {(portfoliosQuery.data ?? []).map((p) => (
+                <CropCard key={p.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-medium text-white">{p.title}</h3>
+                      {p.niche && (
+                        <span className="mt-1 inline-block rounded-full border border-teal/30 bg-teal/10 px-2 py-0.5 font-mono text-[10px] text-teal">
+                          {p.niche}
+                        </span>
+                      )}
+                      <p className="annotation mt-1 !text-muted-foreground">
+                        {new Date(p.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                      </p>
+                    </div>
+                    <a
+                      href={`/p/${p.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 rounded-md border border-line/60 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-teal/40 hover:text-teal"
+                    >
+                      View →
+                    </a>
+                  </div>
+                </CropCard>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

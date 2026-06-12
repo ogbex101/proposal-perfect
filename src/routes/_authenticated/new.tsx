@@ -36,6 +36,8 @@ import { cn } from "@/lib/utils";
 
 import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
+import { listSubProfiles } from "@/lib/sub-profile.functions";
+import { useActiveProfile } from "@/hooks/use-active-profile";
 import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
@@ -87,6 +89,15 @@ function NewProposal() {
   const [showStrategy, setShowStrategy] = useState(false);
 
   const [chosenProfile, setChosenProfile] = useState<FreelancerProfile | null>(null);
+
+  const { subs, activeSubId } = useActiveProfile();
+  const [selectedSubId, setSelectedSubId] = useState<string | null>(activeSubId);
+
+  const subProfilesQuery = useQuery({
+    queryKey: ["sub-profiles"],
+    queryFn: () => listSubProfiles(),
+  });
+  const subProfiles = subProfilesQuery.data ?? [];
 
   const portfolioQuery = useQuery({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
   const portfolio = portfolioQuery.data ?? [];
@@ -286,6 +297,29 @@ function NewProposal() {
       <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
         {/* LEFT: input + analysis */}
         <div className="space-y-6">
+          {/* Profile selector */}
+          {subProfiles.length > 0 && (
+            <CropCard className="p-4">
+              <div className="flex items-center gap-3">
+                <Label className="shrink-0 text-xs text-muted-foreground">Generating as:</Label>
+                <Select
+                  value={selectedSubId ?? "head"}
+                  onValueChange={(v) => setSelectedSubId(v === "head" ? null : v)}
+                >
+                  <SelectTrigger className="h-8 flex-1 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="head">Head Profile (main)</SelectItem>
+                    {subProfiles.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CropCard>
+          )}
+
           {/* Method switch */}
           <div className="flex gap-2">
             <Segment active={method === "paste"} onClick={() => setMethod("paste")}>

@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Loader2,
   Pin,
+  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,6 +43,7 @@ import {
   upsertPortfolio,
   deletePortfolio,
 } from "@/lib/portfolio.functions";
+import { listGeneratedPortfolios } from "@/lib/portfolio-generate.functions";
 
 export const Route = createFileRoute("/_authenticated/portfolio")({
   component: PortfolioPage,
@@ -347,6 +349,111 @@ function PortfolioPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <GeneratedPortfoliosSection />
+    </div>
+  );
+}
+
+function GeneratedPortfoliosSection() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["generated-portfolios"],
+    queryFn: () => listGeneratedPortfolios(),
+  });
+  const portfolios = data ?? [];
+  const [filter, setFilter] = useState<string>("all");
+
+  if (isLoading) return null;
+  if (portfolios.length === 0) return null;
+
+  // Group by niche
+  const byNiche = new Map<string, typeof portfolios>();
+  for (const p of portfolios) {
+    const key = p.niche?.trim() || "Uncategorized";
+    if (!byNiche.has(key)) byNiche.set(key, []);
+    byNiche.get(key)!.push(p);
+  }
+  const niches = [...byNiche.keys()];
+
+  const filtered = filter === "all"
+    ? portfolios
+    : portfolios.filter((p) => (p.niche || "Uncategorized") === filter);
+
+  const filteredByNiche = new Map<string, typeof portfolios>();
+  for (const p of filtered) {
+    const key = p.niche?.trim() || "Uncategorized";
+    if (!filteredByNiche.has(key)) filteredByNiche.set(key, []);
+    filteredByNiche.get(key)!.push(p);
+  }
+
+  return (
+    <div className="mt-12">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <Eyebrow>Generated portfolios</Eyebrow>
+          <p className="annotation mt-1 !text-muted-foreground">AI-generated portfolios, organized by niche.</p>
+        </div>
+      </div>
+
+      {/* Niche filter pills */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        <button
+          onClick={() => setFilter("all")}
+          className={cn(
+            "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+            filter === "all"
+              ? "border-gold/60 bg-gold/10 text-gold"
+              : "border-line/60 text-muted-foreground hover:border-teal/40 hover:text-white"
+          )}
+        >
+          All ({portfolios.length})
+        </button>
+        {niches.map((n) => (
+          <button
+            key={n}
+            onClick={() => setFilter(n)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              filter === n
+                ? "border-teal/60 bg-teal/10 text-teal"
+                : "border-line/60 text-muted-foreground hover:border-teal/40 hover:text-white"
+            )}
+          >
+            {n} ({byNiche.get(n)!.length})
+          </button>
+        ))}
+      </div>
+
+      {/* Grouped list */}
+      <div className="space-y-8">
+        {[...filteredByNiche.entries()].map(([niche, items]) => (
+          <div key={niche}>
+            <div className="mb-3 flex items-center gap-2">
+              <Tag className="h-3.5 w-3.5 text-teal" />
+              <h3 className="text-sm font-semibold text-white">{niche}</h3>
+              <span className="font-mono text-[10px] text-muted-foreground">({items.length})</span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {items.map((p) => (
+                <CropCard key={p.id} className="p-4">
+                  <h4 className="truncate text-sm font-medium text-white">{p.title}</h4>
+                  <p className="annotation mt-1 !text-muted-foreground">
+                    {new Date(p.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                  <a
+                    href={`/p/${p.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 flex items-center gap-1.5 text-xs text-teal hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" /> View portfolio
+                  </a>
+                </CropCard>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -36,18 +36,28 @@ async function structured<T>(schema: z.ZodType<T>, system: string, prompt: strin
     prompt,
   });
 
-  // Strip ```json ... ``` or ``` ... ``` wrappers the model sometimes adds anyway
-  const cleaned = text
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```\s*$/, "")
-    .trim();
-
-  let raw: unknown;
-  try {
-    raw = JSON.parse(cleaned);
-  } catch {
+  // Strategy 1: strip code fences then parse
+  // Strategy 2: find the first { ... } block spanning the whole response
+  // Strategy 3: find any valid JSON object substring
+  function extractJson(src: string): unknown {
+    const attempts: string[] = [
+      // Strip markdown fences
+      src.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim(),
+      // Take from first { to last }
+      src.slice(src.indexOf("{"), src.lastIndexOf("}") + 1).trim(),
+      // Take from first [ to last ] (array root)
+      src.slice(src.indexOf("["), src.lastIndexOf("]") + 1).trim(),
+    ];
+    for (const candidate of attempts) {
+      if (!candidate) continue;
+      try { return JSON.parse(candidate); } catch { /* try next */ }
+    }
+    // Last resort: regex extract first JSON object
+    const m = src.match(/\{[\s\S]*\}/);
+    if (m) { try { return JSON.parse(m[0]); } catch { /* fall through */ } }
     throw new Error("AI returned malformed JSON. Please try again.");
   }
+  const raw = extractJson(text);
 
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
