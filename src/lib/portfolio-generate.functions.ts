@@ -87,11 +87,13 @@ function imageSource(): ImageSource {
 }
 
 // Produce a project image as a data URL using the configured FREE source.
-async function freeProjectImage(keywords: string, seed: number): Promise<string> {
+async function freeProjectImage(keywords: string, seed: number, projectTitle?: string, niche?: string): Promise<string> {
   if (imageSource() === "stock") {
     return fetchImageAsDataUrl(stockImageUrl(keywords, seed));
   }
-  const prompt = `Professional photograph representing ${keywords}. Modern, clean, high quality, well-lit, no text, no logos.`;
+  // Rich, context-specific prompt so the image actually relates to the project
+  const context = [projectTitle && `Project: "${projectTitle}"`, niche && `Niche: ${niche}`, `Keywords: ${keywords}`].filter(Boolean).join(". ");
+  const prompt = `Photorealistic, professional image for a freelance portfolio. ${context}. Style: modern, clean UI screenshot or workspace photo or product mockup. High resolution, well-lit, no watermarks, no text overlays, no logos.`;
   return fetchImageAsDataUrl(pollinationsUrl(prompt, seed));
 }
 
@@ -99,8 +101,11 @@ async function freeProjectImage(keywords: string, seed: number): Promise<string>
 
 export const generatePortfolio = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { jobDescription: string }) =>
-    z.object({ jobDescription: z.string().min(20).max(15000) }).parse(d),
+  .inputValidator((d: { jobDescription: string; subProfileId?: string }) =>
+    z.object({
+      jobDescription: z.string().min(20).max(15000),
+      subProfileId: z.string().uuid().optional(),
+    }).parse(d),
   )
   .handler(async ({ data, context }) => {
     // 1. Load the freelancer's profile.
@@ -112,17 +117,40 @@ export const generatePortfolio = createServerFn({ method: "POST" })
     if (pErr) throw new Error(pErr.message);
     if (!profile) throw new Error("Complete your profile before generating a portfolio.");
 
-    const skills: string[] = (profile.skills as string[] | null) ?? [];
-    const brands: string[] = (profile.brands_worked as string[] | null) ?? [];
+    // Merge with sub-profile if specified
+    let activeProfile = profile;
+    if (data.subProfileId) {
+      const { data: sub } = await context.supabase
+        .from("sub_profiles")
+        .select("*")
+        .eq("id", data.subProfileId)
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if (sub) {
+        activeProfile = {
+          ...profile,
+          name: (sub as any).name ?? profile.name,
+          bio: (sub as any).bio ?? profile.bio,
+          my_story: (sub as any).my_story ?? profile.my_story,
+          skills: ((sub as any).skills?.length ? (sub as any).skills : profile.skills),
+          credentials: ((sub as any).credentials?.length ? (sub as any).credentials : profile.credentials),
+          brands_worked: ((sub as any).brands_worked?.length ? (sub as any).brands_worked : profile.brands_worked),
+          avatar_url: (sub as any).avatar_url ?? profile.avatar_url,
+        };
+      }
+    }
+
+    const skills: string[] = (activeProfile.skills as string[] | null) ?? [];
+    const brands: string[] = (activeProfile.brands_worked as string[] | null) ?? [];
     const credentials =
-      ((profile.credentials as { title: string; institution: string; year: string }[] | null) ?? []);
+      ((activeProfile.credentials as { title: string; institution: string; year: string }[] | null) ?? []);
 
     // 2. AI copy.
     const { generatePortfolioCopy } = await import("./portfolio-ai.server");
     const copy = await generatePortfolioCopy(data.jobDescription, {
-      name: profile.name ?? "",
-      bio: profile.bio ?? "",
-      myStory: profile.my_story ?? "",
+      name: activeProfile.name ?? "",
+      bio: activeProfile.bio ?? "",
+      myStory: activeProfile.my_story ?? "",
       skills,
       credentials,
       brands,
@@ -134,7 +162,7 @@ export const generatePortfolio = createServerFn({ method: "POST" })
     //    Everything is stored as a portfolio-assets PATH (or external URL) so the
     //    public page can sign it uniformly.
     let avatarUrl = "";
-    const savedAvatar = profile.avatar_url ?? "";
+    const savedAvatar = activeProfile.avatar_url ?? "";
     if (savedAvatar) {
       if (/^https?:\/\//.test(savedAvatar)) {
         avatarUrl = savedAvatar; // legacy external/public URL — use as-is
@@ -163,7 +191,7 @@ export const generatePortfolio = createServerFn({ method: "POST" })
         let headshot: string;
         if (imageSource() === "lovable") {
           const { generateImage } = await import("./avatar-ai.server");
-          headshot = await generateImage(profile.name ?? undefined, `${copy.niche}. ${profile.bio ?? ""}`);
+          headshot = await generateImage(activeProfile.name ?? undefined, `${copy.niche}. ${activeProfile.bio ?? ""}`);
         } else {
           // Free AI headshot (no Lovable credits).
           const prompt = `Professional corporate headshot portrait of a person, ${copy.niche}, neutral studio background, business attire, friendly confident expression, high quality, sharp focus.`;
@@ -189,10 +217,10 @@ export const generatePortfolio = createServerFn({ method: "POST" })
           if (source === "lovable") {
             const { generateImagePrompted } = await import("./avatar-ai.server");
             dataUrl = await generateImagePrompted(
-              `Professional, photorealistic image representing this freelance project: ${proj.title}. ${keywords}. Clean, modern, high quality, well-lit. No text or logos.`,
+              `Photorealistic portfolio image for a freelance project titled "${proj.title}". ${keywords}. Niche: ${copy.niche}. Modern, clean, professional UI or workspace. No text, no logos.`,
             );
           } else {
-            dataUrl = await freeProjectImage(keywords, i + 1);
+            dataUrl = await freeProjectImage(keywords, i + 1, proj.title, copy.niche);
           }
           imageUrl = await uploadImage(context.supabase, `${folder}/project-${i + 1}.png`, dataUrl);
         } catch {
@@ -211,13 +239,13 @@ export const generatePortfolio = createServerFn({ method: "POST" })
     // 5. Assemble — factual fields straight from the profile.
     const portfolio: PortfolioData = {
       hero: {
-        name: profile.name || "Your Name",
+        name: activeProfile.name || "Your Name",
         niche: copy.niche,
         tagline: copy.tagline,
         avatarUrl,
       },
       aboutClient: copy.aboutClient,
-      myStory: profile.my_story ?? "",
+      myStory: activeProfile.my_story ?? "",
       whatIDo: copy.whatIDo,
       skills,
       projects,

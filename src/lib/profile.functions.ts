@@ -59,6 +59,7 @@ const profileUpdateSchema = z.object({
   skills: z.array(z.string().max(100)).max(50).optional(),
   credentials: z.array(credentialSchema).max(20).optional(),
   brands_worked: z.array(z.string().max(100)).max(50).optional(),
+  niches: z.array(z.string().max(100)).max(10).optional(),
   default_length: z.enum(["brief", "robust", "explanatory"]).optional(),
   default_plan: z.boolean().optional(),
   // avatar_url now holds a storage PATH (e.g. "<uid>/avatar.jpg"), not a URL,

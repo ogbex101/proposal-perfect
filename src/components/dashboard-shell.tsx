@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useActiveProfile } from "@/hooks/use-active-profile";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -50,6 +51,7 @@ export function DashboardShell({
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const { activeSub } = useActiveProfile();
   const items = NAV.filter((n) => !n.adminOnly || isAdmin);
   const display = name?.trim() || email?.split("@")[0] || "You";
   const initial = display.charAt(0).toUpperCase();
@@ -108,6 +110,11 @@ export function DashboardShell({
           </div>
 
           <div className="flex items-center gap-3">
+            {activeSub && (
+              <span className="hidden rounded-full border border-teal/40 bg-teal/10 px-2.5 py-0.5 text-[10px] font-medium text-teal sm:block">
+                {activeSub.label}
+              </span>
+            )}
             <div className="flex items-center gap-2.5">
               <span className="grid h-8 w-8 place-items-center rounded-full border border-gold/40 bg-gold/10 text-sm font-semibold text-gold">
                 {initial}
