@@ -26,6 +26,7 @@ import { LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { getProfile, updateProfile, type Credential } from "@/lib/profile.functions";
 import { AvatarUploader } from "@/components/AvatarUploader";
 import { CustomHooksPanel, CustomStrategiesPanel } from "@/components/CustomHooksStrategies";
+import { FreelancerProfileManager } from "@/components/FreelancerProfileManager";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -245,13 +246,25 @@ function SettingsPage() {
               userName={name || profile?.email}
               bio={bio}
               onUploadComplete={(path) => setAvatarUrl(path)}
+              onClear={() => setAvatarUrl(null)}
             />
           </div>
         </CropCard>
 
-        {/* ── 02 · Basic info ── */}
+        {/* ── 02 · Freelancer profiles ── */}
         <CropCard className="p-6">
-          <Eyebrow index="02">basic info</Eyebrow>
+          <Eyebrow index="02">freelancer profiles</Eyebrow>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Create up to 10 profiles (e.g. Web Developer, Copywriter). Switch between them and choose which one to use when sending a proposal.
+          </p>
+          <div className="mt-4">
+            <FreelancerProfileManager />
+          </div>
+        </CropCard>
+
+        {/* ── 03 · Basic info ── */}
+        <CropCard className="p-6">
+          <Eyebrow index="03">basic info</Eyebrow>
           <div className="mt-4 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -298,7 +311,7 @@ function SettingsPage() {
 
         {/* ── 03 · Bio & story ── */}
         <CropCard className="p-6">
-          <Eyebrow index="03">bio &amp; story</Eyebrow>
+          <Eyebrow index="04">bio &amp; story</Eyebrow>
           <div className="mt-4 space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="bio">Bio</Label>
@@ -335,7 +348,7 @@ function SettingsPage() {
 
         {/* ── 04 · Skills ── */}
         <CropCard className="p-6">
-          <Eyebrow index="04">
+          <Eyebrow index="05">
             <Zap className="inline h-3 w-3 mr-1" />
             skills
           </Eyebrow>
@@ -349,9 +362,9 @@ function SettingsPage() {
           </div>
         </CropCard>
 
-        {/* ── 05 · Credentials ── */}
+        {/* ── 06 · Credentials ── */}
         <CropCard className="p-6">
-          <Eyebrow index="05">
+          <Eyebrow index="06">
             <GraduationCap className="inline h-3 w-3 mr-1" />
             credentials
           </Eyebrow>
