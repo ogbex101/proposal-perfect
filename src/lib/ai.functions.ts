@@ -223,6 +223,123 @@ Return a JSON object with this exact shape:
     }
   });
 
+// ---------- Generate Profile Sections ----------
+const ProfileSectionsSchema = z.object({
+  bio: z.string(),
+  myStory: z.string(),
+  skills: z.array(z.string()),
+  credentials: z.array(z.object({ title: z.string(), institution: z.string(), year: z.string() })).optional(),
+});
+export type GeneratedProfileSections = z.infer<typeof ProfileSectionsSchema>;
+
+export const generateProfileSections = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { niches: string[]; jobContext?: string }) =>
+    z.object({
+      niches: z.array(z.string().max(100)).min(1).max(10),
+      jobContext: z.string().max(5000).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const nicheList = data.niches.join(", ");
+      const jobBlock = data.jobContext
+        ? `\n\nJob context (tailor the profile to fit this job):\n${data.jobContext}`
+        : "";
+      return await structured(
+        ProfileSectionsSchema,
+        `You generate professional freelancer profile content for a settings page. Be specific, credible, and human. No buzzwords. The freelancer's niches are: ${nicheList}.${jobBlock}
+
+Return a JSON object with these exact keys:
+{
+  "bio": "<1-3 sentences professional bio>",
+  "myStory": "<3-5 sentences origin story — what drives them, key experiences, why clients trust them>",
+  "skills": ["<skill 1>", "<skill 2>", ... "<up to 15 trending, specific skills for the niche>"],
+  "credentials": [{"title": "...", "institution": "...", "year": "..."}]
+}
+For credentials, suggest 2-3 plausible certifications or degrees relevant to the niche. Use empty array if no logical credentials apply.`,
+        `Generate a complete professional profile for a freelancer with these niches: ${nicheList}.${jobBlock}`,
+      );
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
+// ---------- Generate Strategy Document ----------
+const StrategySchema = z.object({
+  projectTitle: z.string(),
+  overview: z.string(),
+  totalDays: z.number(),
+  phases: z.array(z.object({
+    phase: z.number(),
+    name: z.string(),
+    days: z.string(),
+    deliverables: z.array(z.string()),
+    risks: z.array(z.string()),
+  })),
+  criticalPath: z.array(z.string()),
+  featureBreakdown: z.array(z.object({
+    feature: z.string(),
+    priority: z.enum(["Must Have", "Should Have", "Nice to Have"]),
+    estimatedDays: z.number(),
+    notes: z.string(),
+  })),
+  successMetrics: z.array(z.string()),
+  recommendation: z.string(),
+});
+export type StrategyDocument = z.infer<typeof StrategySchema>;
+
+export const generateStrategyDocument = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { jobDescription: string; analysis?: JobAnalysis | null; budget?: string }) =>
+    z.object({
+      jobDescription: z.string().min(10),
+      analysis: z.any().optional().nullable(),
+      budget: z.string().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const analysisBlock = data.analysis
+        ? `\nJob analysis:\n${JSON.stringify(data.analysis, null, 2)}`
+        : "";
+      return await structured(
+        StrategySchema,
+        `You are a senior project manager writing a strategy document for a freelancer to share with a client. Be specific, realistic, and professional. Break the project into 3-5 clear phases.
+
+Return a JSON object with this exact shape:
+{
+  "projectTitle": "<short project title from the job>",
+  "overview": "<2-3 sentence project overview>",
+  "totalDays": <total estimated working days as number>,
+  "phases": [
+    {
+      "phase": 1,
+      "name": "<phase name>",
+      "days": "<e.g. Day 1-5>",
+      "deliverables": ["<deliverable 1>", ...],
+      "risks": ["<risk or delay factor>", ...]
+    }
+  ],
+  "criticalPath": ["<critical item 1>", "<critical item 2>", ...],
+  "featureBreakdown": [
+    {
+      "feature": "<feature name>",
+      "priority": "Must Have",
+      "estimatedDays": <number>,
+      "notes": "<one sentence>"
+    }
+  ],
+  "successMetrics": ["<metric 1>", ...],
+  "recommendation": "<2-3 sentence strategic recommendation>"
+}`,
+        `Create a strategy document for this project:\n\n${data.jobDescription}${analysisBlock}\n\nBudget: ${data.budget || "not specified"}`,
+      );
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
 // ---------- Conversion Messages ----------
 const ConversionSchema = z.object({ options: z.array(z.string()).min(1).max(3) });
 

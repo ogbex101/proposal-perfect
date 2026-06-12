@@ -15,6 +15,8 @@ import {
   Users,
   Pencil,
   Trash2,
+  Layers,
+  Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +29,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { getProfile, updateProfile, type Credential } from "@/lib/profile.functions";
+import { generateProfileSections } from "@/lib/ai.functions";
 import { AvatarUploader } from "@/components/AvatarUploader";
 import { CustomHooksPanel, CustomStrategiesPanel } from "@/components/CustomHooksStrategies";
 import { listSubProfiles, upsertSubProfile, deleteSubProfile, type SubProfile } from "@/lib/sub-profile.functions";
@@ -200,6 +203,8 @@ function SettingsPage() {
   const [skills, setSkills] = useState<string[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
+  const [niches, setNiches] = useState<string[]>([]);
+  const [activeNiches, setActiveNiches] = useState<Set<string>>(new Set());
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [defaultLength, setDefaultLength] = useState<LengthId>("robust");
   const [defaultPlan, setDefaultPlan] = useState(false);
@@ -214,6 +219,7 @@ function SettingsPage() {
     setSkills(profile.skills ?? []);
     setCredentials((profile.credentials as Credential[]) ?? []);
     setBrands(profile.brands_worked ?? []);
+    setNiches((profile.niches as string[]) ?? []);
     setAvatarUrl(profile.avatar_url ?? null);
     setDefaultLength((profile.default_length as LengthId) ?? "robust");
     setDefaultPlan(profile.default_plan ?? false);
@@ -231,6 +237,7 @@ function SettingsPage() {
           skills,
           credentials,
           brands_worked: brands,
+          niches,
           avatar_url: avatarUrl,
           default_length: defaultLength,
           default_plan: defaultPlan,
@@ -510,6 +517,67 @@ function SettingsPage() {
           </div>
         </CropCard>
 
+        {/* ── Niches ── */}
+        <CropCard className="p-6">
+          <Eyebrow index="00">
+            <Layers className="inline h-3 w-3 mr-1" />
+            niches
+          </Eyebrow>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Add up to 10 niches (e.g. "Full-Stack Developer", "Video Editor"). Enable them to AI-generate your bio, story, and skills.
+          </p>
+          <div className="mt-4 space-y-3">
+            <TagList
+              label="Your niches"
+              items={niches}
+              placeholder="e.g. React Developer, Video Editor…"
+              onChange={(next) => {
+                if (next.length <= 10) setNiches(next);
+              }}
+            />
+            {niches.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Enable niches for AI generation:</Label>
+                <div className="flex flex-wrap gap-2">
+                  {niches.map((n) => (
+                    <button
+                      key={n}
+                      onClick={() =>
+                        setActiveNiches((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(n)) next.delete(n); else next.add(n);
+                          return next;
+                        })
+                      }
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        activeNiches.has(n)
+                          ? "border-gold/60 bg-gold/10 text-gold"
+                          : "border-line/60 text-muted-foreground hover:border-teal/40 hover:text-white"
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </CropCard>
+
+        {/* ── AI Profile Generator ── */}
+        {niches.length > 0 && activeNiches.size > 0 && (
+          <AiProfileGenerator
+            activeNiches={[...activeNiches]}
+            onApply={(sections) => {
+              if (sections.bio) setBio(sections.bio);
+              if (sections.myStory) setMyStory(sections.myStory);
+              if (sections.skills?.length) setSkills(sections.skills);
+              if (sections.credentials?.length) setCredentials(sections.credentials);
+            }}
+          />
+        )}
+
         {/* ── Save bar ── */}
 
         <div className="flex justify-end">
@@ -528,6 +596,77 @@ function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function AiProfileGenerator({
+  activeNiches,
+  onApply,
+}: {
+  activeNiches: string[];
+  onApply: (s: import("@/lib/ai.functions").GeneratedProfileSections) => void;
+}) {
+  const [preview, setPreview] = useState<import("@/lib/ai.functions").GeneratedProfileSections | null>(null);
+
+  const generate = useMutation({
+    mutationFn: () => generateProfileSections({ data: { niches: activeNiches } }),
+    onSuccess: (result) => {
+      if (result) setPreview(result);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <CropCard className="p-6 border-gold/30">
+      <Eyebrow>
+        <Wand2 className="inline h-3 w-3 mr-1 text-gold" />
+        <span className="text-gold">AI profile generator</span>
+      </Eyebrow>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Generating for: <span className="text-white">{activeNiches.join(", ")}</span>
+      </p>
+      <div className="mt-4 flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={generate.isPending}
+          onClick={() => generate.mutate()}
+          className="border-gold/40 text-gold hover:bg-gold/10"
+        >
+          {generate.isPending ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Wand2 className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          Generate profile sections
+        </Button>
+        {preview && (
+          <Button
+            size="sm"
+            className="bg-gold text-primary-foreground hover:bg-gold-bright"
+            onClick={() => { onApply(preview); setPreview(null); toast.success("Profile sections applied — save to keep"); }}
+          >
+            Apply all sections
+          </Button>
+        )}
+      </div>
+      {preview && (
+        <div className="mt-4 space-y-3 rounded-lg border border-line/60 bg-background/40 p-4">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Bio preview</p>
+            <p className="text-sm text-foreground/90">{preview.bio}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Skills ({preview.skills.length})</p>
+            <div className="flex flex-wrap gap-1.5">
+              {preview.skills.map((s) => (
+                <span key={s} className="rounded-full border border-line/60 bg-sidebar px-2 py-0.5 text-xs text-white">{s}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </CropCard>
   );
 }
 

@@ -87,11 +87,13 @@ function imageSource(): ImageSource {
 }
 
 // Produce a project image as a data URL using the configured FREE source.
-async function freeProjectImage(keywords: string, seed: number): Promise<string> {
+async function freeProjectImage(keywords: string, seed: number, projectTitle?: string, niche?: string): Promise<string> {
   if (imageSource() === "stock") {
     return fetchImageAsDataUrl(stockImageUrl(keywords, seed));
   }
-  const prompt = `Professional photograph representing ${keywords}. Modern, clean, high quality, well-lit, no text, no logos.`;
+  // Rich, context-specific prompt so the image actually relates to the project
+  const context = [projectTitle && `Project: "${projectTitle}"`, niche && `Niche: ${niche}`, `Keywords: ${keywords}`].filter(Boolean).join(". ");
+  const prompt = `Photorealistic, professional image for a freelance portfolio. ${context}. Style: modern, clean UI screenshot or workspace photo or product mockup. High resolution, well-lit, no watermarks, no text overlays, no logos.`;
   return fetchImageAsDataUrl(pollinationsUrl(prompt, seed));
 }
 
@@ -215,10 +217,10 @@ export const generatePortfolio = createServerFn({ method: "POST" })
           if (source === "lovable") {
             const { generateImagePrompted } = await import("./avatar-ai.server");
             dataUrl = await generateImagePrompted(
-              `Professional, photorealistic image representing this freelance project: ${proj.title}. ${keywords}. Clean, modern, high quality, well-lit. No text or logos.`,
+              `Photorealistic portfolio image for a freelance project titled "${proj.title}". ${keywords}. Niche: ${copy.niche}. Modern, clean, professional UI or workspace. No text, no logos.`,
             );
           } else {
-            dataUrl = await freeProjectImage(keywords, i + 1);
+            dataUrl = await freeProjectImage(keywords, i + 1, proj.title, copy.niche);
           }
           imageUrl = await uploadImage(context.supabase, `${folder}/project-${i + 1}.png`, dataUrl);
         } catch {

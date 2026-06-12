@@ -14,6 +14,7 @@ import {
   Plus,
   Trash2,
   RotateCcw,
+  Map,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -35,7 +36,8 @@ import { cn } from "@/lib/utils";
 
 import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
-import { analyzeJob, generateProposal, generateMilestones, type JobAnalysis } from "@/lib/ai.functions";
+import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
+import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
@@ -80,6 +82,9 @@ function NewProposal() {
     question: string;
   } | null>(null);
   const [showExplain, setShowExplain] = useState(true);
+
+  const [strategyDoc, setStrategyDoc] = useState<StrategyDocument | null>(null);
+  const [showStrategy, setShowStrategy] = useState(false);
 
   const [chosenProfile, setChosenProfile] = useState<FreelancerProfile | null>(null);
 
@@ -177,6 +182,25 @@ function NewProposal() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Generation failed"),
   });
 
+  const strategyMutation = useMutation({
+    mutationFn: () =>
+      generateStrategyDocument({
+        data: {
+          jobDescription: effectiveJob,
+          analysis,
+          budget: budget || undefined,
+        },
+      }),
+    onSuccess: (result) => {
+      if (result) {
+        setStrategyDoc(result);
+        setShowStrategy(true);
+        toast.success("Strategy document generated");
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not generate strategy"),
+  });
+
   const saveMutation = useMutation({
     mutationFn: (profile?: FreelancerProfile) => {
       const title =
@@ -232,6 +256,8 @@ function NewProposal() {
     setExplanation(null);
     setMilestones([]);
     setChosenProfile(null);
+    setStrategyDoc(null);
+    setShowStrategy(false);
   }
 
   function requestSave() {
@@ -508,10 +534,85 @@ function NewProposal() {
             />
           )}
 
+          {content && canGenerate && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={strategyMutation.isPending}
+              onClick={() => strategyMutation.mutate()}
+              className="border-teal/40 text-teal hover:bg-teal/10"
+            >
+              {strategyMutation.isPending ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Map className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Generate strategy doc
+            </Button>
+          )}
+
+          {/* Strategy Document */}
+          {strategyDoc && showStrategy && (
+            <div className="mt-6 space-y-3">
+              <div className="flex items-center justify-between">
+                <Eyebrow>Project strategy</Eyebrow>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground"
+                    onClick={() => setShowStrategy(false)}
+                  >
+                    Hide
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadPdf(`Strategy-${strategyDoc.projectTitle}`, formatStrategyAsText(strategyDoc))}
+                  >
+                    <FileDown className="mr-1.5 h-3.5 w-3.5" /> Download PDF
+                  </Button>
+                </div>
+              </div>
+              <StrategyDocumentView doc={strategyDoc} />
+            </div>
+          )}
+
         </div>
       </div>
     </div>
   );
+}
+
+/* ---------- Strategy helper ---------- */
+function formatStrategyAsText(doc: StrategyDocument): string {
+  const lines: string[] = [
+    `STRATEGY DOCUMENT: ${doc.projectTitle}`,
+    `Estimated Duration: ${doc.totalDays} working days`,
+    "",
+    "OVERVIEW",
+    doc.overview,
+    "",
+    "PROJECT PHASES",
+    ...doc.phases.map((p) => [
+      `Phase ${p.phase}: ${p.name} (${p.days})`,
+      "  Deliverables: " + p.deliverables.join(", "),
+      "  Risks: " + p.risks.join(", "),
+    ].join("\n")),
+    "",
+    "FEATURE BREAKDOWN",
+    ...doc.featureBreakdown.map((f) => `• ${f.feature} [${f.priority}] — ${f.estimatedDays}d — ${f.notes}`),
+    "",
+    "CRITICAL PATH",
+    ...doc.criticalPath.map((c, i) => `${i + 1}. ${c}`),
+    "",
+    "SUCCESS METRICS",
+    ...doc.successMetrics.map((m) => `• ${m}`),
+    "",
+    "RECOMMENDATION",
+    doc.recommendation,
+  ];
+  return lines.join("\n");
 }
 
 /* ---------- Analysis panel ---------- */
