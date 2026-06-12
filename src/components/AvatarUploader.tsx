@@ -1,26 +1,46 @@
 import { useCallback, useRef, useState } from "react";
-import { Camera, Loader2, Sparkles, Upload, User } from "lucide-react";
+import { Camera, Loader2, Sparkles, Upload, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { getAvatarUploadUrl } from "@/lib/profile.functions";
+import { enhanceAvatar, generateAvatar, getAvatarUploadUrl } from "@/lib/profile.functions";
 import { cn } from "@/lib/utils";
 
 interface AvatarUploaderProps {
   currentUrl: string | null | undefined;
   userName?: string | null;
+  bio?: string | null;
   onUploadComplete: (publicUrl: string) => void;
 }
 
-export function AvatarUploader({ currentUrl, userName, onUploadComplete }: AvatarUploaderProps) {
+// Derive the storage object path ("<uid>/avatar.jpg") from a public avatar URL.
+function pathFromPublicUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const marker = "/avatars/";
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  return url.slice(idx + marker.length).split("?")[0];
+}
+
+export function AvatarUploader({
+  currentUrl,
+  userName,
+  bio,
+  onUploadComplete,
+}: AvatarUploaderProps) {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  // Storage path of the current avatar — set on upload, or derived from currentUrl.
+  const [uploadedPath, setUploadedPath] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const displayUrl = preview ?? currentUrl;
+  const activePath = uploadedPath ?? pathFromPublicUrl(currentUrl);
   const initial = (userName?.trim().charAt(0) ?? "U").toUpperCase();
+  const busy = uploading || enhancing || generating;
 
   async function handleFile(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -39,7 +59,7 @@ export function AvatarUploader({ currentUrl, userName, onUploadComplete }: Avata
 
     try {
       // Get signed upload URL from server
-      const { signedUrl, token, publicUrl } = await getAvatarUploadUrl({
+      const { signedUrl, token, publicUrl, path } = await getAvatarUploadUrl({
         data: {
           fileName: file.name,
           contentType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
@@ -56,9 +76,9 @@ export function AvatarUploader({ currentUrl, userName, onUploadComplete }: Avata
 
       if (uploadError) throw new Error(uploadError.message);
 
+      setUploadedPath(path);
       // Add cache-bust so browser reloads the new image
-      const bust = `${publicUrl}?t=${Date.now()}`;
-      setPreview(bust);
+      setPreview(`${publicUrl}?t=${Date.now()}`);
       onUploadComplete(publicUrl);
       toast.success("Profile picture updated");
     } catch (err) {
@@ -81,52 +101,42 @@ export function AvatarUploader({ currentUrl, userName, onUploadComplete }: Avata
   );
 
   async function handleEnhance() {
-    if (!displayUrl) {
+    if (!activePath) {
       toast.error("Upload a profile picture first");
       return;
     }
     setEnhancing(true);
+    const toastId = toast.loading("Enhancing your photo with AI…");
     try {
-      // We use Lovable AI gateway for the image description enhancement.
-      // For actual image enhancement, we call the AI endpoint with an
-      // upscale instruction — using the existing Lovable AI gateway pattern.
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Lovable-API-Key": import.meta.env.VITE_LOVABLE_API_KEY ?? "",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image_url",
-                  image_url: { url: displayUrl },
-                },
-                {
-                  type: "text",
-                  text: "Describe this profile photo in detail so I can regenerate an enhanced, professional version: lighting, background, clothing, facial expression, camera angle.",
-                },
-              ],
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) throw new Error("AI enhancement unavailable");
-      const json = await response.json();
-      const description = json?.choices?.[0]?.message?.content ?? "";
-      toast.success("AI analysis done! Use the prompt below to generate an enhanced image.", {
-        description: description.slice(0, 180),
-        duration: 8000,
-      });
+      // Runs entirely server-side: the server reads your photo from storage,
+      // sends it to the AI image model, and saves the enhanced result back.
+      const { publicUrl, path } = await enhanceAvatar({ data: { path: activePath } });
+      setUploadedPath(path);
+      setPreview(`${publicUrl}?t=${Date.now()}`);
+      onUploadComplete(publicUrl);
+      toast.success("Professional headshot ready! Save to keep it.", { id: toastId });
     } catch (err) {
-      toast.error("AI enhancement failed. Try again later.");
+      toast.error(err instanceof Error ? err.message : "AI enhancement failed", { id: toastId });
     } finally {
       setEnhancing(false);
+    }
+  }
+
+  async function handleGenerate() {
+    setGenerating(true);
+    const toastId = toast.loading("Generating an AI profile picture…");
+    try {
+      const { publicUrl, path } = await generateAvatar({
+        data: { name: userName ?? undefined, bio: bio ?? undefined },
+      });
+      setUploadedPath(path);
+      setPreview(`${publicUrl}?t=${Date.now()}`);
+      onUploadComplete(publicUrl);
+      toast.success("AI profile picture ready! Save to keep it.", { id: toastId });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "AI generation failed", { id: toastId });
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -156,9 +166,14 @@ export function AvatarUploader({ currentUrl, userName, onUploadComplete }: Avata
           <span className="text-4xl font-bold text-muted-foreground">{initial}</span>
         )}
 
-        {/* Overlay on hover */}
-        <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity hover:opacity-100">
-          {uploading ? (
+        {/* Overlay on hover / while working */}
+        <div
+          className={cn(
+            "absolute inset-0 flex items-center justify-center rounded-full bg-black/50 transition-opacity",
+            busy ? "opacity-100" : "opacity-0 hover:opacity-100",
+          )}
+        >
+          {busy ? (
             <Loader2 className="h-8 w-8 animate-spin text-white" />
           ) : (
             <Camera className="h-8 w-8 text-white" />
@@ -181,21 +196,22 @@ export function AvatarUploader({ currentUrl, userName, onUploadComplete }: Avata
         Drag & drop or click to upload · max 5 MB
       </p>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap justify-center gap-2">
         <Button
           variant="outline"
           size="sm"
           onClick={() => inputRef.current?.click()}
-          disabled={uploading}
+          disabled={busy}
         >
           <Upload className="mr-1.5 h-3.5 w-3.5" />
           Upload
         </Button>
+
         <Button
           variant="outline"
           size="sm"
           onClick={handleEnhance}
-          disabled={enhancing || uploading}
+          disabled={busy || !displayUrl}
           className="border-gold/40 text-gold hover:bg-gold/10"
         >
           {enhancing ? (
@@ -204,6 +220,21 @@ export function AvatarUploader({ currentUrl, userName, onUploadComplete }: Avata
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
           )}
           Enhance with AI
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleGenerate}
+          disabled={busy}
+          className="border-teal/40 text-teal hover:bg-teal/10"
+        >
+          {generating ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Wand2 className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          Generate AI photo
         </Button>
       </div>
     </div>
