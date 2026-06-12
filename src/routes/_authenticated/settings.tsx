@@ -26,7 +26,7 @@ import { LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { getProfile, updateProfile, type Credential } from "@/lib/profile.functions";
 import { AvatarUploader } from "@/components/AvatarUploader";
 import { CustomHooksPanel, CustomStrategiesPanel } from "@/components/CustomHooksStrategies";
-import { FreelancerProfileManager } from "@/components/FreelancerProfileManager";
+
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -251,16 +251,6 @@ function SettingsPage() {
           </div>
         </CropCard>
 
-        {/* ── 02 · Freelancer profiles ── */}
-        <CropCard className="p-6">
-          <Eyebrow index="02">freelancer profiles</Eyebrow>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Create up to 10 profiles (e.g. Web Developer, Copywriter). Switch between them and choose which one to use when sending a proposal.
-          </p>
-          <div className="mt-4">
-            <FreelancerProfileManager />
-          </div>
-        </CropCard>
 
         {/* ── 03 · Basic info ── */}
         <CropCard className="p-6">
