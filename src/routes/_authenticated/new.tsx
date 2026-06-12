@@ -39,6 +39,8 @@ import { analyzeJob, generateProposal, generateMilestones, type JobAnalysis } fr
 import { saveProposal } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
+import { ProfilePickerDialog } from "@/components/FreelancerProfileManager";
+import type { FreelancerProfile } from "@/lib/freelancer-profiles.functions";
 import { saveItem } from "@/lib/saved.functions";
 import { copyText, downloadTxt, downloadPdf } from "@/lib/export";
 
@@ -79,6 +81,11 @@ function NewProposal() {
     question: string;
   } | null>(null);
   const [showExplain, setShowExplain] = useState(true);
+
+  // Profile picker — shown before saving a proposal
+  const [profilePickerOpen, setProfilePickerOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"save" | "template" | null>(null);
+  const [chosenProfile, setChosenProfile] = useState<FreelancerProfile | null>(null);
 
   const portfolioQuery = useQuery({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
   const portfolio = portfolioQuery.data ?? [];
@@ -173,7 +180,7 @@ function NewProposal() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (profile?: FreelancerProfile) => {
       const title =
         effectiveJob.split("\n")[0].slice(0, 70) || "Untitled proposal";
       return saveProposal({
@@ -190,6 +197,8 @@ function NewProposal() {
           milestones: useMilestones ? milestones : null,
           content,
           explanation,
+          // attach profile label if chosen
+          ...(profile ? { profile_label: profile.label, profile_id: profile.id } : {}),
         },
       });
     },
@@ -224,6 +233,28 @@ function NewProposal() {
     setContent("");
     setExplanation(null);
     setMilestones([]);
+    setChosenProfile(null);
+  }
+
+  function requestSave() {
+    setPendingAction("save");
+    setProfilePickerOpen(true);
+  }
+
+  function requestSaveTemplate() {
+    setPendingAction("template");
+    setProfilePickerOpen(true);
+  }
+
+  function handleProfileChosen(profile: FreelancerProfile) {
+    setChosenProfile(profile);
+    setProfilePickerOpen(false);
+    if (pendingAction === "save") {
+      saveMutation.mutate(profile);
+    } else if (pendingAction === "template") {
+      saveTemplateMutation.mutate();
+    }
+    setPendingAction(null);
   }
 
   return (
@@ -476,13 +507,21 @@ function NewProposal() {
               showExplain={showExplain}
               setShowExplain={setShowExplain}
               title={effectiveJob.split("\n")[0].slice(0, 60) || "Proposal"}
-              onSave={() => saveMutation.mutate()}
+              onSave={requestSave}
               saving={saveMutation.isPending}
-              onSaveTemplate={() => saveTemplateMutation.mutate()}
+              onSaveTemplate={requestSaveTemplate}
               savingTemplate={saveTemplateMutation.isPending}
+              chosenProfile={chosenProfile}
               onGoHistory={() => navigate({ to: "/history" })}
             />
           )}
+
+          <ProfilePickerDialog
+            open={profilePickerOpen}
+            onClose={() => { setProfilePickerOpen(false); setPendingAction(null); }}
+            onConfirm={handleProfileChosen}
+            title="Which profile do you want to use for this proposal?"
+          />
         </div>
       </div>
     </div>
@@ -563,6 +602,7 @@ function OutputPanel({
   saving,
   onSaveTemplate,
   savingTemplate,
+  chosenProfile,
   onGoHistory,
 }: {
   content: string;
@@ -575,13 +615,21 @@ function OutputPanel({
   saving: boolean;
   onSaveTemplate: () => void;
   savingTemplate: boolean;
+  chosenProfile?: { label: string } | null;
   onGoHistory: () => void;
 }) {
   return (
     <CropCard glow="gold" className="p-5 bp-rise">
       <div className="flex items-center justify-between">
         <Eyebrow>Generated proposal</Eyebrow>
-        <span className="font-mono text-[10px] text-muted-foreground">{content.length} chars</span>
+        <div className="flex items-center gap-2">
+          {chosenProfile && (
+            <span className="rounded-full bg-teal/15 px-2 py-0.5 text-[10px] font-medium text-teal">
+              {chosenProfile.label}
+            </span>
+          )}
+          <span className="font-mono text-[10px] text-muted-foreground">{content.length} chars</span>
+        </div>
       </div>
 
       <Textarea
