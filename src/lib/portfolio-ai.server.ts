@@ -4,6 +4,7 @@
 
 import { generateText } from "ai";
 import { z } from "zod";
+import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
 
 const MODEL = "google/gemini-3-flash-preview";
 
@@ -97,7 +98,7 @@ Return a JSON object with this exact shape:
   "projects": [{"title": "...", "description": "...", "tags": ["...", "..."], "imageKeywords": "..."}, ...],
   "testimonials": [{"quote": "...", "author": "...", "role": "..."}, ...],
   "faqs": [{"question": "...", "answer": "..."}, ...]
-}`;
+}${redFlagPromptBlock()}`;
 
     const { text } = await generateText({
       model,
@@ -105,23 +106,35 @@ Return a JSON object with this exact shape:
       prompt: `Here is the job the client posted. Tailor the portfolio to win it:\n\n${jobDescription}`,
     });
 
-    const cleaned = text
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```\s*$/, "")
-      .trim();
-
-    let raw: unknown;
-    try {
-      raw = JSON.parse(cleaned);
-    } catch {
+    const extractJson = (src: string): unknown => {
+      const attempts = [
+        src.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim(),
+        src.slice(src.indexOf("{"), src.lastIndexOf("}") + 1).trim(),
+      ];
+      for (const c of attempts) {
+        if (!c) continue;
+        try { return JSON.parse(c); } catch { /* next */ }
+      }
+      const m = src.match(/\{[\s\S]*\}/);
+      if (m) { try { return JSON.parse(m[0]); } catch { /* fall through */ } }
       throw new Error("AI returned malformed JSON. Please try again.");
-    }
+    };
+    const raw = extractJson(text);
 
     const parsed = CopySchema.safeParse(raw);
     if (!parsed.success) {
       throw new Error("AI response did not match the expected format. Please try again.");
     }
-    return parsed.data;
+    // Scrub red-flag phrases from the human-readable copy fields.
+    const d = parsed.data;
+    return {
+      ...d,
+      tagline: scrubRedFlags(d.tagline),
+      aboutClient: scrubRedFlags(d.aboutClient),
+      whatIDo: d.whatIDo.map((w) => ({ ...w, description: scrubRedFlags(w.description) })),
+      projects: d.projects.map((p) => ({ ...p, description: scrubRedFlags(p.description) })),
+      faqs: d.faqs.map((f) => ({ ...f, answer: scrubRedFlags(f.answer) })),
+    };
   } catch (err) {
     handleAiError(err);
   }

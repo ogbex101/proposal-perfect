@@ -17,6 +17,7 @@ import {
   Trash2,
   Layers,
   Wand2,
+  Flag,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,6 +54,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useActiveProfile } from "@/hooks/use-active-profile";
+import { listRedFlagWords, addRedFlagWord, deleteRedFlagWord } from "@/lib/red-flags.functions";
+import { DEFAULT_RED_FLAGS } from "@/lib/red-flags";
 
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -518,6 +521,21 @@ function SettingsPage() {
           </div>
         </CropCard>
 
+        {/* ── Red Flag Words ── */}
+        <CropCard className="p-6 border-destructive/20">
+          <Eyebrow index="12">
+            <Flag className="inline h-3 w-3 mr-1 text-destructive" />
+            red flag words
+          </Eyebrow>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Phrases that must NEVER appear in your proposals, hooks, strategies, or portfolio.
+            The built-in generic-filler list is always active and can't be turned off. Add your own below.
+          </p>
+          <div className="mt-4">
+            <RedFlagPanel />
+          </div>
+        </CropCard>
+
         {/* ── Niches ── */}
         <CropCard className="p-6">
           <Eyebrow index="00">
@@ -970,6 +988,74 @@ function SubProfileForm({
                   <X className="h-3 w-3" />
                 </button>
               </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RedFlagPanel() {
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState("");
+  const [showDefaults, setShowDefaults] = useState(false);
+
+  const { data: words = [] } = useQuery({
+    queryKey: ["red-flag-words"],
+    queryFn: () => listRedFlagWords(),
+  });
+
+  const add = useMutation({
+    mutationFn: (phrase: string) => addRedFlagWord({ data: { phrase } }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["red-flag-words"] }); setDraft(""); toast.success("Red flag added"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteRedFlagWord({ data: { id } }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["red-flag-words"] }); toast.success("Removed"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (draft.trim().length >= 2) add.mutate(draft.trim()); } }}
+          placeholder='e.g. "I will deliver", "results-driven"…'
+          className="flex-1"
+        />
+        <Button variant="outline" size="sm" disabled={draft.trim().length < 2 || add.isPending} onClick={() => add.mutate(draft.trim())}>
+          <Plus className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {words.length > 0 && (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Your custom red flags</Label>
+          <div className="flex flex-wrap gap-2">
+            {words.map((w) => (
+              <span key={w.id} className="flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-0.5 text-xs text-destructive">
+                {w.phrase}
+                <button onClick={() => remove.mutate(w.id)} className="hover:text-white" aria-label={`Remove ${w.phrase}`}>
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <button onClick={() => setShowDefaults((v) => !v)} className="text-xs text-muted-foreground underline-offset-2 hover:underline">
+          {showDefaults ? "Hide" : "Show"} built-in red flags ({DEFAULT_RED_FLAGS.length}) — always active
+        </button>
+        {showDefaults && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {DEFAULT_RED_FLAGS.map((d) => (
+              <span key={d} className="rounded-full border border-line/60 bg-sidebar px-2 py-0.5 text-[10px] text-muted-foreground">{d}</span>
             ))}
           </div>
         )}

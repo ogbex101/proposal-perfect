@@ -3,6 +3,23 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateText } from "ai";
 import { z } from "zod";
 import { FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
+import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
+
+// Load a user's custom red-flag phrases. Defaults always apply regardless;
+// this only adds the user's own phrases. Wrapped so a missing table never
+// breaks generation.
+async function loadCustomFlags(context: { supabase: any; userId: string }): Promise<string[]> {
+  try {
+    const { data: rfRows } = await context.supabase
+      .from("red_flag_words")
+      .select("phrase")
+      .eq("user_id", context.userId);
+    return (rfRows ?? []).map((r: { phrase: string }) => r.phrase);
+  } catch {
+    /* table may not exist yet; defaults still apply */
+    return [];
+  }
+}
 
 const MODEL = "google/gemini-3-flash-preview";
 
@@ -109,7 +126,7 @@ Return a JSON object with these exact keys:
   "hookReason": "...",
   "suggestedStrategyId": "<exact id from list>",
   "strategyReason": "..."
-}`,
+}${redFlagPromptBlock()}`,
         `Analyze this job post:\n\n${data.jobDescription}`,
       );
     } catch (err) {
@@ -190,8 +207,9 @@ export const generateProposal = createServerFn({ method: "POST" })
       budget: z.string().optional(),
     }).parse(d),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     try {
+      const customFlags = await loadCustomFlags(context);
       const hook = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0];
       const strategy = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0];
       const length = LENGTHS.find((l) => l.id === data.length) ?? LENGTHS[1];
@@ -206,7 +224,7 @@ export const generateProposal = createServerFn({ method: "POST" })
         ? `Job analysis:\n${JSON.stringify(data.analysis, null, 2)}`
         : "";
 
-      return await structured(
+      const result = await structured(
         ProposalSchema,
         `You write human, high-converting freelance proposals. Hard rules:
 - No greeting. No "Hi". Start directly with the hook.
@@ -226,9 +244,10 @@ Return a JSON object with this exact shape:
     "strategy": "<why this strategy works for this job>",
     "question": "<why this closing question works>"
   }
-}`,
+}${redFlagPromptBlock(customFlags)}`,
         `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}`,
       );
+      return { ...result, content: scrubRedFlags(result.content, customFlags) };
     } catch (err) {
       handleAiError(err);
     }
@@ -257,7 +276,7 @@ export const generateProfileSections = createServerFn({ method: "POST" })
       const jobBlock = data.jobContext
         ? `\n\nJob context (tailor the profile to fit this job):\n${data.jobContext}`
         : "";
-      return await structured(
+      const result = await structured(
         ProfileSectionsSchema,
         `You generate professional freelancer profile content for a settings page. Be specific, credible, and human. No buzzwords. The freelancer's niches are: ${nicheList}.${jobBlock}
 
@@ -268,9 +287,14 @@ Return a JSON object with these exact keys:
   "skills": ["<skill 1>", "<skill 2>", ... "<up to 15 trending, specific skills for the niche>"],
   "credentials": [{"title": "...", "institution": "...", "year": "..."}]
 }
-For credentials, suggest 2-3 plausible certifications or degrees relevant to the niche. Use empty array if no logical credentials apply.`,
+For credentials, suggest 2-3 plausible certifications or degrees relevant to the niche. Use empty array if no logical credentials apply.${redFlagPromptBlock()}`,
         `Generate a complete professional profile for a freelancer with these niches: ${nicheList}.${jobBlock}`,
       );
+      return {
+        ...result,
+        bio: scrubRedFlags(result.bio),
+        myStory: scrubRedFlags(result.myStory),
+      };
     } catch (err) {
       handleAiError(err);
     }
@@ -359,8 +383,9 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
   .inputValidator((d: { clientMessage: string }) =>
     z.object({ clientMessage: z.string().min(5).max(5000) }).parse(d),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     try {
+      const customFlags = await loadCustomFlags(context);
       const result = await structured(
         ConversionSchema,
         `You write professional, human follow-up replies for a freelancer to send to a client. Three distinct options, each 2-5 sentences, each addressing what the client said and moving toward a close. No "Hi". No "Let me know if you have questions". No fluff.
@@ -368,10 +393,10 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
 Return a JSON object with this exact shape:
 {
   "options": ["reply 1 text", "reply 2 text", "reply 3 text"]
-}`,
+}${redFlagPromptBlock(customFlags)}`,
         `Client said:\n"${data.clientMessage}"\n\nGive me 3 reply options.`,
       );
-      return result.options;
+      return result.options.map((o) => scrubRedFlags(o, customFlags));
     } catch (err) {
       handleAiError(err);
     }
