@@ -165,6 +165,7 @@ function SettingsPage() {
 
   const profile = data?.profile;
   const isAdmin = data?.isAdmin ?? false;
+  const avatarSignedUrl = data?.avatarSignedUrl ?? null;
 
   // ── Form state ──
   const [name, setName] = useState("");
@@ -240,10 +241,10 @@ function SettingsPage() {
           <Eyebrow index="01">profile picture</Eyebrow>
           <div className="mt-6">
             <AvatarUploader
-              currentUrl={avatarUrl}
+              currentUrl={avatarSignedUrl}
               userName={name || profile?.email}
               bio={bio}
-              onUploadComplete={(url) => setAvatarUrl(url)}
+              onUploadComplete={(path) => setAvatarUrl(path)}
             />
           </div>
         </CropCard>
