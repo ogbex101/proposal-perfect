@@ -184,11 +184,36 @@ function NewProposal() {
         },
       });
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       setContent(result.content);
       setExplanation(result.explanation);
       setShowExplain(true);
-      toast.success("Proposal generated");
+      // Auto-save to history so every generated proposal is archived.
+      try {
+        const title = effectiveJob.split("\n")[0].slice(0, 70) || "Untitled proposal";
+        await saveProposal({
+          data: {
+            title,
+            job_description: effectiveJob,
+            job_analysis: analysis,
+            hook: hookId,
+            strategy: strategyId,
+            length,
+            include_plan: includePlan,
+            portfolio_ids: selectedPortfolio,
+            budget: budget || null,
+            milestones: useMilestones ? milestones : null,
+            content: result.content,
+            explanation: result.explanation,
+          },
+        });
+        queryClient.invalidateQueries({ queryKey: ["proposals"] });
+        queryClient.invalidateQueries({ queryKey: ["proposal-analytics"] });
+        toast.success("Proposal generated & saved to history");
+      } catch {
+        // Generation still succeeded; saving failed silently — user can save manually.
+        toast.success("Proposal generated");
+      }
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Generation failed"),
   });
