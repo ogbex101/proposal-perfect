@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Loader2, Sparkles, Trash2, Upload, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,14 @@ export function AvatarUploader({
   const [cleared, setCleared] = useState(false);
   // Storage path of the current avatar — set on upload, or derived from currentUrl.
   const [uploadedPath, setUploadedPath] = useState<string | null>(null);
+
+  // Sync preview when the parent provides a fresh signed URL (e.g. after query refetch)
+  useEffect(() => {
+    if (!cleared && !uploadedPath) {
+      setPreview(currentUrl ?? null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUrl]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Show the signed URL when no local preview exists (i.e., page reload scenario)
@@ -60,8 +68,9 @@ export function AvatarUploader({
       return;
     }
 
-    // Show local preview immediately
+    // Show local preview immediately; remember what we had before in case we need to revert
     const objectUrl = URL.createObjectURL(file);
+    const prevPreview = preview;
     setPreview(objectUrl);
     setCleared(false);
     setUploading(true);
@@ -74,9 +83,11 @@ export function AvatarUploader({
         },
       });
 
+      // `path` is the correct storage object path (e.g. "<uid>/avatar.jpg").
+      // Do NOT re-derive it from signedUrl — that includes query params and breaks.
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .uploadToSignedUrl(signedUrl.split("avatars/")[1] ?? "", token, file, {
+        .uploadToSignedUrl(path, token, file, {
           contentType: file.type,
           upsert: true,
         });
@@ -88,7 +99,8 @@ export function AvatarUploader({
       toast.success("Profile picture updated — click Save to keep it.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
-      setPreview(null);
+      // Revert to the previous preview instead of blanking it
+      setPreview(prevPreview);
     } finally {
       setUploading(false);
     }

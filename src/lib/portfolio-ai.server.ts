@@ -92,6 +92,7 @@ ${profileBlock}`;
       system,
       prompt: `Here is the job the client posted. Tailor the portfolio to win it:\n\n${jobDescription}`,
     });
+    if (!experimental_output) throw new Error("AI did not return structured portfolio data. Please try again.");
     return experimental_output;
   } catch (err) {
     handleAiError(err);

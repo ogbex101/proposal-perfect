@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateObject } from "ai";
+import { generateText, Output } from "ai";
 import { z } from "zod";
 import { FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 
@@ -17,11 +17,25 @@ function handleAiError(err: unknown): never {
   const msg = err instanceof Error ? err.message : String(err);
   if (msg.includes("429")) throw new Error("Rate limit hit. Please wait a moment and try again.");
   if (msg.includes("402")) throw new Error("AI credits exhausted. Please add credits to continue.");
-  // Surface schema validation errors clearly so they're easier to debug
-  if (msg.toLowerCase().includes("schema") || msg.toLowerCase().includes("parse")) {
-    throw new Error("AI response formatting error — please try again.");
-  }
   throw new Error(msg);
+}
+
+// Use generateText + Output.object (compatible with the Lovable AI gateway).
+// generateObject uses a different protocol that the gateway does not support.
+async function structured<T>(
+  schema: z.ZodType<T>,
+  system: string,
+  prompt: string,
+): Promise<T> {
+  const model = await getModel();
+  const { experimental_output } = await generateText({
+    model,
+    experimental_output: Output.object({ schema }),
+    system,
+    prompt,
+  });
+  if (!experimental_output) throw new Error("AI did not return structured data. Please try again.");
+  return experimental_output as T;
 }
 
 // ---------- Analyze Job ----------
@@ -40,19 +54,18 @@ export type JobAnalysis = z.infer<typeof AnalysisSchema>;
 
 export const analyzeJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { jobDescription: string }) => z.object({ jobDescription: z.string().min(20).max(15000) }).parse(d))
+  .inputValidator((d: { jobDescription: string }) =>
+    z.object({ jobDescription: z.string().min(20).max(15000) }).parse(d),
+  )
   .handler(async ({ data }) => {
     try {
-      const model = await getModel();
       const hookList = HOOKS.map((h) => `- ${h.id}: ${h.name} — ${h.description}`).join("\n");
       const strategyList = STRATEGIES.map((s) => `- ${s.id}: ${s.name} — ${s.description}`).join("\n");
-      const { object } = await generateObject({
-        model,
-        schema: AnalysisSchema,
-        system: `You analyze freelance job posts. Be specific, never generic. Interpret, don't repeat. Choose the single best matching hook id and strategy id from these exact lists:\nHOOKS:\n${hookList}\nSTRATEGIES:\n${strategyList}`,
-        prompt: `Analyze this job post:\n\n${data.jobDescription}`,
-      });
-      return object;
+      return await structured(
+        AnalysisSchema,
+        `You analyze freelance job posts. Be specific, never generic. Interpret, don't repeat. Choose the single best matching hook id and strategy id from these exact lists:\nHOOKS:\n${hookList}\nSTRATEGIES:\n${strategyList}`,
+        `Analyze this job post:\n\n${data.jobDescription}`,
+      );
     } catch (err) {
       handleAiError(err);
     }
@@ -60,8 +73,11 @@ export const analyzeJob = createServerFn({ method: "POST" })
 
 // ---------- Generate Milestones ----------
 const MilestonesSchema = z.object({
-  milestones: z.array(z.object({ title: z.string(), description: z.string(), amount: z.string().optional() })),
+  milestones: z.array(
+    z.object({ title: z.string(), description: z.string(), amount: z.string().optional() }),
+  ),
 });
+
 export const generateMilestones = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { jobDescription: string; budget?: string }) =>
@@ -69,14 +85,12 @@ export const generateMilestones = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      const model = await getModel();
-      const { object } = await generateObject({
-        model,
-        schema: MilestonesSchema,
-        system: `Create 2-4 sensible project milestones. Each has a short title and a one-sentence deliverable description. If a budget is given, distribute amounts realistically; otherwise omit amount.`,
-        prompt: `Job:\n${data.jobDescription}\n\nBudget: ${data.budget || "not provided"}`,
-      });
-      return object.milestones;
+      const result = await structured(
+        MilestonesSchema,
+        `Create 2-4 sensible project milestones. Each has a short title and a one-sentence deliverable description. If a budget is given, distribute amounts realistically; otherwise omit amount.`,
+        `Job:\n${data.jobDescription}\n\nBudget: ${data.budget || "not provided"}`,
+      );
+      return result.milestones;
     } catch (err) {
       handleAiError(err);
     }
@@ -112,14 +126,17 @@ export const generateProposal = createServerFn({ method: "POST" })
       strategyId: z.string(),
       length: z.enum(["brief", "robust", "explanatory"]),
       includePlan: z.boolean(),
-      portfolioItems: z.array(z.object({ title: z.string(), url: z.string(), description: z.string() })),
-      milestones: z.array(z.object({ title: z.string(), description: z.string(), amount: z.string().optional() })).optional(),
+      portfolioItems: z.array(
+        z.object({ title: z.string(), url: z.string(), description: z.string() }),
+      ),
+      milestones: z
+        .array(z.object({ title: z.string(), description: z.string(), amount: z.string().optional() }))
+        .optional(),
       budget: z.string().optional(),
     }).parse(d),
   )
   .handler(async ({ data }) => {
     try {
-      const model = await getModel();
       const hook = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0];
       const strategy = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0];
       const length = LENGTHS.find((l) => l.id === data.length) ?? LENGTHS[1];
@@ -140,15 +157,15 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
       const milestoneBlock = data.milestones?.length
         ? `Milestones:\n${data.milestones.map((m) => `- ${m.title}${m.amount ? ` (${m.amount})` : ""}: ${m.description}`).join("\n")}`
         : "";
-      const analysisBlock = data.analysis ? `Job analysis:\n${JSON.stringify(data.analysis, null, 2)}` : "";
+      const analysisBlock = data.analysis
+        ? `Job analysis:\n${JSON.stringify(data.analysis, null, 2)}`
+        : "";
 
-      const { object } = await generateObject({
-        model,
-        schema: ProposalSchema,
+      return await structured(
+        ProposalSchema,
         system,
-        prompt: `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}`,
-      });
-      return object;
+        `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}`,
+      );
     } catch (err) {
       handleAiError(err);
     }
@@ -156,6 +173,7 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 
 // ---------- Conversion Messages ----------
 const ConversionSchema = z.object({ options: z.array(z.string()).min(1).max(3) });
+
 export const generateConversionResponses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientMessage: string }) =>
@@ -163,14 +181,12 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      const model = await getModel();
-      const { object } = await generateObject({
-        model,
-        schema: ConversionSchema,
-        system: `You write professional, human follow-up replies for a freelancer to send to a client. Three distinct options, each 2-5 sentences, each addressing what the client said and moving toward a close. No "Hi". No "Let me know if you have questions". No fluff.`,
-        prompt: `Client said:\n"${data.clientMessage}"\n\nGive me 3 reply options.`,
-      });
-      return object.options;
+      const result = await structured(
+        ConversionSchema,
+        `You write professional, human follow-up replies for a freelancer to send to a client. Three distinct options, each 2-5 sentences, each addressing what the client said and moving toward a close. No "Hi". No "Let me know if you have questions". No fluff.`,
+        `Client said:\n"${data.clientMessage}"\n\nGive me 3 reply options.`,
+      );
+      return result.options;
     } catch (err) {
       handleAiError(err);
     }
