@@ -59,7 +59,7 @@ export function AvatarUploader({
 
     try {
       // Get signed upload URL from server
-      const { signedUrl, token, publicUrl, path } = await getAvatarUploadUrl({
+      const { signedUrl, token, path } = await getAvatarUploadUrl({
         data: {
           fileName: file.name,
           contentType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
@@ -77,9 +77,9 @@ export function AvatarUploader({
       if (uploadError) throw new Error(uploadError.message);
 
       setUploadedPath(path);
-      // Add cache-bust so browser reloads the new image
-      setPreview(`${publicUrl}?t=${Date.now()}`);
-      onUploadComplete(publicUrl);
+      // Keep showing the local file (the bucket is private, so the public URL
+      // would not load). We persist the storage PATH; the parent signs it.
+      onUploadComplete(path);
       toast.success("Profile picture updated");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -110,10 +110,11 @@ export function AvatarUploader({
     try {
       // Runs entirely server-side: the server reads your photo from storage,
       // sends it to the AI image model, and saves the enhanced result back.
-      const { publicUrl, path } = await enhanceAvatar({ data: { path: activePath } });
+      const { path, previewDataUrl } = await enhanceAvatar({ data: { path: activePath } });
       setUploadedPath(path);
-      setPreview(`${publicUrl}?t=${Date.now()}`);
-      onUploadComplete(publicUrl);
+      // Show the returned image bytes immediately; persist the storage path.
+      if (previewDataUrl) setPreview(previewDataUrl);
+      onUploadComplete(path);
       toast.success("Professional headshot ready! Save to keep it.", { id: toastId });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "AI enhancement failed", { id: toastId });
@@ -126,12 +127,12 @@ export function AvatarUploader({
     setGenerating(true);
     const toastId = toast.loading("Generating an AI profile picture…");
     try {
-      const { publicUrl, path } = await generateAvatar({
+      const { path, previewDataUrl } = await generateAvatar({
         data: { name: userName ?? undefined, bio: bio ?? undefined },
       });
       setUploadedPath(path);
-      setPreview(`${publicUrl}?t=${Date.now()}`);
-      onUploadComplete(publicUrl);
+      if (previewDataUrl) setPreview(previewDataUrl);
+      onUploadComplete(path);
       toast.success("AI profile picture ready! Save to keep it.", { id: toastId });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "AI generation failed", { id: toastId });
