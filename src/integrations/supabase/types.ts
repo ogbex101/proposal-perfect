@@ -372,13 +372,17 @@ export type Database = {
           brands_worked: string[] | null
           created_at: string | null
           credentials: Json | null
+          email: string | null
           id: string
           label: string
           my_story: string | null
           name: string | null
+          niche: string | null
+          phone: string | null
           skills: string[] | null
           updated_at: string | null
           user_id: string
+          whatsapp: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -386,13 +390,17 @@ export type Database = {
           brands_worked?: string[] | null
           created_at?: string | null
           credentials?: Json | null
+          email?: string | null
           id?: string
           label?: string
           my_story?: string | null
           name?: string | null
+          niche?: string | null
+          phone?: string | null
           skills?: string[] | null
           updated_at?: string | null
           user_id: string
+          whatsapp?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -400,13 +408,17 @@ export type Database = {
           brands_worked?: string[] | null
           created_at?: string | null
           credentials?: Json | null
+          email?: string | null
           id?: string
           label?: string
           my_story?: string | null
           name?: string | null
+          niche?: string | null
+          phone?: string | null
           skills?: string[] | null
           updated_at?: string | null
           user_id?: string
+          whatsapp?: string | null
         }
         Relationships: []
       }
