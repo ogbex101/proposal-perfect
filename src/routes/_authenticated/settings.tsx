@@ -19,6 +19,7 @@ import {
   Layers,
   Wand2,
   Flag,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 

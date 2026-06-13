@@ -19,6 +19,8 @@ import {
   Zap,
   MessageSquarePlus,
   Link2,
+  ExternalLink,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -51,6 +53,7 @@ import { listGeneratedPortfolios } from "@/lib/portfolio-generate.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
 type FreelancerProfile = { id: string; label: string };
 import { saveItem } from "@/lib/saved.functions";
+import { lookupFreelancerProject, submitFreelancerBid } from "@/lib/freelancer.functions";
 import { copyText, downloadTxt, downloadPdf, downloadElementAsPdf } from "@/lib/export";
 
 export const Route = createFileRoute("/_authenticated/new")({
@@ -109,6 +112,12 @@ function NewProposal() {
   const [showHookAnalysis, setShowHookAnalysis] = useState(false);
 
   const [chosenProfile, setChosenProfile] = useState<FreelancerProfile | null>(null);
+
+  // Freelancer.com integration
+  const [freelancerUrl, setFreelancerUrl] = useState("");
+  const [freelancerProject, setFreelancerProject] = useState<{ id: number; title: string; budget: { minimum?: number; maximum?: number }; currency: string } | null>(null);
+  const [bidAmount, setBidAmount] = useState("");
+  const [deliveryDays, setDeliveryDays] = useState("7");
 
   // Prefill from history "Use as template"
   useEffect(() => {
@@ -394,6 +403,36 @@ function NewProposal() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save template"),
   });
 
+  const lookupProjectMutation = useMutation({
+    mutationFn: () => lookupFreelancerProject({ data: { projectUrl: freelancerUrl } }),
+    onSuccess: (project) => {
+      if (project) {
+        setFreelancerProject(project);
+        // Pre-fill job text from project description
+        if (project.description && !jobText) setJobText(project.description);
+        if (project.budget?.minimum) setBidAmount(String(project.budget.minimum));
+        toast.success(`Found: ${project.title}`);
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const submitBidMutation = useMutation({
+    mutationFn: () => {
+      if (!freelancerProject || !content) throw new Error("Generate a proposal first");
+      return submitFreelancerBid({
+        data: {
+          projectId: freelancerProject.id,
+          proposalText: content,
+          bidAmount: parseFloat(bidAmount) || 100,
+          deliveryDays: parseInt(deliveryDays) || 7,
+        },
+      });
+    },
+    onSuccess: () => toast.success("🎉 Bid submitted to Freelancer.com!"),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const canAnalyze = effectiveJob.length >= 20;
   const canGenerate = effectiveJob.length >= 10;
 
@@ -461,6 +500,82 @@ function NewProposal() {
               </div>
             </CropCard>
           )}
+
+          {/* Freelancer.com integration panel */}
+          <CropCard className="p-4 border-teal/20 bg-teal/5">
+            <div className="flex items-center gap-2 mb-3">
+              <ExternalLink className="h-4 w-4 text-teal" />
+              <span className="text-sm font-semibold text-teal">Freelancer.com</span>
+              <span className="text-[10px] text-muted-foreground">— paste project URL to auto-fill and submit bid</span>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                value={freelancerUrl}
+                onChange={(e) => setFreelancerUrl(e.target.value)}
+                placeholder="https://www.freelancer.com/projects/..."
+                className="flex-1 text-sm"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-teal/40 text-teal hover:bg-teal/10 shrink-0"
+                disabled={lookupProjectMutation.isPending || !freelancerUrl.includes("freelancer.com")}
+                onClick={() => lookupProjectMutation.mutate()}
+              >
+                {lookupProjectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Load Project"}
+              </Button>
+            </div>
+
+            {freelancerProject && (
+              <div className="mt-3 space-y-3">
+                <div className="rounded-lg bg-background/40 border border-line/40 px-3 py-2">
+                  <p className="text-xs font-medium text-white truncate">{freelancerProject.title}</p>
+                  {(freelancerProject.budget.minimum || freelancerProject.budget.maximum) && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Budget: {freelancerProject.currency} {freelancerProject.budget.minimum}–{freelancerProject.budget.maximum}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">Bid amount ({freelancerProject.currency})</Label>
+                    <Input
+                      value={bidAmount}
+                      onChange={(e) => setBidAmount(e.target.value)}
+                      type="number"
+                      min="1"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="w-24 space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">Days</Label>
+                    <Input
+                      value={deliveryDays}
+                      onChange={(e) => setDeliveryDays(e.target.value)}
+                      type="number"
+                      min="1"
+                      max="365"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+                <Button
+                  className="w-full bg-teal text-primary-foreground hover:bg-teal/80"
+                  disabled={submitBidMutation.isPending || !content}
+                  onClick={() => submitBidMutation.mutate()}
+                >
+                  {submitBidMutation.isPending ? (
+                    <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Submitting bid…</>
+                  ) : (
+                    <><Send className="mr-1.5 h-4 w-4" /> Submit bid to Freelancer.com</>
+                  )}
+                </Button>
+                {!content && (
+                  <p className="text-[11px] text-muted-foreground text-center">Generate a proposal first, then submit</p>
+                )}
+              </div>
+            )}
+          </CropCard>
 
           {/* Method switch */}
           <div className="flex gap-2">
