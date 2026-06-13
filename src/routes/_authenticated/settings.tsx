@@ -246,7 +246,7 @@ function SettingsPage() {
     }
   }, [merged, activeSubId]);
 
-  const save = useMutation({
+  const save = useMutation<unknown, Error, void>({
     mutationFn: () => {
       if (activeSubId && activeSub) {
         // Save to sub-profile

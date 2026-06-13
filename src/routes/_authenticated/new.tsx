@@ -181,6 +181,7 @@ function NewProposal() {
         ...result,
         detectedLanguage: result.detectedLanguage ?? "English",
         suggestedLength: result.suggestedLength ?? "robust",
+        detectedNiche: result.detectedNiche ?? "",
       };
       setAnalysis(normalized);
       const h = HOOKS.find((x) => x.id === result.suggestedHookId);
@@ -1041,7 +1042,8 @@ function OutputPanel({
   savingTemplate: boolean;
   chosenProfile?: { label: string } | null;
   onGoHistory: () => void;
-  hookStrengthMutation: ReturnType<typeof useMutation>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  hookStrengthMutation: any;
   hookStrength: HookStrength | null;
   showHookAnalysis: boolean;
   setShowHookAnalysis: (v: boolean) => void;
