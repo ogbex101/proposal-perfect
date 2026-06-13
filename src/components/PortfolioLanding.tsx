@@ -166,6 +166,14 @@ export function PortfolioLanding({ data }: { data: PortfolioData }) {
 
       {/* ── Hero ─────────────────────────────────────────────── */}
       <header className="pf-hero" id="top">
+        {/* Niche-specific hero background */}
+        {hero.heroImageUrl && (
+          <div
+            className="pf-hero-img-bg"
+            style={{ backgroundImage: `url(${hero.heroImageUrl})` }}
+            aria-hidden="true"
+          />
+        )}
         {/* Glowing accent orbs + grain */}
         <div className="pf-orb pf-orb-a" aria-hidden="true" />
         <div className="pf-orb pf-orb-b" aria-hidden="true" />
@@ -674,6 +682,15 @@ const PF_CSS = `
     radial-gradient(1200px 600px at 70% -10%, rgba(43,214,198,0.10), transparent 60%),
     linear-gradient(160deg, #060b16 0%, #081325 45%, #050810 100%);
   overflow: hidden;
+}
+.pf-hero-img-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.18;
+  z-index: 0;
+  filter: saturate(0.6) brightness(0.7);
 }
 .pf-hero-bg-code {
   position: absolute; top: 50%; right: -20px; transform: translateY(-50%);

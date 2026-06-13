@@ -141,6 +141,8 @@ function NewProposal() {
       const s = STRATEGIES.find((x) => x.id === result.suggestedStrategyId);
       if (h) setHookId(h.id);
       if (s) setStrategyId(s.id);
+      // Auto-apply AI-suggested length
+      if (result.suggestedLength) setLength(result.suggestedLength as LengthId);
       // Auto-select primary portfolio items if none chosen yet
       if (selectedPortfolio.length === 0) {
         const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);

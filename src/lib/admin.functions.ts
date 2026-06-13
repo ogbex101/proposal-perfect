@@ -2,81 +2,92 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-/**
- * Confirms the calling user holds the 'admin' role. The check runs against the
- * caller's RLS-scoped client (they can only read their OWN roles), so it can't
- * be spoofed by passing another user's id. Throws if not an admin.
- */
-async function assertAdmin(context: { supabase: any; userId: string }) {
-  const { data, error } = await context.supabase
+// Verify the calling user is an admin (has role="admin" in user_roles).
+async function requireAdmin(supabase: any, userId: string) {
+  const { data } = await supabase
     .from("user_roles")
     .select("role")
-    .eq("user_id", context.userId)
-    .eq("role", "admin")
+    .eq("user_id", userId)
     .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Forbidden: admin access required");
+  if (data?.role !== "admin") throw new Error("Forbidden: admin only.");
 }
 
-export const adminListUsers = createServerFn({ method: "GET" })
+export type AdminUser = {
+  id: string;
+  email: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  proposal_count: number;
+  portfolio_count: number;
+};
+
+export const listAdminUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
-    // Service-role client bypasses RLS — only reachable after the admin check above.
+    await requireAdmin(context.supabase, context.userId);
+
+    // Use service-role client to read auth.users
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+    if (error) throw new Error(error.message);
 
-    const [{ data: profiles, error: pErr }, { data: proposals, error: prErr }, { data: roles }] =
-      await Promise.all([
-        supabaseAdmin
-          .from("profiles")
-          .select("id,email,name,created_at")
-          .order("created_at", { ascending: false }),
-        supabaseAdmin.from("proposals").select("user_id"),
-        supabaseAdmin.from("user_roles").select("user_id,role"),
-      ]);
-    if (pErr) throw new Error(pErr.message);
-    if (prErr) throw new Error(prErr.message);
+    // Enrich with proposal + portfolio counts
+    const ids = (users ?? []).map((u: any) => u.id);
+    const [{ data: proposals }, { data: portfolios }] = await Promise.all([
+      context.supabase.from("proposals").select("user_id").in("user_id", ids),
+      context.supabase.from("generated_portfolios").select("user_id").in("user_id", ids),
+    ]);
 
-    const counts = new Map<string, number>();
-    for (const p of proposals ?? []) {
-      counts.set(p.user_id, (counts.get(p.user_id) ?? 0) + 1);
-    }
-    const adminIds = new Set((roles ?? []).filter((r) => r.role === "admin").map((r) => r.user_id));
+    const proposalCounts: Record<string, number> = {};
+    const portfolioCounts: Record<string, number> = {};
+    (proposals ?? []).forEach((r: any) => { proposalCounts[r.user_id] = (proposalCounts[r.user_id] ?? 0) + 1; });
+    (portfolios ?? []).forEach((r: any) => { portfolioCounts[r.user_id] = (portfolioCounts[r.user_id] ?? 0) + 1; });
 
-    return (profiles ?? []).map((u) => ({
+    return (users ?? []).map((u: any): AdminUser => ({
       id: u.id,
-      email: u.email,
-      name: u.name,
+      email: u.email ?? null,
       created_at: u.created_at,
-      proposal_count: counts.get(u.id) ?? 0,
-      is_admin: adminIds.has(u.id),
+      last_sign_in_at: u.last_sign_in_at ?? null,
+      proposal_count: proposalCounts[u.id] ?? 0,
+      portfolio_count: portfolioCounts[u.id] ?? 0,
     }));
   });
 
-export const adminGetUser = createServerFn({ method: "POST" })
+export const getPageViewStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { userId: string }) => z.object({ userId: z.string().uuid() }).parse(d))
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  .handler(async ({ context }) => {
+    await requireAdmin(context.supabase, context.userId);
+    const { data, error } = await context.supabase
+      .from("page_views")
+      .select("user_id, fingerprint, created_at, path")
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
 
-    const [{ data: profile }, { data: proposals }, { data: saved }] = await Promise.all([
-      supabaseAdmin.from("profiles").select("*").eq("id", data.userId).maybeSingle(),
-      supabaseAdmin
-        .from("proposals")
-        .select("id,title,job_description,length,content,created_at")
-        .eq("user_id", data.userId)
-        .order("created_at", { ascending: false }),
-      supabaseAdmin
-        .from("saved_items")
-        .select("*")
-        .eq("user_id", data.userId)
-        .order("created_at", { ascending: false }),
-    ]);
-
-    return {
-      profile,
-      proposals: proposals ?? [],
-      saved: saved ?? [],
-    };
+export const recordPageView = createServerFn({ method: "POST" })
+  .inputValidator((d: { path: string; fingerprint?: string; referrer?: string; userAgent?: string; userId?: string }) =>
+    z.object({
+      path: z.string().max(500),
+      fingerprint: z.string().max(200).optional(),
+      referrer: z.string().max(500).optional(),
+      userAgent: z.string().max(500).optional(),
+      userId: z.string().uuid().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.from("page_views").insert({
+        path: data.path,
+        fingerprint: data.fingerprint ?? null,
+        referrer: data.referrer ?? null,
+        user_agent: data.userAgent ?? null,
+        user_id: data.userId ?? null,
+      } as never);
+    } catch {
+      // Never crash the page over analytics
+    }
+    return { ok: true };
   });

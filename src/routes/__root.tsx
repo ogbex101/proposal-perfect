@@ -115,9 +115,45 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function usePageViewTracker() {
+  const router = useRouter();
+  useEffect(() => {
+    const track = () => {
+      const fingerprint = [
+        navigator.language,
+        screen.width,
+        screen.height,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+        navigator.hardwareConcurrency,
+      ].join("|");
+      // Hash the fingerprint to a short string
+      let h = 0;
+      for (let i = 0; i < fingerprint.length; i++) h = (Math.imul(31, h) + fingerprint.charCodeAt(i)) | 0;
+      const fp = Math.abs(h).toString(36);
+      // Fire and forget — import lazily to avoid bundle bloat on initial load
+      import("@/lib/admin.functions").then(({ recordPageView }) => {
+        recordPageView({
+          data: {
+            path: window.location.pathname,
+            fingerprint: fp,
+            referrer: document.referrer || undefined,
+            userAgent: navigator.userAgent.slice(0, 200),
+          },
+        }).catch(() => {});
+      });
+    };
+    // Track on mount
+    track();
+    // Track on route changes
+    return router.subscribe("onResolved", track);
+  }, [router]);
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+
+  usePageViewTracker();
 
   useEffect(() => {
     let mounted = true;

@@ -95,6 +95,7 @@ const AnalysisSchema = z.object({
   suggestedStrategyId: z.string(),
   strategyReason: z.string(),
   detectedLanguage: z.string().default("English"),
+  suggestedLength: z.enum(["brief", "robust", "explanatory"]).default("robust"),
 });
 export type JobAnalysis = z.infer<typeof AnalysisSchema>;
 
@@ -127,7 +128,8 @@ Return a JSON object with these exact keys:
   "hookReason": "...",
   "suggestedStrategyId": "<exact id from list>",
   "strategyReason": "...",
-  "detectedLanguage": "<full English name of the language this job post is written in, e.g. English, French, Spanish, German, Portuguese, Arabic, etc.>"
+  "detectedLanguage": "<full English name of the language this job post is written in, e.g. English, French, Spanish, German, Portuguese, Arabic, etc.>",
+  "suggestedLength": "<brief|robust|explanatory — brief for simple/quick tasks under $500 or short gigs, robust for most jobs, explanatory for complex technical or high-budget projects over $2000>"
 }${redFlagPromptBlock()}`,
         `Analyze this job post:\n\n${data.jobDescription}`,
       );
@@ -241,7 +243,11 @@ export const generateProposal = createServerFn({ method: "POST" })
 ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 - Use the assigned HOOK: "${hook.name}" — ${hook.description}
 - Use the assigned STRATEGY: "${strategy.name}" — ${strategy.description}
-- Target length: ~${length.target} characters (${length.name}).
+- LENGTH ENFORCEMENT (this is a hard rule):
+  * brief: MAXIMUM 1500 characters total. One tight paragraph (3-4 sentences hook + deliverable insight) + one question + one CTA. NO portfolio section, NO execution plan, NO milestones list. Stop at 1500 chars — cut ruthlessly.
+  * robust: 2000–3000 characters. Hook → portfolio (2-3 links) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
+  * explanatory: 3000–5000 characters. All sections fully developed. Detailed execution plan. Full milestones if provided.
+  You are writing a "${length.name}" proposal so the rules for "${length.id}" apply.
 - Structure: Hook paragraph. ${data.portfolioItems.length > 0 && data.length !== "brief" ? "Portfolio paragraph with 2-3 links and one-line relevance for each. " : ""}Deliverables (2-4 sentences about outcomes, not steps). One non-obvious advice/warning sentence. ${data.includePlan ? "2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a simple list. " : ""}One open-ended question. Specific call to action.
 
 Return a JSON object with this exact shape:

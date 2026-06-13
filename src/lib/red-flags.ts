@@ -3,10 +3,14 @@
 // Used both to instruct the model (prevention) and to scrub output (cleanup).
 
 export const DEFAULT_RED_FLAGS: string[] = [
+  // Generic opener phrases
+  "i can do this job",
+  "i am the perfect fit",
   "here is what i will do",
   "here's what i will do",
   "here is how i will do it",
   "here's how i'll do it",
+  "i have done this before",
   "i will do this",
   "i will deliver",
   "i will provide",
@@ -14,33 +18,53 @@ export const DEFAULT_RED_FLAGS: string[] = [
   "i will make sure",
   "i can do this",
   "i can help you",
-  "i am the perfect fit",
   "i am the best candidate",
   "i am confident that",
   "i am passionate about",
+  "i am excited to apply",
   "i am excited to",
   "i would love to",
-  "i have done this before",
   "i have years of experience",
   "i am an expert in",
+  // Closing phrases
   "let me know if you have any questions",
   "looking forward to hearing from you",
+  "i am looking forward to hearing from you",
   "thank you for your consideration",
   "i am available for a call",
   "jump on a call",
   "hop on a call",
+  // Salutations
   "dear hiring manager",
   "to whom it may concern",
+  // Rhetorical / manipulative openers
   "most developers",
   "most freelancers",
-  "in today's fast-paced world",
-  "in today's digital age",
+  "here is my advice",
+  "what happens when",
+  "let me ask you a question",
+  "imagine if",
+  "the problem is",
+  "here is the truth",
+  "here's the truth",
+  "take a look at my portfolio",
+  // Questions that put the burden on the client
+  "what is your budget",
+  "do you have any questions for me",
+  // Self-praise filler
+  "i am a quick learner",
+  "i pay attention to detail",
+  "client satisfaction is important to me",
+  "quality is my top priority",
   "results-driven",
   "detail-oriented",
   "team player",
   "go-getter",
   "think outside the box",
   "hit the ground running",
+  // Filler phrases
+  "in today's fast-paced world",
+  "in today's digital age",
   "best regards",
   "warm regards",
   "i hope this message finds you well",
@@ -62,12 +86,13 @@ function norm(s: string): string {
 }
 
 // Return the merged active red-flag list (defaults + custom), de-duplicated.
-export function activeRedFlags(custom: string[] = []): string[] {
+export function activeRedFlags(custom: string[] = [], disabled: string[] = []): string[] {
+  const disabledSet = new Set(disabled.map(norm));
   const seen = new Set<string>();
   const out: string[] = [];
   for (const phrase of [...DEFAULT_RED_FLAGS, ...custom.map(norm)]) {
     const n = norm(phrase);
-    if (n && !seen.has(n)) {
+    if (n && !seen.has(n) && !disabledSet.has(n)) {
       seen.add(n);
       out.push(n);
     }
@@ -76,16 +101,16 @@ export function activeRedFlags(custom: string[] = []): string[] {
 }
 
 // Detect which red-flag phrases appear in the given text.
-export function detectRedFlags(text: string, custom: string[] = []): string[] {
+export function detectRedFlags(text: string, custom: string[] = [], disabled: string[] = []): string[] {
   const hay = norm(text);
-  return activeRedFlags(custom).filter((p) => hay.includes(p));
+  return activeRedFlags(custom, disabled).filter((p) => hay.includes(p));
 }
 
 // Remove red-flag phrases from text. Strips the offending phrase and tidies
 // up leftover punctuation/whitespace so sentences stay readable.
-export function scrubRedFlags(text: string, custom: string[] = []): string {
+export function scrubRedFlags(text: string, custom: string[] = [], disabled: string[] = []): string {
   let out = text;
-  for (const phrase of activeRedFlags(custom)) {
+  for (const phrase of activeRedFlags(custom, disabled)) {
     // Build a case-insensitive matcher for the phrase with flexible whitespace.
     const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
     const re = new RegExp(escaped, "gi");
@@ -103,7 +128,7 @@ export function scrubRedFlags(text: string, custom: string[] = []): string {
 }
 
 // Build the instruction block injected into system prompts.
-export function redFlagPromptBlock(custom: string[] = []): string {
-  const list = activeRedFlags(custom);
+export function redFlagPromptBlock(custom: string[] = [], disabled: string[] = []): string {
+  const list = activeRedFlags(custom, disabled);
   return `\n\nHARD CONSTRAINT — RED-FLAGGED PHRASES (NEVER use any of these or close variants; they read as generic AI filler and instantly disqualify the writing):\n${list.map((p) => `  • "${p}"`).join("\n")}\n\nWrite like a sharp human expert who has done this work for years — specific, confident, plain-spoken. No filler, no clichés, no hedging, no corporate buzzwords. Every sentence must carry concrete meaning.`;
 }

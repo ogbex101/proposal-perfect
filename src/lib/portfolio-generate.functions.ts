@@ -49,13 +49,14 @@ async function signPortfolioImages(
   supabase: import("@supabase/supabase-js").SupabaseClient,
   data: PortfolioData,
 ): Promise<PortfolioData> {
-  const [avatarUrl, projects] = await Promise.all([
+  const [avatarUrl, heroImageUrl, projects] = await Promise.all([
     signValue(supabase, data.hero.avatarUrl),
+    signValue(supabase, data.hero.heroImageUrl ?? ""),
     Promise.all(
       data.projects.map(async (p) => ({ ...p, imageUrl: await signValue(supabase, p.imageUrl) })),
     ),
   ]);
-  return { ...data, hero: { ...data.hero, avatarUrl }, projects };
+  return { ...data, hero: { ...data.hero, avatarUrl, heroImageUrl: heroImageUrl || undefined }, projects };
 }
 
 // Keyword stock image (no API key needed), stable per seed.
@@ -93,7 +94,7 @@ async function freeProjectImage(keywords: string, seed: number, projectTitle?: s
   }
   // Rich, context-specific prompt so the image actually relates to the project
   const context = [projectTitle && `Project: "${projectTitle}"`, niche && `Niche: ${niche}`, `Keywords: ${keywords}`].filter(Boolean).join(". ");
-  const prompt = `Photorealistic, professional image for a freelance portfolio. ${context}. Style: modern, clean UI screenshot or workspace photo or product mockup. High resolution, well-lit, no watermarks, no text overlays, no logos.`;
+  const prompt = `High-quality professional photograph for a freelance portfolio. ${context}. Ultra-realistic, editorial quality. Either: a clean UI/app screenshot mockup on a device, or a professional workspace with relevant tools and equipment, or a finished product shot. No watermarks, no text overlays, no stock-photo clichés. Cinematic lighting.`;
   return fetchImageAsDataUrl(pollinationsUrl(prompt, seed));
 }
 
@@ -236,6 +237,16 @@ export const generatePortfolio = createServerFn({ method: "POST" })
       }),
     );
 
+    // 4b. Hero background image — niche-specific wide landscape.
+    let heroImageUrl = "";
+    try {
+      const heroPrompt = `Professional workspace photograph representing ${copy.niche}. Wide landscape format. Modern, clean, well-lit. No people, no faces, no text, no logos. Cinematic depth of field. High quality editorial photo.`;
+      const heroDataUrl = await freeProjectImage(heroPrompt, 99, undefined, copy.niche);
+      heroImageUrl = await uploadImage(context.supabase, `${folder}/hero-bg.png`, heroDataUrl);
+    } catch {
+      // fallback: no hero image, gradient used instead
+    }
+
     // 5. Assemble — factual fields straight from the profile.
     const portfolio: PortfolioData = {
       hero: {
@@ -243,6 +254,7 @@ export const generatePortfolio = createServerFn({ method: "POST" })
         niche: copy.niche,
         tagline: copy.tagline,
         avatarUrl,
+        heroImageUrl,
       },
       aboutClient: copy.aboutClient,
       myStory: activeProfile.my_story ?? "",

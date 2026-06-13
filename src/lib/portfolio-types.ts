@@ -31,6 +31,7 @@ export type PortfolioData = {
     niche: string;
     tagline: string;
     avatarUrl: string;
+    heroImageUrl?: string;
   };
   aboutClient: string;
   myStory: string;
