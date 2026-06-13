@@ -131,6 +131,36 @@ export type Database = {
         }
         Relationships: []
       }
+      page_views: {
+        Row: {
+          created_at: string
+          fingerprint: string | null
+          id: string
+          path: string
+          referrer: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          fingerprint?: string | null
+          id?: string
+          path: string
+          referrer?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          fingerprint?: string | null
+          id?: string
+          path?: string
+          referrer?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       portfolio_items: {
         Row: {
           created_at: string
@@ -227,6 +257,7 @@ export type Database = {
       proposals: {
         Row: {
           budget: string | null
+          client_responded: boolean | null
           content: string
           created_at: string
           explanation: Json | null
@@ -238,6 +269,7 @@ export type Database = {
           length: string
           milestones: Json | null
           portfolio_ids: string[]
+          responded_at: string | null
           strategy: string | null
           title: string | null
           updated_at: string
@@ -245,6 +277,7 @@ export type Database = {
         }
         Insert: {
           budget?: string | null
+          client_responded?: boolean | null
           content?: string
           created_at?: string
           explanation?: Json | null
@@ -256,6 +289,7 @@ export type Database = {
           length?: string
           milestones?: Json | null
           portfolio_ids?: string[]
+          responded_at?: string | null
           strategy?: string | null
           title?: string | null
           updated_at?: string
@@ -263,6 +297,7 @@ export type Database = {
         }
         Update: {
           budget?: string | null
+          client_responded?: boolean | null
           content?: string
           created_at?: string
           explanation?: Json | null
@@ -274,6 +309,7 @@ export type Database = {
           length?: string
           milestones?: Json | null
           portfolio_ids?: string[]
+          responded_at?: string | null
           strategy?: string | null
           title?: string | null
           updated_at?: string
