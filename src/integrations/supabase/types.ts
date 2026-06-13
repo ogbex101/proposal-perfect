@@ -180,6 +180,7 @@ export type Database = {
           id: string
           my_story: string | null
           name: string | null
+          niches: string[] | null
           phone: string | null
           skills: string[]
           updated_at: string
@@ -197,6 +198,7 @@ export type Database = {
           id: string
           my_story?: string | null
           name?: string | null
+          niches?: string[] | null
           phone?: string | null
           skills?: string[]
           updated_at?: string
@@ -214,6 +216,7 @@ export type Database = {
           id?: string
           my_story?: string | null
           name?: string | null
+          niches?: string[] | null
           phone?: string | null
           skills?: string[]
           updated_at?: string
@@ -278,6 +281,27 @@ export type Database = {
         }
         Relationships: []
       }
+      red_flag_words: {
+        Row: {
+          created_at: string | null
+          id: string
+          phrase: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          phrase: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          phrase?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       saved_items: {
         Row: {
           created_at: string
@@ -301,6 +325,51 @@ export type Database = {
           kind?: string
           ref_id?: string | null
           snapshot?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sub_profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          brands_worked: string[] | null
+          created_at: string | null
+          credentials: Json | null
+          id: string
+          label: string
+          my_story: string | null
+          name: string | null
+          skills: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          brands_worked?: string[] | null
+          created_at?: string | null
+          credentials?: Json | null
+          id?: string
+          label?: string
+          my_story?: string | null
+          name?: string | null
+          skills?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          brands_worked?: string[] | null
+          created_at?: string | null
+          credentials?: Json | null
+          id?: string
+          label?: string
+          my_story?: string | null
+          name?: string | null
+          skills?: string[] | null
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []
