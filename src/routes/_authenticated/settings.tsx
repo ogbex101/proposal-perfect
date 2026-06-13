@@ -625,6 +625,26 @@ function SettingsPage() {
           </div>
         </CropCard>
 
+        {/* ── Freelancer.com Integration ── */}
+        <CropCard className="p-6 border-teal/20">
+          <Eyebrow index="12">
+            <ExternalLink className="inline h-3 w-3 mr-1 text-teal" />
+            freelancer.com
+          </Eyebrow>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Add your Freelancer personal access token to submit bids directly from this app.
+            Get one at: <span className="text-teal font-mono text-[11px]">freelancer.com → Settings → API → Personal Access Tokens</span>
+          </p>
+          <div className="mt-4 rounded-lg border border-line/60 bg-background/40 p-3">
+            <p className="text-xs text-white font-medium mb-1">Setup instructions:</p>
+            <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>Go to Freelancer.com → Settings → API Access</li>
+              <li>Create a "Personal Access Token" with bid/project permissions</li>
+              <li>In Lovable Cloud → Settings → Secrets, add: <span className="text-teal font-mono">FREELANCER_TOKEN = your_token_here</span></li>
+            </ol>
+          </div>
+        </CropCard>
+
         {/* ── 11 · Sub Profiles ── */}
         <CropCard className="p-6">
           <Eyebrow index="11">
