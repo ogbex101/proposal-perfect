@@ -191,14 +191,17 @@ function NewProposal() {
       const s = STRATEGIES.find((x) => x.id === result.suggestedStrategyId);
       if (h) setHookId(h.id);
       if (s) setStrategyId(s.id);
-      // Auto-apply AI-suggested length
       if (result.suggestedLength) setLength(result.suggestedLength as LengthId);
-      // Auto-select primary portfolio items if none chosen yet
       if (selectedPortfolio.length === 0) {
         const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
         if (primaries.length) setSelectedPortfolio(primaries);
       }
-      toast.success("Job analyzed");
+      // Auto-trigger strategy + proposal immediately after analysis
+      setTimeout(() => {
+        strategyMutation.mutate();
+        generateMutation.mutate();
+      }, 100);
+      toast.success("Analyzing… generating proposal & strategy");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Analysis failed"),
   });
@@ -918,12 +921,11 @@ function NewProposal() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
+                    onClick={async () => {
                       try {
-                        // Unicode-safe base64 encode
-                        const json = JSON.stringify(strategyDoc);
-                        const encoded = btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/gi, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
-                        const url = `${window.location.origin}/strategy?d=${encodeURIComponent(encoded)}`;
+                        const LZString = (await import("lz-string")).default;
+                        const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(strategyDoc));
+                        const url = `${window.location.origin}/strategy?d=${encoded}`;
                         navigator.clipboard.writeText(url).then(() => toast.success("Link copied — share it with your client")).catch(() => {
                           const ta = document.createElement("textarea");
                           ta.value = url;

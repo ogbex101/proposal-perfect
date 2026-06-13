@@ -366,6 +366,7 @@ The gold standard: the client reads this and thinks "this person has seen my exa
 
 Hard rules:
 - No greeting. No "Hi". Start directly with the hook.${languageInstruction}${toneInstruction}
+- NO BULLET POINTS. NO HYPHENS. NO DASHES as list markers. Write in clean flowing prose only. If listing items, embed them naturally in sentences ("I'll handle X, Y, and Z" not "- X\n- Y\n- Z"). The proposal must look like a confident personal message, not a formatted document.
 - HUMAN EMPATHY WITHOUT GENERIC LANGUAGE: Show you understand by naming specifics — their industry friction, the real reason this project is urgent, the hidden risk they're taking by not solving it now. Do not use any phrase that sounds like emotional performance ("I understand your frustration", "I know how stressful this is"). Instead, demonstrate understanding through precision.
 - CONFIDENCE WITHOUT ARROGANCE: Write like someone who has solved this exact type of problem before and is not anxious about it. Calm. Certain. But not boastful. The confidence comes from the quality of the insight, not from self-promotion.
 - DO NOT parrot or restate the job post. Echo the client's stated needs at most ~30%. The other ~70% must be YOUR original interpretation, deeper insight, and value they did NOT explicitly ask for. Show you understand the problem more deeply than they described it.
@@ -416,7 +417,14 @@ Return a JSON object with this exact shape:
           finalResult = { ...result, content: text };
         }
       }
-      return { ...finalResult, content: scrubRedFlags(finalResult.content, customFlags) };
+      // Strip any bullet/hyphen list lines the AI still outputs
+      const cleanContent = finalResult.content
+        .split("\n")
+        .map((line) => line.replace(/^[\s]*[-•*]\s+/, "").replace(/^[\s]*\d+\.\s+/, ""))
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      return { ...finalResult, content: scrubRedFlags(cleanContent, customFlags) };
     } catch (err) {
       handleAiError(err);
     }

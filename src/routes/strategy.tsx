@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef } from "react";
+import LZString from "lz-string";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import type { StrategyDocument } from "@/lib/ai.functions";
 import { Button } from "@/components/ui/button";
@@ -21,8 +22,9 @@ function StrategyPage() {
   const doc = useMemo<StrategyDocument | null>(() => {
     if (!d) return null;
     try {
-      // Unicode-safe decode (mirrors encoder in new.tsx)
-      return JSON.parse(decodeURIComponent(Array.from(atob(decodeURIComponent(d)), (c) => "%" + c.charCodeAt(0).toString(16).padStart(2, "0")).join("")));
+      const json = LZString.decompressFromEncodedURIComponent(d);
+      if (!json) return null;
+      return JSON.parse(json);
     } catch {
       return null;
     }
