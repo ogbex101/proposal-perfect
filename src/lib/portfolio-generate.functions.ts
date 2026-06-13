@@ -269,7 +269,6 @@ export const generatePortfolio = createServerFn({ method: "POST" })
       },
       aboutClient: copy.aboutClient,
       myStory: activeProfile.my_story ?? "",
-      whatIDo: copy.whatIDo,
       // Preserve the supplied reference structure/titles while allowing the AI
       // to tailor each description to the specific job.
       whatIDo: reference.services.map((service, index) => ({
