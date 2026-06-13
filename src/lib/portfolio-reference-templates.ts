@@ -5,6 +5,7 @@ export type ReferenceProject = {
   description: string;
   tags: string[];
   imageKeywords: string;
+  imageUrl?: string;
 };
 
 export type PortfolioReferenceTemplate = {
@@ -30,10 +31,10 @@ const developer: PortfolioReferenceTemplate = {
     { title: "Responsive UI Engineering", description: "Polished interfaces that remain clear, fast, and usable across screen sizes." },
   ],
   projects: [
-    { title: "AI Website Security & Analysis Tool", description: "A real-time scanner for security, performance, SEO, and accessibility with visual previews and prioritized fixes.", tags: ["TypeScript", "AI", "Security"], imageKeywords: "cybersecurity analytics dashboard website scanner UI" },
-    { title: "Recruitment Management Portal", description: "A dual-interface recruitment system with job discovery, applications, document uploads, status tracking, and administration.", tags: ["Next.js", "Database", "Auth"], imageKeywords: "modern recruitment applicant tracking dashboard" },
-    { title: "Real-Time Communication Platform", description: "Role-based course communities with live messaging, file sharing, enrolment, and resource management.", tags: ["Realtime", "PostgreSQL", "JWT"], imageKeywords: "education chat collaboration web application" },
-    { title: "Scalable SaaS Workspace", description: "A multi-user product workspace combining reusable workflows, integrations, permissions, and production-ready data architecture.", tags: ["SaaS", "API", "Workflows"], imageKeywords: "saas project management application dashboard" },
+    { title: "AI Website Security & Analysis Tool", description: "A real-time scanner for security, performance, SEO, and accessibility with visual previews and prioritized fixes.", tags: ["TypeScript", "AI", "Security"], imageKeywords: "cybersecurity analytics dashboard website scanner UI", imageUrl: "https://slijjjzgalpgugyjouih.supabase.co/storage/v1/object/public/project-images/13802a08-26cc-4c61-8760-d33888d848cf.png" },
+    { title: "Recruitment Management Portal", description: "A dual-interface recruitment system with job discovery, applications, document uploads, status tracking, and administration.", tags: ["Next.js", "Database", "Auth"], imageKeywords: "modern recruitment applicant tracking dashboard", imageUrl: "https://slijjjzgalpgugyjouih.supabase.co/storage/v1/object/public/project-images/b386fd0c-e16b-4e1f-9080-048c17249333.png" },
+    { title: "Real-Time Communication Platform", description: "Role-based course communities with live messaging, file sharing, enrolment, and resource management.", tags: ["Realtime", "PostgreSQL", "JWT"], imageKeywords: "education chat collaboration web application", imageUrl: "https://slijjjzgalpgugyjouih.supabase.co/storage/v1/object/public/project-images/7b7a33f1-07b7-469a-bd8d-19e2d25dd073.png" },
+    { title: "Scalable SaaS Workspace", description: "A multi-user product workspace combining reusable workflows, integrations, permissions, and production-ready data architecture.", tags: ["SaaS", "API", "Workflows"], imageKeywords: "saas project management application dashboard", imageUrl: "https://aiiyykdklfukbwfniexm.supabase.co/storage/v1/object/public/portfolio/projects/a6b2affd-4314-4c1f-9726-a2fdd1172906.png" },
   ],
 };
 
@@ -50,10 +51,10 @@ const marketing: PortfolioReferenceTemplate = {
     { title: "Testing & Optimization", description: "Structured experiments across subject lines, creative, timing, audience, and offers." },
   ],
   projects: [
-    { title: "Ecommerce Welcome Series", description: "A branded welcome sequence that introduces the offer, handles objections, and moves new subscribers toward a first purchase.", tags: ["Klaviyo", "Lifecycle", "Design"], imageKeywords: "premium ecommerce welcome email design long form" },
-    { title: "Retention Flow System", description: "A coordinated post-purchase and win-back system built around customer behaviour and lifecycle timing.", tags: ["Automation", "Segmentation", "CRM"], imageKeywords: "email marketing automation flow dashboard" },
-    { title: "Promotional Campaign Suite", description: "A reusable campaign design system for launches, seasonal promotions, and product storytelling.", tags: ["Mailchimp", "Copywriting", "A/B Testing"], imageKeywords: "fashion ecommerce promotional email campaign design" },
-    { title: "Social Content Operations", description: "A practical content workflow covering research, scheduling, asset organization, approvals, and reporting.", tags: ["Social Media", "Canva", "Analytics"], imageKeywords: "social media content calendar analytics workspace" },
+    { title: "Ecommerce Welcome Series", description: "A branded welcome sequence that introduces the offer, handles objections, and moves new subscribers toward a first purchase.", tags: ["Klaviyo", "Lifecycle", "Design"], imageKeywords: "premium ecommerce welcome email design long form", imageUrl: "https://jfnvnjfxthkxqnjvlmkk.supabase.co/storage/v1/object/public/portfolio-media/1778998774088-AACa__illa.png" },
+    { title: "Retention Flow System", description: "A coordinated post-purchase and win-back system built around customer behaviour and lifecycle timing.", tags: ["Automation", "Segmentation", "CRM"], imageKeywords: "email marketing automation flow dashboard", imageUrl: "https://jfnvnjfxthkxqnjvlmkk.supabase.co/storage/v1/object/public/portfolio-media/1778998829397-Welcome_Email___Dr._Baron_Shop____1_.png" },
+    { title: "Promotional Campaign Suite", description: "A reusable campaign design system for launches, seasonal promotions, and product storytelling.", tags: ["Mailchimp", "Copywriting", "A/B Testing"], imageKeywords: "fashion ecommerce promotional email campaign design", imageUrl: "https://jfnvnjfxthkxqnjvlmkk.supabase.co/storage/v1/object/public/portfolio-media/1779253612885-Frame_18__1_.png" },
+    { title: "Social Content Operations", description: "A practical content workflow covering research, scheduling, asset organization, approvals, and reporting.", tags: ["Social Media", "Canva", "Analytics"], imageKeywords: "social media content calendar analytics workspace", imageUrl: "https://svzpenybdkmkfzbfyafg.supabase.co/storage/v1/object/public/portfolio/projects/1779276129587-89zrw4o43oi.png" },
   ],
 };
 

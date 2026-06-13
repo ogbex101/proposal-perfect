@@ -224,7 +224,9 @@ export const generatePortfolio = createServerFn({ method: "POST" })
         let imageUrl = stockImageUrl(keywords, i + 1); // external fallback
         try {
           let dataUrl: string;
-          if (source === "lovable") {
+           if (fallback?.imageUrl) {
+             dataUrl = await fetchImageAsDataUrl(fallback.imageUrl);
+           } else if (source === "lovable") {
             const { generateImagePrompted } = await import("./avatar-ai.server");
             dataUrl = await generateImagePrompted(
               `Photorealistic portfolio image for a freelance project titled "${proj.title}". ${keywords}. Niche: ${copy.niche}. Modern, clean, professional UI or workspace. No text, no logos.`,
@@ -268,6 +270,12 @@ export const generatePortfolio = createServerFn({ method: "POST" })
       aboutClient: copy.aboutClient,
       myStory: activeProfile.my_story ?? "",
       whatIDo: copy.whatIDo,
+      // Preserve the supplied reference structure/titles while allowing the AI
+      // to tailor each description to the specific job.
+      whatIDo: reference.services.map((service, index) => ({
+        title: service.title,
+        description: copy.whatIDo[index]?.description ?? service.description,
+      })),
       skills,
       projects,
       credentials,
