@@ -1,20 +1,11 @@
 // SERVER-ONLY. Generates the structured copy for an AI portfolio from a job
-// description + the freelancer's profile, using the Lovable AI gateway (the
-// same server-side provider the proposal features use).
+// description + the freelancer's profile, using the multi-provider AI fallback
+// system.
 
-import { generateText } from "ai";
+import { generateWithFallback } from "./ai-gateway.server";
 import { z } from "zod";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
 import type { PortfolioReferenceTemplate } from "./portfolio-reference-templates";
-
-const MODEL = "google/gemini-3-flash-preview";
-
-async function getModel() {
-  const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("Missing LOVABLE_API_KEY. Connect the Lovable AI connector in Lovable Cloud.");
-  return createLovableAiGatewayProvider(key)(MODEL);
-}
 
 export type PortfolioProfileInput = {
   name: string;
@@ -67,8 +58,6 @@ export async function generatePortfolioCopy(
   reference: PortfolioReferenceTemplate,
 ): Promise<PortfolioCopy> {
   try {
-    const model = await getModel();
-
     const profileBlock = [
       `Name: ${profile.name || "(not provided)"}`,
       `Bio: ${profile.bio || "(not provided)"}`,
@@ -114,8 +103,7 @@ Return a JSON object with this exact shape:
   "faqs": [{"question": "...", "answer": "..."}, ...]
 }${redFlagPromptBlock()}`;
 
-    const { text } = await generateText({
-      model,
+    const text = await generateWithFallback({
       system,
       prompt: `Here is the job the client posted. Tailor the portfolio to win it:\n\n${jobDescription}`,
     });

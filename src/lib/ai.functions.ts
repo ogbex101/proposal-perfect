@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateText } from "ai";
+import { generateWithFallback } from "./ai-gateway.server";
 import { z } from "zod";
 import { FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
@@ -21,15 +21,6 @@ async function loadCustomFlags(context: { supabase: any; userId: string }): Prom
   }
 }
 
-const MODEL = "google/gemini-3-flash-preview";
-
-async function getModel() {
-  const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("Missing LOVABLE_API_KEY");
-  return createLovableAiGatewayProvider(key)(MODEL);
-}
-
 function handleAiError(err: unknown): never {
   const msg = err instanceof Error ? err.message : String(err);
   if (msg.includes("429")) throw new Error("Rate limit hit. Please wait a moment and try again.");
@@ -43,10 +34,7 @@ function handleAiError(err: unknown): never {
  * This works with every gateway/model — no SDK structured-output features needed.
  */
 async function structured<T>(schema: z.ZodType<T>, system: string, prompt: string): Promise<T> {
-  const model = await getModel();
-
-  const { text } = await generateText({
-    model,
+  const text = await generateWithFallback({
     system:
       system +
       "\n\nCRITICAL: Your entire response must be a single valid JSON object — no markdown, no code fences, no commentary before or after. Start with { and end with }.",

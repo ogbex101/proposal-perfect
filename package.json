@@ -12,6 +12,10 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.82",
+    "@ai-sdk/groq": "^3.0.41",
+    "@ai-sdk/mistral": "^3.0.39",
+    "@ai-sdk/openai": "^3.0.71",
     "@ai-sdk/openai-compatible": "^2.0.48",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
