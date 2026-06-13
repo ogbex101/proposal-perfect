@@ -35,7 +35,7 @@ export const saveProposal = createServerFn({ method: "POST" })
 export const listProposals = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+    const { data, error } = await (context.supabase as any)
       .from("proposals")
       .select("id,title,job_description,length,content,hook,strategy,client_responded,responded_at,created_at")
       .order("created_at", { ascending: false })
@@ -74,12 +74,12 @@ export const markProposalResponse = createServerFn({ method: "POST" })
     z.object({ id: z.string().uuid(), responded: z.boolean().nullable() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
+    const { error } = await (context.supabase as any)
       .from("proposals")
       .update({
         client_responded: data.responded,
         responded_at: data.responded !== null ? new Date().toISOString() : null,
-      } as never)
+      })
       .eq("id", data.id)
       .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
@@ -102,7 +102,7 @@ export type ProposalAnalytics = {
 export const getProposalAnalytics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<ProposalAnalytics> => {
-    const { data, error } = await context.supabase
+    const { data, error } = await (context.supabase as any)
       .from("proposals")
       .select("hook, strategy, client_responded")
       .order("created_at", { ascending: false })

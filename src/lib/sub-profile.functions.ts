@@ -21,6 +21,8 @@ const subProfileSchema = z.object({
   avatar_url: z.string().max(500).nullable().optional(),
 });
 
+export type SubProfileInput = z.input<typeof subProfileSchema>;
+
 export type SubProfile = {
   id: string;
   user_id: string;
