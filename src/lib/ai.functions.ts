@@ -588,7 +588,9 @@ Rules:
 
 // ---------- Conversion Messages ----------
 const ConversionSchema = z.object({
-  options: z.array(z.object({
+  bestReply: z.string(),
+  bestReplyReason: z.string(),
+  alternatives: z.array(z.object({
     mode: z.string(),
     reply: z.string(),
   })),
@@ -596,33 +598,59 @@ const ConversionSchema = z.object({
 
 export const generateConversionResponses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { clientMessage: string; replyLanguage?: string }) =>
-    z.object({ clientMessage: z.string().min(5).max(5000), replyLanguage: z.string().optional() }).parse(d),
+  .inputValidator((d: { clientMessage: string; jobDescription?: string; sentProposal?: string; replyLanguage?: string }) =>
+    z.object({
+      clientMessage: z.string().min(5).max(5000),
+      jobDescription: z.string().max(5000).optional(),
+      sentProposal: z.string().max(5000).optional(),
+      replyLanguage: z.string().optional(),
+    }).parse(d),
   )
   .handler(async ({ data, context }) => {
     try {
       const customFlags = await loadCustomFlags(context);
+      const contextBlock = [
+        data.jobDescription ? `JOB DESCRIPTION:\n${data.jobDescription}` : null,
+        data.sentProposal ? `YOUR SENT PROPOSAL:\n${data.sentProposal}` : null,
+        `CLIENT'S MESSAGE:\n${data.clientMessage}`,
+      ].filter(Boolean).join("\n\n---\n\n");
+      const langInstruction = data.replyLanguage && data.replyLanguage !== "English"
+        ? `\n\nWRITE ALL REPLIES IN ${data.replyLanguage}.`
+        : "";
       const result = await structured(
         ConversionSchema,
-        `You write 6 distinct professional follow-up replies for a freelancer to send to a client. Each reply must use a completely different tone and approach as labeled. No "Hi". No "Let me know if you have questions". No fluff. Each reply is 2-5 sentences, direct, and moves toward a close.
+        `You are a rapid-response conversion coach for freelancers. The client is waiting. Analyze the full conversation thread and generate:
 
-Return a JSON object with this exact shape:
+1. The single BEST reply — the one most likely to advance the conversation toward a hire. Choose the tone and approach based on what the client actually wrote and what they seem to value.
+2. A brief reason (1-2 sentences) explaining why this reply was chosen.
+3. 5 alternative replies, each with a distinct approach.
+
+RULES:
+- Sound completely human — like a confident professional texting a peer, not writing a cover letter
+- No "I hope this message finds you well", no "Please let me know if you have questions", no formal openers
+- Get straight to the point. Clients skim messages.
+- Reference specifics from the job and proposal when available — never be generic
+- Each alternative must be genuinely different in approach, not just tone
+
+Return a JSON object:
 {
-  "options": [
-    { "mode": "Founder-to-Founder", "reply": "<strategic reply, vision-focused, peer-to-peer, treats client as a fellow builder>" },
-    { "mode": "As a Friend", "reply": "<warm, genuine, casual but still professional — like texting a trusted colleague>" },
-    { "mode": "Show Knowledge", "reply": "<demonstrates deep domain expertise about the client's specific problem — references what they likely face>" },
-    { "mode": "Strong Understanding", "reply": "<leads with empathy — shows you fully understand their situation, constraints, and goal>" },
-    { "mode": "As an Expert", "reply": "<authoritative, confident — you've solved this exact problem before and you're guiding them>" },
-    { "mode": "Sharp & Brief", "reply": "<ultra-concise — 1-2 sentences max — for clients who are clearly busy or direct>" }
+  "bestReply": "<the single best reply to send>",
+  "bestReplyReason": "<1-2 sentence explanation of why this approach wins>",
+  "alternatives": [
+    { "mode": "Founder-to-Founder", "reply": "<strategic, peer-to-peer>" },
+    { "mode": "As a Friend", "reply": "<warm, genuine, casual>" },
+    { "mode": "Show Knowledge", "reply": "<demonstrates domain expertise>" },
+    { "mode": "Strong Understanding", "reply": "<leads with empathy and precision>" },
+    { "mode": "Sharp & Brief", "reply": "<1-2 sentences, for busy clients>" }
   ]
-}${redFlagPromptBlock(customFlags)}${data.replyLanguage && data.replyLanguage !== "English" ? `\n\nWRITE ALL REPLIES IN ${data.replyLanguage}.` : ""}`,
-        `Client said:\n"${data.clientMessage}"\n\nGive me 6 reply options.`,
+}${redFlagPromptBlock(customFlags)}${langInstruction}`,
+        contextBlock,
       );
-      return result.options.map((o) => ({
-        mode: o.mode,
-        reply: scrubRedFlags(o.reply, customFlags),
-      }));
+      return {
+        bestReply: scrubRedFlags(result.bestReply, customFlags),
+        bestReplyReason: result.bestReplyReason,
+        alternatives: result.alternatives.map((a) => ({ ...a, reply: scrubRedFlags(a.reply, customFlags) })),
+      };
     } catch (err) {
       handleAiError(err);
     }
