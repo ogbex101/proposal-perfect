@@ -737,7 +737,11 @@ function SubProfilesPanel() {
 
   const EMPTY_SUB: Partial<SubProfile> = {
     label: "",
+    niche: null,
     name: null,
+    email: null,
+    phone: null,
+    whatsapp: null,
     bio: null,
     my_story: null,
     skills: [],
@@ -821,7 +825,11 @@ function SubProfilesPanel() {
                 save.mutate({
                   id: editTarget.id,
                   label: editTarget.label,
+                  niche: editTarget.niche || null,
                   name: editTarget.name || null,
+                  email: editTarget.email || null,
+                  phone: editTarget.phone || null,
+                  whatsapp: editTarget.whatsapp || null,
                   bio: editTarget.bio || null,
                   my_story: editTarget.my_story || null,
                   skills: editTarget.skills ?? [],
@@ -879,12 +887,34 @@ function SubProfileForm({
         />
       </div>
       <div className="space-y-1.5">
+        <Label>Primary niche <span className="text-xs text-muted-foreground">(used for portfolio matching)</span></Label>
+        <Input
+          value={value.niche ?? ""}
+          onChange={(e) => onChange({ ...value, niche: e.target.value || null })}
+          placeholder="e.g. Email Marketing Specialist"
+        />
+      </div>
+      <div className="space-y-1.5">
         <Label>Name <span className="text-xs text-muted-foreground">(leave blank to use head profile)</span></Label>
         <Input
           value={value.name ?? ""}
           onChange={(e) => onChange({ ...value, name: e.target.value || null })}
           placeholder="Override name…"
         />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="space-y-1.5">
+          <Label>Email</Label>
+          <Input type="email" value={value.email ?? ""} onChange={(e) => onChange({ ...value, email: e.target.value || null })} placeholder="you@gmail.com" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Phone</Label>
+          <Input value={value.phone ?? ""} onChange={(e) => onChange({ ...value, phone: e.target.value || null })} placeholder="+234…" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>WhatsApp</Label>
+          <Input value={value.whatsapp ?? ""} onChange={(e) => onChange({ ...value, whatsapp: e.target.value || null })} placeholder="+234…" />
+        </div>
       </div>
       <div className="space-y-1.5">
         <Label>Bio <span className="text-xs text-muted-foreground">(leave blank to inherit)</span></Label>

@@ -8,6 +8,7 @@ const STORAGE_KEY = "pp_active_sub_profile_id";
 export type MergedProfile = {
   id: string;
   email: string | null;
+  niche: string | null;
   name: string | null;
   phone: string | null;
   whatsapp: string | null;
@@ -33,10 +34,11 @@ function mergeWithHead(
   const brands = sub.brands_worked?.length ? sub.brands_worked : (head.brands_worked as string[] ?? []);
   return {
     id: head.id as string,
-    email: head.email as string | null,
+    email: sub.email ?? (head.email as string | null),
+    niche: sub.niche ?? null,
     name: sub.name ?? (head.name as string | null),
-    phone: head.phone as string | null,
-    whatsapp: head.whatsapp as string | null,
+    phone: sub.phone ?? (head.phone as string | null),
+    whatsapp: sub.whatsapp ?? (head.whatsapp as string | null),
     bio: sub.bio ?? (head.bio as string | null),
     my_story: sub.my_story ?? (head.my_story as string | null),
     skills,
@@ -91,6 +93,7 @@ export function useActiveProfile() {
       : {
           id: head.id,
           email: head.email ?? null,
+          niche: null,
           name: head.name ?? null,
           phone: head.phone ?? null,
           whatsapp: head.whatsapp ?? null,
