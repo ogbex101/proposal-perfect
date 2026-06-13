@@ -83,27 +83,34 @@ export async function downloadPdf(title: string, text: string): Promise<void> {
 }
 
 /**
- * Captures a DOM element (including all SVG diagrams) as a high-res image
- * and saves it as a multi-page PDF. Use this for visual documents like the
- * strategy document where diagrams must be preserved.
+ * Captures a DOM element (including all SVG diagrams, CSS variables, and modern
+ * CSS) as a high-res image and saves it as a multi-page PDF.
+ * Uses html-to-image which handles Tailwind CSS variables and inline SVGs correctly.
  */
 export async function downloadElementAsPdf(
   element: HTMLElement,
   filename: string,
 ): Promise<void> {
-  const html2canvas = (await import("html2canvas")).default;
+  const { toPng } = await import("html-to-image");
   const { jsPDF } = await import("jspdf");
 
   // Snapshot the element at 2× for retina sharpness
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
+  const dataUrl = await toPng(element, {
+    pixelRatio: 2,
     backgroundColor: "#0a0f14",
-    logging: false,
+    skipFonts: false,
+    cacheBust: true,
   });
 
-  const imgW = canvas.width;
-  const imgH = canvas.height;
+  // Decode image to get real pixel dimensions
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+  const imgW = img.naturalWidth;
+  const imgH = img.naturalHeight;
 
   // A4 in pt: 595 × 842
   const pageW = 595;
@@ -118,21 +125,18 @@ export async function downloadElementAsPdf(
   const usableFirstPage = pageH - topOffset - margin;
   const usableSubPage = pageH - margin * 2;
 
-  let srcY = 0; // current y position in source image (canvas pixels)
-
-  // Helper: draw a horizontal strip of the source canvas as one PDF page
-  function addPageWithStrip(yPx: number, heightPx: number, isFirst: boolean) {
-    doc.addPage();
+  // Draw a horizontal strip of the source image as one PDF page
+  async function addPageWithStrip(yPx: number, heightPx: number, isFirst: boolean) {
     const stripCanvas = document.createElement("canvas");
     stripCanvas.width = imgW;
     stripCanvas.height = heightPx;
     const ctx = stripCanvas.getContext("2d")!;
-    ctx.drawImage(canvas, 0, yPx, imgW, heightPx, 0, 0, imgW, heightPx);
+    ctx.drawImage(img, 0, yPx, imgW, heightPx, 0, 0, imgW, heightPx);
     const strip = stripCanvas.toDataURL("image/png");
     const stripPrintH = heightPx * scale;
 
+    doc.addPage();
     if (isFirst) {
-      // header
       doc.setFillColor(10, 15, 26);
       doc.rect(0, 0, pageW, 50, "F");
       doc.setTextColor(201, 168, 76);
@@ -141,25 +145,27 @@ export async function downloadElementAsPdf(
       doc.text("XPERIENCE PROPS", margin, 22);
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(13);
-      doc.text((filename || "Strategy").slice(0, 80), margin, 40);
+      doc.text((filename || "Strategy Document").slice(0, 80), margin, 40);
       doc.addImage(strip, "PNG", margin, topOffset, printW, stripPrintH);
     } else {
       doc.addImage(strip, "PNG", margin, margin, printW, stripPrintH);
     }
   }
 
-  // First page strip
+  let srcY = 0;
   const firstStripPx = Math.floor(usableFirstPage / scale);
-  addPageWithStrip(srcY, Math.min(firstStripPx, imgH), true);
+  await addPageWithStrip(srcY, Math.min(firstStripPx, imgH), true);
   srcY += firstStripPx;
 
-  // Subsequent pages
   const subStripPx = Math.floor(usableSubPage / scale);
   while (srcY < imgH) {
     const h = Math.min(subStripPx, imgH - srcY);
-    addPageWithStrip(srcY, h, false);
+    await addPageWithStrip(srcY, h, false);
     srcY += subStripPx;
   }
+
+  // jsPDF always creates a blank page 1 — remove it
+  doc.deletePage(1);
 
   doc.save(`${safeFilename(filename)}.pdf`);
 }
