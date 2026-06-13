@@ -36,6 +36,7 @@ function ConversionPage() {
   const [clientMsg, setClientMsg] = useState("");
   const [replies, setReplies] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [replyLanguage, setReplyLanguage] = useState("English");
 
   const history = useQuery({
     queryKey: ["conversions"],
@@ -44,7 +45,7 @@ function ConversionPage() {
   const rows = (history.data ?? []) as ConversionRow[];
 
   const generate = useMutation({
-    mutationFn: () => generateConversionResponses({ data: { clientMessage: clientMsg } }),
+    mutationFn: () => generateConversionResponses({ data: { clientMessage: clientMsg, replyLanguage } }),
     onSuccess: async (result) => {
       const options = result ?? [];
       setReplies(options);
@@ -84,6 +85,18 @@ function ConversionPage() {
               placeholder="Paste what the client sent you — a question, an objection, a price concern, an update request…"
               className="mt-2 resize-y bg-background/60 leading-relaxed"
             />
+            <div className="mt-4">
+              <Label className="annotation !text-muted-foreground">Reply language</Label>
+              <select
+                value={replyLanguage}
+                onChange={(e) => setReplyLanguage(e.target.value)}
+                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {["English", "French", "Spanish", "Portuguese", "Arabic", "German", "Italian", "Dutch", "Russian", "Chinese", "Japanese", "Korean"].map((lang) => (
+                  <option key={lang} value={lang}>{lang}</option>
+                ))}
+              </select>
+            </div>
             <Button
               className="mt-4 w-full bg-gold text-primary-foreground hover:bg-gold-bright"
               disabled={generate.isPending || clientMsg.trim().length < 5}

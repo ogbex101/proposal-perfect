@@ -34,22 +34,22 @@ const CopySchema = z.object({
   whatIDo: z.array(z.object({
     title: z.string(),
     description: z.string(),
-  })).max(5),
+  })),
   projects: z.array(z.object({
     title: z.string(),
     description: z.string(),
-    tags: z.array(z.string()).max(4),
+    tags: z.array(z.string()),
     imageKeywords: z.string(),
-  })).max(4),
+  })),
   testimonials: z.array(z.object({
     quote: z.string(),
     author: z.string(),
     role: z.string(),
-  })).max(3),
+  })),
   faqs: z.array(z.object({
     question: z.string(),
     answer: z.string(),
-  })).max(6),
+  })),
 });
 
 export type PortfolioCopy = z.infer<typeof CopySchema>;

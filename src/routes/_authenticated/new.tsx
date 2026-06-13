@@ -323,6 +323,12 @@ function NewProposal() {
           jobDescription: effectiveJob,
           analysis,
           budget: budget || undefined,
+          targetLanguage: (() => {
+            const detectedLang = analysis?.detectedLanguage;
+            return proposalLanguage === "detected" && detectedLang && detectedLang.toLowerCase() !== "english"
+              ? detectedLang
+              : undefined;
+          })(),
         },
       }),
     onSuccess: (result) => {

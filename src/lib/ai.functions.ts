@@ -405,7 +405,19 @@ Return a JSON object with this exact shape:
 }${redFlagPromptBlock(customFlags)}`,
         `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}${data.strategyDocument ? `\n\nStrategy reference:\n${data.strategyDocument}` : ""}\n\n${strategyBlock}${data.targetLanguage && data.targetLanguage.toLowerCase() !== "english" ? `\n\nOUTPUT LANGUAGE: ${data.targetLanguage}` : ""}`,
       );
-      return { ...result, content: scrubRedFlags(result.content, customFlags) };
+      // Hard-enforce brief limit
+      let finalResult = result;
+      if (data.length === "brief") {
+        const MAX = 1500;
+        let text = result.content;
+        if (text.length > MAX) {
+          const cut = text.slice(0, MAX);
+          const lastPunct = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "), cut.lastIndexOf(".\n"));
+          text = lastPunct > 800 ? cut.slice(0, lastPunct + 1).trimEnd() : cut.trimEnd();
+          finalResult = { ...result, content: text };
+        }
+      }
+      return { ...finalResult, content: scrubRedFlags(finalResult.content, customFlags) };
     } catch (err) {
       handleAiError(err);
     }
@@ -484,11 +496,12 @@ export type StrategyDocument = z.infer<typeof StrategySchema>;
 
 export const generateStrategyDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { jobDescription: string; analysis?: JobAnalysis | null; budget?: string }) =>
+  .inputValidator((d: { jobDescription: string; analysis?: JobAnalysis | null; budget?: string; targetLanguage?: string }) =>
     z.object({
       jobDescription: z.string().min(10),
       analysis: z.any().optional().nullable(),
       budget: z.string().optional(),
+      targetLanguage: z.string().optional(),
     }).parse(d),
   )
   .handler(async ({ data }) => {
@@ -496,9 +509,12 @@ export const generateStrategyDocument = createServerFn({ method: "POST" })
       const analysisBlock = data.analysis
         ? `\nJob analysis:\n${JSON.stringify(data.analysis, null, 2)}`
         : "";
+      const languageInstruction = data.targetLanguage && data.targetLanguage.toLowerCase() !== "english"
+        ? `\n\nLANGUAGE: Write ALL text fields in ${data.targetLanguage}. Every word must be in ${data.targetLanguage}.`
+        : "";
       return await structured(
         StrategySchema,
-        `You are a senior project manager writing a strategy document for a freelancer to share with a client. Be specific, realistic, and professional. Break the project into 3-5 clear phases.
+        `You are a senior project manager writing a strategy document for a freelancer to share with a client. Be specific, realistic, and professional. Break the project into 3-5 clear phases.${languageInstruction}
 
 Return a JSON object with this exact shape:
 {
@@ -538,15 +554,18 @@ const ConversionSchema = z.object({ options: z.array(z.string()).min(1).max(3) }
 
 export const generateConversionResponses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { clientMessage: string }) =>
-    z.object({ clientMessage: z.string().min(5).max(5000) }).parse(d),
+  .inputValidator((d: { clientMessage: string; replyLanguage?: string }) =>
+    z.object({ clientMessage: z.string().min(5).max(5000), replyLanguage: z.string().optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
     try {
       const customFlags = await loadCustomFlags(context);
+      const languageInstruction = data.replyLanguage && data.replyLanguage.toLowerCase() !== "english"
+        ? `\n\nWRITE ALL REPLIES IN ${data.replyLanguage}. Every word must be in ${data.replyLanguage}.`
+        : "";
       const result = await structured(
         ConversionSchema,
-        `You write professional, human follow-up replies for a freelancer to send to a client. Three distinct options, each 2-5 sentences, each addressing what the client said and moving toward a close. No "Hi". No "Let me know if you have questions". No fluff.
+        `You write professional, human follow-up replies for a freelancer to send to a client. Three distinct options, each 2-5 sentences, each addressing what the client said and moving toward a close. No "Hi". No "Let me know if you have questions". No fluff.${languageInstruction}
 
 Return a JSON object with this exact shape:
 {
