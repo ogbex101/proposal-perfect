@@ -8,7 +8,11 @@ const MAX_SUB_PROFILES = 9;
 const subProfileSchema = z.object({
   id: z.string().uuid().optional(),
   label: z.string().min(1).max(60),
+  niche: z.string().max(120).nullable().optional(),
   name: z.string().max(120).nullable().optional(),
+  email: z.string().email().max(320).nullable().optional(),
+  phone: z.string().max(50).nullable().optional(),
+  whatsapp: z.string().max(50).nullable().optional(),
   bio: z.string().max(1000).nullable().optional(),
   my_story: z.string().max(3000).nullable().optional(),
   skills: z.array(z.string().max(100)).max(50).optional(),
@@ -27,16 +31,30 @@ export type SubProfile = {
   id: string;
   user_id: string;
   label: string;
+  niche: string | null;
   name: string | null;
+  email: string | null;
+  phone: string | null;
+  whatsapp: string | null;
   bio: string | null;
   my_story: string | null;
   skills: string[];
   credentials: Credential[];
   brands_worked: string[];
   avatar_url: string | null;
+  avatar_signed_url?: string | null;
   created_at: string;
   updated_at: string;
 };
+
+function toSubProfile(row: Record<string, unknown>): SubProfile {
+  return {
+    ...row,
+    skills: Array.isArray(row.skills) ? row.skills as string[] : [],
+    credentials: Array.isArray(row.credentials) ? row.credentials as Credential[] : [],
+    brands_worked: Array.isArray(row.brands_worked) ? row.brands_worked as string[] : [],
+  } as unknown as SubProfile;
+}
 
 export const listSubProfiles = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -47,7 +65,12 @@ export const listSubProfiles = createServerFn({ method: "GET" })
       .eq("user_id", context.userId)
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
-    return (data ?? []) as SubProfile[];
+    return Promise.all((data ?? []).map(async (raw) => {
+      const row = toSubProfile(raw);
+      if (!row.avatar_url || /^https?:\/\//.test(row.avatar_url)) return { ...row, avatar_signed_url: row.avatar_url };
+      const { data: signed } = await context.supabase.storage.from("avatars").createSignedUrl(row.avatar_url, 60 * 60 * 24 * 7);
+      return { ...row, avatar_signed_url: signed?.signedUrl ?? null };
+    }));
   });
 
 export const upsertSubProfile = createServerFn({ method: "POST" })
@@ -63,7 +86,7 @@ export const upsertSubProfile = createServerFn({ method: "POST" })
         .select()
         .single();
       if (error) throw new Error(error.message);
-      return row as SubProfile;
+      return toSubProfile(row);
     }
 
     // Enforce max 9 sub-profiles
@@ -81,7 +104,7 @@ export const upsertSubProfile = createServerFn({ method: "POST" })
       .select()
       .single();
     if (error) throw new Error(error.message);
-    return row as SubProfile;
+    return toSubProfile(row);
   });
 
 export const deleteSubProfile = createServerFn({ method: "POST" })

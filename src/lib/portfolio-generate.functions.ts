@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { slugify, type PortfolioData } from "./portfolio-types";
+import { matchPortfolioReference } from "./portfolio-reference-templates";
 
 // ─── helpers (server-side) ────────────────────────────────────────────────────
 
@@ -118,8 +119,9 @@ export const generatePortfolio = createServerFn({ method: "POST" })
     if (pErr) throw new Error(pErr.message);
     if (!profile) throw new Error("Complete your profile before generating a portfolio.");
 
-    // Merge with sub-profile if specified
+    // Merge with the explicitly selected persona if specified.
     let activeProfile = profile;
+    let personaNiche = "";
     if (data.subProfileId) {
       const { data: sub } = await context.supabase
         .from("sub_profiles")
@@ -128,6 +130,7 @@ export const generatePortfolio = createServerFn({ method: "POST" })
         .eq("user_id", context.userId)
         .maybeSingle();
       if (sub) {
+        personaNiche = (sub as any).niche ?? "";
         activeProfile = {
           ...profile,
           name: (sub as any).name ?? profile.name,
@@ -137,6 +140,9 @@ export const generatePortfolio = createServerFn({ method: "POST" })
           credentials: ((sub as any).credentials?.length ? (sub as any).credentials : profile.credentials),
           brands_worked: ((sub as any).brands_worked?.length ? (sub as any).brands_worked : profile.brands_worked),
           avatar_url: (sub as any).avatar_url ?? profile.avatar_url,
+          email: (sub as any).email ?? profile.email,
+          phone: (sub as any).phone ?? profile.phone,
+          whatsapp: (sub as any).whatsapp ?? profile.whatsapp,
         };
       }
     }
@@ -146,7 +152,9 @@ export const generatePortfolio = createServerFn({ method: "POST" })
     const credentials =
       ((activeProfile.credentials as { title: string; institution: string; year: string }[] | null) ?? []);
 
-    // 2. AI copy.
+    // 2. Deterministically select the closest supplied reference family, then
+    // let AI tailor only the variable 30% of its content to this job.
+    const reference = matchPortfolioReference(`${personaNiche}\n${data.jobDescription}`);
     const { generatePortfolioCopy } = await import("./portfolio-ai.server");
     const copy = await generatePortfolioCopy(data.jobDescription, {
       name: activeProfile.name ?? "",
@@ -155,7 +163,7 @@ export const generatePortfolio = createServerFn({ method: "POST" })
       skills,
       credentials,
       brands,
-    });
+    }, reference);
 
     const folder = `${context.userId}/gen-${Date.now()}`;
 
@@ -210,12 +218,15 @@ export const generatePortfolio = createServerFn({ method: "POST" })
     //    kept as the ultimate fallback if both fetch and upload fail.
     const source = imageSource();
     const projects = await Promise.all(
-      copy.projects.map(async (proj, i) => {
-        const keywords = proj.imageKeywords || proj.tags.join(" ");
+       copy.projects.map(async (proj, i) => {
+         const fallback = reference.projects[i];
+         const keywords = fallback?.imageKeywords || proj.imageKeywords || proj.tags.join(" ");
         let imageUrl = stockImageUrl(keywords, i + 1); // external fallback
         try {
           let dataUrl: string;
-          if (source === "lovable") {
+           if (fallback?.imageUrl) {
+             dataUrl = await fetchImageAsDataUrl(fallback.imageUrl);
+           } else if (source === "lovable") {
             const { generateImagePrompted } = await import("./avatar-ai.server");
             dataUrl = await generateImagePrompted(
               `Photorealistic portfolio image for a freelance project titled "${proj.title}". ${keywords}. Niche: ${copy.niche}. Modern, clean, professional UI or workspace. No text, no logos.`,
@@ -228,9 +239,9 @@ export const generatePortfolio = createServerFn({ method: "POST" })
           // keep external stock fallback
         }
         return {
-          title: proj.title,
+           title: fallback?.title ?? proj.title,
           description: proj.description,
-          tags: proj.tags,
+           tags: fallback?.tags ?? proj.tags,
           imageUrl,
           imageKeywords: keywords,
         };
@@ -258,7 +269,12 @@ export const generatePortfolio = createServerFn({ method: "POST" })
       },
       aboutClient: copy.aboutClient,
       myStory: activeProfile.my_story ?? "",
-      whatIDo: copy.whatIDo,
+      // Preserve the supplied reference structure/titles while allowing the AI
+      // to tailor each description to the specific job.
+      whatIDo: reference.services.map((service, index) => ({
+        title: service.title,
+        description: copy.whatIDo[index]?.description ?? service.description,
+      })),
       skills,
       projects,
       credentials,
@@ -266,9 +282,9 @@ export const generatePortfolio = createServerFn({ method: "POST" })
       faqs: copy.faqs,
       brands,
       contact: {
-        email: profile.email ?? undefined,
-        phone: profile.phone ?? undefined,
-        whatsapp: profile.whatsapp ?? undefined,
+        email: activeProfile.email ?? undefined,
+        phone: activeProfile.phone ?? undefined,
+        whatsapp: activeProfile.whatsapp ?? undefined,
       },
     };
 

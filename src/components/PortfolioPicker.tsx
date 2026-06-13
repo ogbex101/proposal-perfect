@@ -31,6 +31,7 @@ type Mode = "link" | "saved" | "generate";
 
 interface PortfolioPickerProps {
   jobDescription: string;
+  subProfileId?: string | null;
   currentLink: string | null;
   onLinkChange: (url: string | null) => void;
 }
@@ -40,7 +41,7 @@ function portfolioUrl(slug: string): string {
   return `${origin}/p/${slug}`;
 }
 
-export function PortfolioPicker({ jobDescription, currentLink, onLinkChange }: PortfolioPickerProps) {
+export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onLinkChange }: PortfolioPickerProps) {
   const [mode, setMode] = useState<Mode>("link");
   const [linkValue, setLinkValue] = useState(currentLink ?? "");
   const [generated, setGenerated] = useState<{
@@ -60,7 +61,7 @@ export function PortfolioPicker({ jobDescription, currentLink, onLinkChange }: P
   const saved = savedQuery.data ?? [];
 
   const generateMutation = useMutation({
-    mutationFn: () => generatePortfolio({ data: { jobDescription } }),
+    mutationFn: () => generatePortfolio({ data: { jobDescription, subProfileId: subProfileId ?? undefined } }),
     onSuccess: (res) => {
       setGenerated(res);
       setSavedSlug(null);

@@ -577,6 +577,7 @@ function NewProposal() {
               {/* AI / saved / pasted portfolio for this job */}
               <PortfolioPicker
                 jobDescription={effectiveJob}
+                subProfileId={selectedSubId}
                 currentLink={portfolioLink}
                 onLinkChange={setPortfolioLink}
               />

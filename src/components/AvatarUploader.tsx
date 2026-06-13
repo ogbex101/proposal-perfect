@@ -10,6 +10,7 @@ interface AvatarUploaderProps {
   currentUrl: string | null | undefined;
   userName?: string | null;
   bio?: string | null;
+  profileKey?: string;
   onUploadComplete: (path: string) => void;
   /** Called when the user clears / removes the picture */
   onClear?: () => void;
@@ -28,6 +29,7 @@ export function AvatarUploader({
   currentUrl,
   userName,
   bio,
+  profileKey,
   onUploadComplete,
   onClear,
 }: AvatarUploaderProps) {
@@ -80,6 +82,7 @@ export function AvatarUploader({
         data: {
           fileName: file.name,
           contentType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
+          profileKey,
         },
       });
 

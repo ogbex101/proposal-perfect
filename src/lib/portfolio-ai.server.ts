@@ -5,6 +5,7 @@
 import { generateText } from "ai";
 import { z } from "zod";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
+import type { PortfolioReferenceTemplate } from "./portfolio-reference-templates";
 
 const MODEL = "google/gemini-3-flash-preview";
 
@@ -63,6 +64,7 @@ function handleAiError(err: unknown): never {
 export async function generatePortfolioCopy(
   jobDescription: string,
   profile: PortfolioProfileInput,
+  reference: PortfolioReferenceTemplate,
 ): Promise<PortfolioCopy> {
   try {
     const model = await getModel();
@@ -76,16 +78,28 @@ export async function generatePortfolioCopy(
       `Brands worked with: ${profile.brands.length ? profile.brands.join(", ") : "(none listed)"}`,
     ].join("\n");
 
-    const system = `You write a freelancer's portfolio landing page tailored to ONE specific job.
+    const referenceBlock = [
+      `Template family: ${reference.label}`,
+      `Visual direction: ${reference.visualDirection}`,
+      `Fixed services: ${reference.services.map((service) => `${service.title}: ${service.description}`).join(" | ")}`,
+      `Fixed project samples: ${reference.projects.map((project) => `${project.title}: ${project.description} [${project.tags.join(", ")}]`).join(" | ")}`,
+    ].join("\n");
+
+    const system = `You tailor a reference-backed freelancer portfolio to ONE specific job. The supplied template and samples are 70% of the result; your writing is the remaining 30%.
 Rules:
 - Ground everything in the freelancer's real profile below. Do NOT invent credentials, brands, or skills that contradict it.
-- The "projects" and "testimonials" are illustrative samples — make them realistic, specific, and clearly relevant to the job, never generic filler.
-- Match the freelancer's actual skills to what the job needs in "whatIDo".
+- Keep the fixed service titles and project titles from the reference template. You may tailor descriptions to the job, but do not replace the project concepts with generic inventions.
+- Return exactly ${reference.services.length} whatIDo entries and ${reference.projects.length} projects in the same order as the reference.
+- Match the freelancer's actual skills to what the job needs in service descriptions.
 - Write like a confident professional, not a marketer. No clichés ("passionate", "go-getter", "results-driven"), no exclamation marks.
 - "aboutClient" must reference specifics from the job post so it feels personal.
+- Testimonials must never reuse names, identities, or personal claims from any reference website. Keep them clearly illustrative and role-based.
 
 FREELANCER PROFILE:
 ${profileBlock}
+
+REFERENCE TEMPLATE (preserve approximately 70%):
+${referenceBlock}
 
 CRITICAL: Your entire response must be a single valid JSON object — no markdown, no code fences, no commentary before or after. Start with { and end with }.
 
