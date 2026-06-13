@@ -5,7 +5,6 @@ export async function copyText(text: string): Promise<void> {
     await navigator.clipboard.writeText(text);
     return;
   }
-  // Fallback for older browsers / insecure contexts
   const ta = document.createElement("textarea");
   ta.value = text;
   ta.style.position = "fixed";
@@ -49,9 +48,9 @@ export async function downloadPdf(title: string, text: string): Promise<void> {
   let y = margin;
 
   // Header band
-  doc.setFillColor(10, 15, 26); // navy
+  doc.setFillColor(10, 15, 26);
   doc.rect(0, 0, pageW, 86, "F");
-  doc.setTextColor(201, 168, 76); // gold
+  doc.setTextColor(201, 168, 76);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.text("XPERIENCE PROPS", margin, 38);
@@ -77,8 +76,91 @@ export async function downloadPdf(title: string, text: string): Promise<void> {
       doc.text(line, margin, y);
       y += lineHeight;
     }
-    y += 6; // paragraph gap
+    y += 6;
   }
 
   doc.save(`${safeFilename(title)}.pdf`);
 }
+
+/**
+ * Captures a DOM element (including all SVG diagrams) as a high-res image
+ * and saves it as a multi-page PDF. Use this for visual documents like the
+ * strategy document where diagrams must be preserved.
+ */
+export async function downloadElementAsPdf(
+  element: HTMLElement,
+  filename: string,
+): Promise<void> {
+  const html2canvas = (await import("html2canvas")).default;
+  const { jsPDF } = await import("jspdf");
+
+  // Snapshot the element at 2× for retina sharpness
+  const canvas = await html2canvas(element, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#0a0f14",
+    logging: false,
+  });
+
+  const imgW = canvas.width;
+  const imgH = canvas.height;
+
+  // A4 in pt: 595 × 842
+  const pageW = 595;
+  const pageH = 842;
+  const margin = 28;
+  const printW = pageW - margin * 2;
+  const scale = printW / imgW;
+
+  const doc = new jsPDF({ unit: "pt", format: "a4", compress: true });
+
+  const topOffset = 58; // space below header on page 1
+  const usableFirstPage = pageH - topOffset - margin;
+  const usableSubPage = pageH - margin * 2;
+
+  let srcY = 0; // current y position in source image (canvas pixels)
+
+  // Helper: draw a horizontal strip of the source canvas as one PDF page
+  function addPageWithStrip(yPx: number, heightPx: number, isFirst: boolean) {
+    doc.addPage();
+    const stripCanvas = document.createElement("canvas");
+    stripCanvas.width = imgW;
+    stripCanvas.height = heightPx;
+    const ctx = stripCanvas.getContext("2d")!;
+    ctx.drawImage(canvas, 0, yPx, imgW, heightPx, 0, 0, imgW, heightPx);
+    const strip = stripCanvas.toDataURL("image/png");
+    const stripPrintH = heightPx * scale;
+
+    if (isFirst) {
+      // header
+      doc.setFillColor(10, 15, 26);
+      doc.rect(0, 0, pageW, 50, "F");
+      doc.setTextColor(201, 168, 76);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text("XPERIENCE PROPS", margin, 22);
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(13);
+      doc.text((filename || "Strategy").slice(0, 80), margin, 40);
+      doc.addImage(strip, "PNG", margin, topOffset, printW, stripPrintH);
+    } else {
+      doc.addImage(strip, "PNG", margin, margin, printW, stripPrintH);
+    }
+  }
+
+  // First page strip
+  const firstStripPx = Math.floor(usableFirstPage / scale);
+  addPageWithStrip(srcY, Math.min(firstStripPx, imgH), true);
+  srcY += firstStripPx;
+
+  // Subsequent pages
+  const subStripPx = Math.floor(usableSubPage / scale);
+  while (srcY < imgH) {
+    const h = Math.min(subStripPx, imgH - srcY);
+    addPageWithStrip(srcY, h, false);
+    srcY += subStripPx;
+  }
+
+  doc.save(`${safeFilename(filename)}.pdf`);
+}
+

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ScanLine,
@@ -49,7 +49,7 @@ import { listGeneratedPortfolios } from "@/lib/portfolio-generate.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
 type FreelancerProfile = { id: string; label: string };
 import { saveItem } from "@/lib/saved.functions";
-import { copyText, downloadTxt, downloadPdf } from "@/lib/export";
+import { copyText, downloadTxt, downloadPdf, downloadElementAsPdf } from "@/lib/export";
 
 export const Route = createFileRoute("/_authenticated/new")({
   component: NewProposal,
@@ -91,6 +91,7 @@ function NewProposal() {
 
   const [strategyDoc, setStrategyDoc] = useState<StrategyDocument | null>(null);
   const [showStrategy, setShowStrategy] = useState(false);
+  const strategyRef = useRef<HTMLDivElement>(null);
 
   // Language: "english" keeps proposal in English, "detected" writes it in the job's language
   const [proposalLanguage, setProposalLanguage] = useState<"english" | "detected">("english");
@@ -902,13 +903,21 @@ function NewProposal() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => downloadPdf(`Strategy-${strategyDoc.projectTitle}`, formatStrategyAsText(strategyDoc)).then(() => toast.success("Strategy PDF downloaded")).catch(() => toast.error("PDF download failed — try again"))}
+                    onClick={() => {
+                      if (!strategyRef.current) { toast.error("Strategy not rendered yet"); return; }
+                      toast.loading("Capturing diagrams…", { id: "strat-pdf" });
+                      downloadElementAsPdf(strategyRef.current, `Strategy-${strategyDoc.projectTitle}`)
+                        .then(() => toast.success("Strategy PDF downloaded", { id: "strat-pdf" }))
+                        .catch(() => toast.error("PDF failed — try again", { id: "strat-pdf" }));
+                    }}
                   >
                     <FileDown className="mr-1.5 h-3.5 w-3.5" /> Download PDF
                   </Button>
                 </div>
               </div>
-              <StrategyDocumentView doc={strategyDoc} />
+              <div ref={strategyRef}>
+                <StrategyDocumentView doc={strategyDoc} />
+              </div>
             </div>
           )}
 
