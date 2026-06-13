@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#0a0f14"/>
+  <!-- Gold "X" mark -->
+  <rect x="96" y="224" width="320" height="64" rx="32" fill="#B98A2E" transform="rotate(45 256 256)"/>
+  <rect x="96" y="224" width="320" height="64" rx="32" fill="#B98A2E" transform="rotate(-45 256 256)"/>
+  <!-- Teal dot accent -->
+  <circle cx="380" cy="132" r="28" fill="#0E7C86"/>
+</svg>

@@ -365,15 +365,22 @@ export const generateProposal = createServerFn({ method: "POST" })
 
       const result = await structured(
         ProposalSchema,
-        `You write human, high-converting freelance proposals. Hard rules:
+        `You write freelance proposals that win because the client FEELS understood — not impressed, not sold to, understood.
+
+The gold standard: the client reads this and thinks "this person has seen my exact problem before and knows exactly how it ends." That feeling comes from specificity, not claims. Never say "I understand your needs." Instead, name the specific thing they're dealing with, name the downstream cost of it, name the thing they probably haven't tried yet.
+
+Hard rules:
 - No greeting. No "Hi". Start directly with the hook.${languageInstruction}${toneInstruction}
-- DO NOT parrot or restate the job post. Echo the client's stated needs only lightly — at most ~30% of the proposal may reflect their requirements; the other ~70% must be YOUR original interpretation, insight, approach, and value they did NOT explicitly ask for. Show you understand the problem more deeply than they described it. Never copy the client's wording verbatim.
+- HUMAN EMPATHY WITHOUT GENERIC LANGUAGE: Show you understand by naming specifics — their industry friction, the real reason this project is urgent, the hidden risk they're taking by not solving it now. Do not use any phrase that sounds like emotional performance ("I understand your frustration", "I know how stressful this is"). Instead, demonstrate understanding through precision.
+- CONFIDENCE WITHOUT ARROGANCE: Write like someone who has solved this exact type of problem before and is not anxious about it. Calm. Certain. But not boastful. The confidence comes from the quality of the insight, not from self-promotion.
+- DO NOT parrot or restate the job post. Echo the client's stated needs at most ~30%. The other ~70% must be YOUR original interpretation, deeper insight, and value they did NOT explicitly ask for. Show you understand the problem more deeply than they described it.
+- Every sentence must advance a thought. No filler, no transitions that carry no meaning ("Additionally", "Furthermore", "As mentioned above").
 - Forbidden phrases (NEVER use any of these or close variants):
 ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 - Use the assigned HOOK: ${hookLabel}
 - Use the assigned STRATEGY: ${strategyLabel}
 - LENGTH ENFORCEMENT (this is a hard rule):
-  * brief: MAXIMUM 1500 characters total. Every single sentence must carry a concrete, specific point — no transitions, no filler adjectives, no scene-setting. Structure: 3-4 sentence hook paragraph (each sentence a distinct insight about their problem), one razor-targeted open question, one crisp CTA. NO portfolio section. NO execution plan. NO milestones. If you find yourself writing "I will" or "I can" — delete and rewrite from the client's outcome perspective instead. These 1500 characters must feel denser and more valuable than a 4000-character generic proposal.
+  * brief: MAXIMUM 1500 characters total. Every single sentence must carry a concrete, specific point — no transitions, no filler adjectives, no scene-setting. Structure: 3-4 sentence hook paragraph (each sentence a distinct insight about their problem), one razor-targeted open question, one crisp CTA. NO portfolio section. NO execution plan. NO milestones. These 1500 characters must feel denser and more valuable than a 4000-character generic proposal.
   * robust: 2000–3000 characters. Hook → portfolio (2-3 links) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
   * explanatory: 3000–5000 characters. All sections fully developed. Detailed execution plan. Full milestones if provided.
   You are writing a "${length.name}" proposal so the rules for "${length.id}" apply.

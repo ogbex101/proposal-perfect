@@ -77,13 +77,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "Xperience Props — Proposals That Convert" },
       { name: "description", content: "AI-powered proposal generator for freelancers. Paste a job post, get a human, conversion-tuned pitch in seconds." },
       { property: "og:title", content: "Xperience Props" },
       { property: "og:description", content: "Proposals That Convert. Not Generic. Just Human." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      // PWA
+      { name: "theme-color", content: "#B98A2E" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "XP Props" },
+      { name: "msapplication-TileColor", content: "#0a0f14" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -93,6 +100,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap",
       },
+      { rel: "manifest", href: "/manifest.json" },
+      { rel: "icon", href: "/icon.svg", type: "image/svg+xml" },
+      { rel: "apple-touch-icon", href: "/icon.svg" },
     ],
   }),
   shellComponent: RootShell,
@@ -113,6 +123,15 @@ function RootShell({ children }: { children: ReactNode }) {
       </body>
     </html>
   );
+}
+
+function useServiceWorker() {
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker
+      .register("/sw.js", { scope: "/" })
+      .catch(() => {/* SW registration failure is non-fatal */});
+  }, []);
 }
 
 function usePageViewTracker() {
@@ -153,6 +172,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
 
+  useServiceWorker();
   usePageViewTracker();
 
   useEffect(() => {
