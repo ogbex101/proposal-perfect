@@ -598,39 +598,57 @@ const ConversionSchema = z.object({
 
 export const generateConversionResponses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { clientMessage: string; jobDescription?: string; sentProposal?: string; replyLanguage?: string }) =>
+  .inputValidator((d: {
+    clientMessage: string;
+    jobDescription?: string;
+    sentProposal?: string;
+    replyLanguage?: string;
+    chatHistory?: Array<{ role: "client" | "you"; content: string }>;
+  }) =>
     z.object({
       clientMessage: z.string().min(5).max(5000),
       jobDescription: z.string().max(5000).optional(),
       sentProposal: z.string().max(5000).optional(),
       replyLanguage: z.string().optional(),
+      chatHistory: z.array(z.object({ role: z.enum(["client", "you"]), content: z.string() })).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
     try {
       const customFlags = await loadCustomFlags(context);
+
+      // Build a readable chat thread so the AI has full context
+      const historyBlock = data.chatHistory && data.chatHistory.length > 0
+        ? `FULL CONVERSATION HISTORY (oldest first):\n${data.chatHistory
+            .map((m) => `[${m.role === "client" ? "CLIENT" : "YOU"}]: ${m.content}`)
+            .join("\n\n")}\n\n---\n\n`
+        : "";
+
       const contextBlock = [
         data.jobDescription ? `JOB DESCRIPTION:\n${data.jobDescription}` : null,
         data.sentProposal ? `YOUR SENT PROPOSAL:\n${data.sentProposal}` : null,
-        `CLIENT'S MESSAGE:\n${data.clientMessage}`,
+        historyBlock || null,
+        `CLIENT'S LATEST MESSAGE:\n${data.clientMessage}`,
       ].filter(Boolean).join("\n\n---\n\n");
       const langInstruction = data.replyLanguage && data.replyLanguage !== "English"
         ? `\n\nWRITE ALL REPLIES IN ${data.replyLanguage}.`
         : "";
       const result = await structured(
         ConversionSchema,
-        `You are a rapid-response conversion coach for freelancers. The client is waiting. Analyze the full conversation thread and generate:
+        `You are a rapid-response conversion coach for freelancers. The client is waiting. Read the FULL conversation history carefully so you can continue the thread naturally — do not restart or summarize what was already said. Generate:
 
-1. The single BEST reply — the one most likely to advance the conversation toward a hire. Choose the tone and approach based on what the client actually wrote and what they seem to value.
-2. A brief reason (1-2 sentences) explaining why this reply was chosen.
+1. The single BEST reply — the one most likely to move the conversation toward a hire RIGHT NOW. Take into account the entire thread dynamic: what was already agreed, what objections were raised, what the client's tone reveals.
+2. A brief reason (1-2 sentences) explaining why this reply wins given the full context.
 3. 5 alternative replies, each with a distinct approach.
 
-RULES:
-- Sound completely human — like a confident professional texting a peer, not writing a cover letter
-- No "I hope this message finds you well", no "Please let me know if you have questions", no formal openers
-- Get straight to the point. Clients skim messages.
-- Reference specifics from the job and proposal when available — never be generic
-- Each alternative must be genuinely different in approach, not just tone
+CRITICAL RULES (the client must NEVER suspect AI):
+- Write like a human who typed this on their phone in 30 seconds — natural rhythm, occasional contractions, no polished corporate prose
+- No formal openers: never "I hope this message finds you well", "Dear", "Certainly!", "Absolutely!", "Great question!", "I understand your concern"
+- Never sound eager or desperate — confident and measured, like someone with multiple clients
+- No lists, no headers, no structured formatting in the reply — just natural conversational text
+- If the thread shows the client is already warm, reflect that; if they're cautious, match that energy
+- Reference specifics from the job/proposal/prior messages — never be generic
+- Each alternative must be genuinely different in approach, not just rephrased
 
 Return a JSON object:
 {
