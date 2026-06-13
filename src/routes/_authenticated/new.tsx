@@ -88,6 +88,9 @@ function NewProposal() {
   const [strategyDoc, setStrategyDoc] = useState<StrategyDocument | null>(null);
   const [showStrategy, setShowStrategy] = useState(false);
 
+  // Language: "english" keeps proposal in English, "detected" writes it in the job's language
+  const [proposalLanguage, setProposalLanguage] = useState<"english" | "detected">("english");
+
   const [chosenProfile, setChosenProfile] = useState<FreelancerProfile | null>(null);
 
   const { subs, activeSubId } = useActiveProfile();
@@ -170,6 +173,11 @@ function NewProposal() {
           description: "A portfolio tailored to this job.",
         });
       }
+      const detectedLang = analysis?.detectedLanguage;
+      const targetLanguage =
+        proposalLanguage === "detected" && detectedLang && detectedLang.toLowerCase() !== "english"
+          ? detectedLang
+          : undefined;
       return generateProposal({
         data: {
           jobDescription: effectiveJob,
@@ -181,6 +189,7 @@ function NewProposal() {
           portfolioItems: items,
           milestones: useMilestones ? milestones : undefined,
           budget: budget || undefined,
+          targetLanguage,
         },
       });
     },
@@ -294,6 +303,7 @@ function NewProposal() {
     setChosenProfile(null);
     setStrategyDoc(null);
     setShowStrategy(false);
+    setProposalLanguage("english");
   }
 
   function requestSave() {
@@ -556,6 +566,41 @@ function NewProposal() {
                   onRegenerate={() => milestoneMutation.mutate()}
                   regenerating={milestoneMutation.isPending}
                 />
+              )}
+
+              {/* Language selector — shown when job is not in English */}
+              {analysis?.detectedLanguage && analysis.detectedLanguage.toLowerCase() !== "english" && (
+                <div className="rounded-md border border-border bg-background/40 p-3">
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    Job detected in <span className="font-semibold text-white">{analysis.detectedLanguage}</span>. Proposal language:
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setProposalLanguage("english")}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-xs font-medium transition-colors",
+                        proposalLanguage === "english"
+                          ? "border-gold/50 bg-gold/10 text-gold"
+                          : "border-border text-muted-foreground hover:text-white",
+                      )}
+                    >
+                      English
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProposalLanguage("detected")}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-xs font-medium transition-colors",
+                        proposalLanguage === "detected"
+                          ? "border-teal/50 bg-teal/10 text-teal"
+                          : "border-border text-muted-foreground hover:text-white",
+                      )}
+                    >
+                      {analysis.detectedLanguage}
+                    </button>
+                  </div>
+                </div>
               )}
 
               <Button

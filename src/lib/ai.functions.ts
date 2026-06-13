@@ -94,6 +94,7 @@ const AnalysisSchema = z.object({
   hookReason: z.string(),
   suggestedStrategyId: z.string(),
   strategyReason: z.string(),
+  detectedLanguage: z.string().default("English"),
 });
 export type JobAnalysis = z.infer<typeof AnalysisSchema>;
 
@@ -125,7 +126,8 @@ Return a JSON object with these exact keys:
   "suggestedHookId": "<exact id from list>",
   "hookReason": "...",
   "suggestedStrategyId": "<exact id from list>",
-  "strategyReason": "..."
+  "strategyReason": "...",
+  "detectedLanguage": "<full English name of the language this job post is written in, e.g. English, French, Spanish, German, Portuguese, Arabic, etc.>"
 }${redFlagPromptBlock()}`,
         `Analyze this job post:\n\n${data.jobDescription}`,
       );
@@ -190,6 +192,7 @@ export const generateProposal = createServerFn({ method: "POST" })
     portfolioItems: Array<{ title: string; url: string; description: string }>;
     milestones?: Array<{ title: string; description: string; amount?: string }>;
     budget?: string;
+    targetLanguage?: string;
   }) =>
     z.object({
       jobDescription: z.string().min(10),
@@ -205,6 +208,7 @@ export const generateProposal = createServerFn({ method: "POST" })
         .array(z.object({ title: z.string(), description: z.string(), amount: z.string().optional() }))
         .optional(),
       budget: z.string().optional(),
+      targetLanguage: z.string().optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -224,10 +228,14 @@ export const generateProposal = createServerFn({ method: "POST" })
         ? `Job analysis:\n${JSON.stringify(data.analysis, null, 2)}`
         : "";
 
+      const languageInstruction = data.targetLanguage && data.targetLanguage.toLowerCase() !== "english"
+        ? `\n- LANGUAGE: Write the ENTIRE proposal in ${data.targetLanguage}. Every sentence, word, and phrase must be in ${data.targetLanguage}. Do not mix languages.`
+        : "";
+
       const result = await structured(
         ProposalSchema,
         `You write human, high-converting freelance proposals. Hard rules:
-- No greeting. No "Hi". Start directly with the hook.
+- No greeting. No "Hi". Start directly with the hook.${languageInstruction}
 - DO NOT parrot or restate the job post. Echo the client's stated needs only lightly — at most ~30% of the proposal may reflect their requirements; the other ~70% must be YOUR original interpretation, insight, approach, and value they did NOT explicitly ask for. Show you understand the problem more deeply than they described it. Never copy the client's wording verbatim.
 - Forbidden phrases (NEVER use any of these or close variants):
 ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
@@ -245,7 +253,7 @@ Return a JSON object with this exact shape:
     "question": "<why this closing question works>"
   }
 }${redFlagPromptBlock(customFlags)}`,
-        `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}`,
+        `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}${data.targetLanguage && data.targetLanguage.toLowerCase() !== "english" ? `\n\nOUTPUT LANGUAGE: ${data.targetLanguage}` : ""}`,
       );
       return { ...result, content: scrubRedFlags(result.content, customFlags) };
     } catch (err) {
