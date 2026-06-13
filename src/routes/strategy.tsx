@@ -21,7 +21,8 @@ function StrategyPage() {
   const doc = useMemo<StrategyDocument | null>(() => {
     if (!d) return null;
     try {
-      return JSON.parse(atob(d));
+      // Unicode-safe decode (mirrors encoder in new.tsx)
+      return JSON.parse(decodeURIComponent(Array.from(atob(decodeURIComponent(d)), (c) => "%" + c.charCodeAt(0).toString(16).padStart(2, "0")).join("")));
     } catch {
       return null;
     }

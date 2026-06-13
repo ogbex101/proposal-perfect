@@ -124,7 +124,7 @@ export const getAvatarUploadUrl = createServerFn({ method: "POST" })
 
     const { data: signedData, error } = await context.supabase.storage
       .from("avatars")
-      .createSignedUploadUrl(objectPath);
+      .createSignedUploadUrl(objectPath, { upsert: true });
 
     if (error) throw new Error(error.message);
 

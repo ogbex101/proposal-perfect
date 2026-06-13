@@ -920,8 +920,10 @@ function NewProposal() {
                     size="sm"
                     onClick={() => {
                       try {
-                        const encoded = btoa(JSON.stringify(strategyDoc));
-                        const url = `${window.location.origin}/strategy?d=${encoded}`;
+                        // Unicode-safe base64 encode
+                        const json = JSON.stringify(strategyDoc);
+                        const encoded = btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/gi, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+                        const url = `${window.location.origin}/strategy?d=${encodeURIComponent(encoded)}`;
                         navigator.clipboard.writeText(url).then(() => toast.success("Link copied — share it with your client")).catch(() => {
                           const ta = document.createElement("textarea");
                           ta.value = url;
@@ -1114,12 +1116,50 @@ function OutputPanel({
         </div>
       </div>
 
-      <Textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        rows={14}
-        className="mt-3 resize-y bg-background/60 text-sm leading-relaxed"
-      />
+      {/* Toggle: Preview / Edit */}
+      {(() => {
+        const [preview, setPreview] = (useState as <T>(v: T) => [T, (v: T) => void])(true);
+        return (
+          <>
+            <div className="mt-3 flex items-center justify-between">
+              <div className="flex rounded-lg border border-line/60 overflow-hidden text-xs">
+                <button
+                  onClick={() => setPreview(true)}
+                  className={cn("px-3 py-1.5 transition-colors", preview ? "bg-gold/20 text-gold font-medium" : "text-muted-foreground hover:text-white")}
+                >
+                  Preview
+                </button>
+                <button
+                  onClick={() => setPreview(false)}
+                  className={cn("px-3 py-1.5 transition-colors border-l border-line/60", !preview ? "bg-sidebar text-white font-medium" : "text-muted-foreground hover:text-white")}
+                >
+                  Edit
+                </button>
+              </div>
+              <span className="font-mono text-[10px] text-muted-foreground">{content.length} chars</span>
+            </div>
+
+            {preview ? (
+              <div className="mt-3 rounded-lg border border-line/40 bg-background/40 p-4 min-h-[14rem] max-h-[32rem] overflow-y-auto">
+                {content.split(/\n\n+/).map((para, i) => (
+                  <p key={i} className={cn("text-sm leading-relaxed text-foreground/90", i > 0 && "mt-4")}>
+                    {para.split(/\n/).map((line, j) => (
+                      <span key={j}>{line}{j < para.split(/\n/).length - 1 && <br />}</span>
+                    ))}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <Textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                rows={14}
+                className="mt-3 resize-y bg-background/60 text-sm leading-relaxed"
+              />
+            )}
+          </>
+        );
+      })()}
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" onClick={() => copyText(content).then(() => toast.success("Copied"))}>
@@ -1137,21 +1177,19 @@ function OutputPanel({
         <Button size="sm" variant="ghost" onClick={onSaveTemplate} disabled={savingTemplate} className="text-muted-foreground">
           Save as template
         </Button>
-        {content && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-teal/30 text-teal hover:bg-teal/10"
-            onClick={() => hookStrengthMutation.mutate(undefined)}
-            disabled={hookStrengthMutation.isPending}
-          >
-            {hookStrengthMutation.isPending ? (
-              <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Scoring hook…</>
-            ) : (
-              <><Zap className="mr-1.5 h-3.5 w-3.5" /> Score my hook</>
-            )}
-          </Button>
-        )}
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-teal/30 text-teal hover:bg-teal/10"
+          onClick={() => hookStrengthMutation.mutate(undefined)}
+          disabled={hookStrengthMutation.isPending}
+        >
+          {hookStrengthMutation.isPending ? (
+            <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Scoring hook…</>
+          ) : (
+            <><Zap className="mr-1.5 h-3.5 w-3.5" /> Score my hook</>
+          )}
+        </Button>
       </div>
 
       {content && (
