@@ -44,7 +44,7 @@ function mergeWithHead(
     skills,
     credentials,
     brands_worked: brands,
-    avatar_url: sub.avatar_url ?? (head.avatar_url as string | null),
+    avatar_url: sub.avatar_url ?? null,
     default_length: head.default_length as string | null,
     default_plan: head.default_plan as boolean | null,
   };
