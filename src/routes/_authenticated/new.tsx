@@ -141,7 +141,12 @@ function NewProposal() {
   const analyzeMutation = useMutation({
     mutationFn: () => analyzeJob({ data: { jobDescription: effectiveJob } }),
     onSuccess: (result) => {
-      setAnalysis(result);
+      const normalized: JobAnalysis = {
+        ...result,
+        detectedLanguage: result.detectedLanguage ?? "English",
+        suggestedLength: result.suggestedLength ?? "robust",
+      };
+      setAnalysis(normalized);
       const h = HOOKS.find((x) => x.id === result.suggestedHookId);
       const s = STRATEGIES.find((x) => x.id === result.suggestedStrategyId);
       if (h) setHookId(h.id);

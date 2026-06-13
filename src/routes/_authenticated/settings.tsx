@@ -715,7 +715,7 @@ function SubProfilesPanel() {
   const [toDelete, setToDelete] = useState<SubProfile | null>(null);
 
   const save = useMutation({
-    mutationFn: (d: Parameters<typeof upsertSubProfile>[0]["data"]) =>
+    mutationFn: (d: import("@/lib/sub-profile.functions").SubProfileInput) =>
       upsertSubProfile({ data: d }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sub-profiles"] });

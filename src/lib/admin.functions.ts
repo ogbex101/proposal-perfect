@@ -57,7 +57,7 @@ export const getPageViewStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireAdmin(context.supabase, context.userId);
-    const { data, error } = await context.supabase
+    const { data, error } = await (context.supabase as any)
       .from("page_views")
       .select("user_id, fingerprint, created_at, path")
       .order("created_at", { ascending: false })
@@ -79,13 +79,13 @@ export const recordPageView = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      await supabaseAdmin.from("page_views").insert({
+      await (supabaseAdmin as any).from("page_views").insert({
         path: data.path,
         fingerprint: data.fingerprint ?? null,
         referrer: data.referrer ?? null,
         user_agent: data.userAgent ?? null,
         user_id: data.userId ?? null,
-      } as never);
+      });
     } catch {
       // Never crash the page over analytics
     }
