@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessagesSquare, Loader2, Copy, Trash2, ChevronDown, ChevronUp, Zap } from "lucide-react";
+import { MessagesSquare, Loader2, Copy, Trash2, ChevronDown, ChevronUp, Zap, History } from "lucide-react";
 import { toast } from "sonner";
 import { CropCard, Eyebrow, PageHeader, EmptyState } from "@/components/blueprint";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { generateConversionResponses } from "@/lib/ai.functions";
 import { listConversions, saveConversion, deleteConversion } from "@/lib/conversion.functions";
+import { listProposals } from "@/lib/proposals.functions";
 import { copyText } from "@/lib/export";
 
 export const Route = createFileRoute("/_authenticated/conversion")({
@@ -45,6 +46,12 @@ function ConversionPage() {
   const [replyLanguage, setReplyLanguage] = useState("English");
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  const proposalsQuery = useQuery({
+    queryKey: ["proposals"],
+    queryFn: () => listProposals(),
+  });
+  const proposals = proposalsQuery.data ?? [];
 
   const history = useQuery({
     queryKey: ["conversions"],
@@ -94,6 +101,34 @@ function ConversionPage() {
         {/* Left: generator */}
         <div className="space-y-4">
           <CropCard className="p-5 space-y-4">
+            {/* Proposal picker */}
+            {proposals.length > 0 && (
+              <div>
+                <Label className="annotation !text-muted-foreground flex items-center gap-1.5">
+                  <History className="h-3 w-3" /> Load from proposal history <span className="text-[10px] text-muted-foreground/60">(auto-fills job & proposal)</span>
+                </Label>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const p = proposals.find((x: { id: string }) => x.id === e.target.value);
+                    if (!p) return;
+                    if ((p as { job_description?: string }).job_description) setJobDesc((p as { job_description: string }).job_description);
+                    if ((p as { content?: string }).content) setSentProposal((p as { content: string }).content);
+                    toast.success("Proposal loaded — edit if needed");
+                    e.target.value = "";
+                  }}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="" disabled>Select a saved proposal…</option>
+                  {proposals.map((p: { id: string; title?: string; created_at: string }) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title || "Untitled"} — {new Date(p.created_at).toLocaleDateString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Job description (optional) */}
             <div>
               <Label className="annotation !text-muted-foreground">Job description <span className="text-[10px] text-muted-foreground/60">(optional — improves context)</span></Label>
