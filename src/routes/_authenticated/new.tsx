@@ -1017,7 +1017,91 @@ function OutputPanel({
         <Button size="sm" variant="ghost" onClick={onSaveTemplate} disabled={savingTemplate} className="text-muted-foreground">
           Save as template
         </Button>
+        {content && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-teal/30 text-teal hover:bg-teal/10"
+            onClick={() => hookStrengthMutation.mutate(undefined)}
+            disabled={hookStrengthMutation.isPending}
+          >
+            {hookStrengthMutation.isPending ? (
+              <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Scoring hook…</>
+            ) : (
+              <><Zap className="mr-1.5 h-3.5 w-3.5" /> Score my hook</>
+            )}
+          </Button>
+        )}
       </div>
+
+      {hookStrength && showHookAnalysis && (
+        <div className="mt-3 rounded-lg border border-border bg-background/60 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold",
+                hookStrength.score >= 8 ? "bg-teal/20 text-teal" :
+                hookStrength.score >= 5 ? "bg-gold/20 text-gold" :
+                "bg-red-500/20 text-red-400"
+              )}>
+                {hookStrength.score}
+              </div>
+              <span className="text-xs text-white font-medium">{hookStrength.verdict}</span>
+            </div>
+            <button
+              className="text-[10px] text-muted-foreground hover:text-white"
+              onClick={() => setShowHookAnalysis(false)}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {hookStrength.strengths.length > 0 && (
+              <div>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-teal">What works</p>
+                <ul className="space-y-1">
+                  {hookStrength.strengths.map((s, i) => (
+                    <li key={i} className="text-xs text-white/80">✓ {s}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {hookStrength.weaknesses.length > 0 && (
+              <div>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-red-400">What kills it</p>
+                <ul className="space-y-1">
+                  {hookStrength.weaknesses.map((w, i) => (
+                    <li key={i} className="text-xs text-white/80">✗ {w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {hookStrength.score < 9 && (
+            <div className="rounded-md border border-gold/20 bg-gold/[0.04] p-3">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gold">Stronger opening ↓</p>
+              <p className="text-xs text-white/90 leading-relaxed italic">"{hookStrength.rewrite}"</p>
+              <p className="mt-1.5 text-[10px] text-muted-foreground">{hookStrength.rewriteRationale}</p>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="mt-2 h-6 px-2 text-[10px] text-gold hover:bg-gold/10"
+                onClick={() => {
+                  const parts = content.split("\n\n");
+                  parts[0] = hookStrength.rewrite;
+                  setContent(parts.join("\n\n"));
+                  setShowHookAnalysis(false);
+                  toast.success("Hook replaced — review the full proposal");
+                }}
+              >
+                ↑ Replace my hook with this
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {explanation && (
         <div className="mt-5 border-t border-border/70 pt-4">
