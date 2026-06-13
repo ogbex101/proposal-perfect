@@ -878,6 +878,14 @@ function SubProfileForm({
 
   return (
     <div className="space-y-4 py-2">
+      <AvatarUploader
+        currentUrl={value.avatar_signed_url ?? value.avatar_url}
+        userName={value.name ?? value.label}
+        bio={value.bio}
+        profileKey={value.id ?? (value.label || "persona").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "persona"}
+        onUploadComplete={(path) => onChange({ ...value, avatar_url: path, avatar_signed_url: undefined })}
+        onClear={() => onChange({ ...value, avatar_url: null, avatar_signed_url: null })}
+      />
       <div className="space-y-1.5">
         <Label>Persona label <span className="text-destructive">*</span></Label>
         <Input

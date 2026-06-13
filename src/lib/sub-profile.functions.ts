@@ -42,6 +42,7 @@ export type SubProfile = {
   credentials: Credential[];
   brands_worked: string[];
   avatar_url: string | null;
+  avatar_signed_url?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -64,7 +65,12 @@ export const listSubProfiles = createServerFn({ method: "GET" })
       .eq("user_id", context.userId)
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
-    return (data ?? []).map((row) => toSubProfile(row));
+    return Promise.all((data ?? []).map(async (raw) => {
+      const row = toSubProfile(raw);
+      if (!row.avatar_url || /^https?:\/\//.test(row.avatar_url)) return { ...row, avatar_signed_url: row.avatar_url };
+      const { data: signed } = await context.supabase.storage.from("avatars").createSignedUrl(row.avatar_url, 60 * 60 * 24 * 7);
+      return { ...row, avatar_signed_url: signed?.signedUrl ?? null };
+    }));
   });
 
 export const upsertSubProfile = createServerFn({ method: "POST" })

@@ -109,17 +109,18 @@ export const updateProfile = createServerFn({ method: "POST" })
 
 export const getAvatarUploadUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { fileName: string; contentType: string }) =>
+  .inputValidator((d: { fileName: string; contentType: string; profileKey?: string }) =>
     z
       .object({
         fileName: z.string().max(200),
         contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+        profileKey: z.string().regex(/^[a-zA-Z0-9-]+$/).max(80).optional(),
       })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
     const ext = data.fileName.split(".").pop() ?? "jpg";
-    const objectPath = `${context.userId}/avatar.${ext}`;
+    const objectPath = `${context.userId}/${data.profileKey ? `${data.profileKey}-` : ""}avatar.${ext}`;
 
     const { data: signedData, error } = await context.supabase.storage
       .from("avatars")
