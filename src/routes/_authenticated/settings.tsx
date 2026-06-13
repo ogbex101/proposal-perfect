@@ -254,6 +254,18 @@ function SettingsPage() {
     onError: (e: Error) => toast.error(e.message || "Could not save"),
   });
 
+  const completenessFields = [
+    { label: "Name", filled: !!(name?.trim()) },
+    { label: "Bio", filled: !!(bio?.trim()) },
+    { label: "Story", filled: !!(myStory?.trim()) },
+    { label: "Skills", filled: skills.length >= 3 },
+    { label: "Avatar", filled: !!(avatarUrl) },
+    { label: "Contact email", filled: !!(profile?.email?.trim()) },
+  ];
+  const completenessScore = Math.round(
+    (completenessFields.filter((f) => f.filled).length / completenessFields.length) * 100
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -271,6 +283,29 @@ function SettingsPage() {
       />
 
       <div className="space-y-5">
+        {completenessScore < 100 && (
+          <div className="mb-6 rounded-lg border border-border bg-background/60 p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-medium text-white">Profile {completenessScore}% complete</p>
+              <span className="text-xs text-muted-foreground">
+                {completenessFields.filter((f) => !f.filled).map((f) => f.label).join(" · ")} missing
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  completenessScore >= 80 ? "bg-teal" : completenessScore >= 50 ? "bg-gold" : "bg-red-400"
+                )}
+                style={{ width: `${completenessScore}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              A complete profile gives the AI better context and generates higher-quality proposals.
+            </p>
+          </div>
+        )}
+
         {/* ── 01 · Avatar ── */}
         <CropCard className="p-6">
           <Eyebrow index="01">profile picture</Eyebrow>

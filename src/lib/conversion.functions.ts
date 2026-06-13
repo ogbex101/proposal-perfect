@@ -8,6 +8,7 @@ export const listConversions = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("conversion_messages")
       .select("*")
+      .eq("user_id", context.userId)
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) throw new Error(error.message);
@@ -45,7 +46,8 @@ export const deleteConversion = createServerFn({ method: "POST" })
     const { error } = await context.supabase
       .from("conversion_messages")
       .delete()
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

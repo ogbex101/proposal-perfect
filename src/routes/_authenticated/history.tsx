@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -65,7 +65,8 @@ type Row = {
 
 function HistoryPage() {
   const qc = useQueryClient();
-  const navigate = Route.useNavigate();
+  const navigate = useNavigate();
+  const routeNavigate = Route.useNavigate();
   const { open } = Route.useSearch();
 
   const { data, isLoading } = useQuery({
@@ -112,7 +113,7 @@ function HistoryPage() {
 
   const closeViewer = () => {
     setOpenId(null);
-    if (open) navigate({ search: {}, replace: true });
+    if (open) routeNavigate({ search: {}, replace: true });
   };
 
   const filtered = rows.filter((r) => {
@@ -201,6 +202,17 @@ function HistoryPage() {
                 </p>
               </button>
               <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-white"
+                  onClick={() => {
+                    sessionStorage.setItem("prefill_job", r.job_description || "");
+                    navigate({ to: "/new" });
+                  }}
+                >
+                  <Copy className="mr-1 h-3 w-3" /> Use as template
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"

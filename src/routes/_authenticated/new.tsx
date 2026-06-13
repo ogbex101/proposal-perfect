@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ScanLine,
@@ -15,6 +15,8 @@ import {
   Trash2,
   RotateCcw,
   Map,
+  Star,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,13 +34,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
 import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
 import { useActiveProfile } from "@/hooks/use-active-profile";
-import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, generateAiHookStrategy, type JobAnalysis, type StrategyDocument, type AiHookStrategy } from "@/lib/ai.functions";
+import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, generateAiHookStrategy, analyzeHookStrength, type JobAnalysis, type StrategyDocument, type AiHookStrategy, type HookStrength } from "@/lib/ai.functions";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
@@ -90,13 +93,28 @@ function NewProposal() {
 
   // Language: "english" keeps proposal in English, "detected" writes it in the job's language
   const [proposalLanguage, setProposalLanguage] = useState<"english" | "detected">("english");
+  const [toneAssertiveness, setToneAssertiveness] = useState(3); // 1-5
+  const [toneFormalness, setToneFormalness] = useState(3);       // 1-5
 
   // AI-generated custom hook/strategy
   const [aiHookStrategy, setAiHookStrategy] = useState<AiHookStrategy | null>(null);
   const AI_HOOK_ID = "__ai__";
   const AI_STRATEGY_ID = "__ai__";
 
+  const [hookStrength, setHookStrength] = useState<HookStrength | null>(null);
+  const [showHookAnalysis, setShowHookAnalysis] = useState(false);
+
   const [chosenProfile, setChosenProfile] = useState<FreelancerProfile | null>(null);
+
+  // Prefill from history "Use as template"
+  useEffect(() => {
+    const prefill = sessionStorage.getItem("prefill_job");
+    if (prefill) {
+      setJobText(prefill);
+      setMethod("paste");
+      sessionStorage.removeItem("prefill_job");
+    }
+  }, []);
 
   const { subs, activeSubId } = useActiveProfile();
   const [selectedSubId, setSelectedSubId] = useState<string | null>(activeSubId);
@@ -210,6 +228,8 @@ function NewProposal() {
           milestones: useMilestones ? milestones : undefined,
           budget: budget || undefined,
           targetLanguage,
+          toneAssertiveness,
+          toneFormalness,
         },
       });
     },
@@ -258,6 +278,21 @@ function NewProposal() {
       }
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not generate hook/strategy"),
+  });
+
+  const hookStrengthMutation = useMutation({
+    mutationFn: () => {
+      // Extract the first paragraph of the content as the hook
+      const hookText = content.split("\n\n")[0] || content.slice(0, 400);
+      return analyzeHookStrength({ data: { hookText, jobDescription: effectiveJob } });
+    },
+    onSuccess: (result) => {
+      if (result) {
+        setHookStrength(result);
+        setShowHookAnalysis(true);
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not analyze hook"),
   });
 
   const strategyMutation = useMutation({
@@ -338,6 +373,10 @@ function NewProposal() {
     setShowStrategy(false);
     setProposalLanguage("english");
     setAiHookStrategy(null);
+    setToneAssertiveness(3);
+    setToneFormalness(3);
+    setHookStrength(null);
+    setShowHookAnalysis(false);
   }
 
   function requestSave() {
@@ -567,6 +606,37 @@ function NewProposal() {
                 </div>
               </div>
 
+              {/* Tone calibrator */}
+              <div className="space-y-3">
+                <Label className="annotation mb-0 block !text-muted-foreground">Tone</Label>
+                <div>
+                  <div className="mb-1 flex justify-between text-[10px] text-muted-foreground">
+                    <span>Consultative</span>
+                    <span className="text-white font-medium">{["", "Very Consultative", "Consultative", "Balanced", "Assertive", "Very Assertive"][toneAssertiveness]}</span>
+                    <span>Assertive</span>
+                  </div>
+                  <Slider
+                    min={1} max={5} step={1}
+                    value={[toneAssertiveness]}
+                    onValueChange={([v]) => setToneAssertiveness(v)}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <div className="mb-1 flex justify-between text-[10px] text-muted-foreground">
+                    <span>Casual</span>
+                    <span className="text-white font-medium">{["", "Very Casual", "Casual", "Semi-formal", "Professional", "Very Formal"][toneFormalness]}</span>
+                    <span>Formal</span>
+                  </div>
+                  <Slider
+                    min={1} max={5} step={1}
+                    value={[toneFormalness]}
+                    onValueChange={([v]) => setToneFormalness(v)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
               <ToggleRow
                 label="Include execution plan"
                 hint="A 2–3 sentence approach the client approves step by step."
@@ -724,6 +794,10 @@ function NewProposal() {
               savingTemplate={saveTemplateMutation.isPending}
               chosenProfile={chosenProfile}
               onGoHistory={() => navigate({ to: "/history" })}
+              hookStrengthMutation={hookStrengthMutation}
+              hookStrength={hookStrength}
+              showHookAnalysis={showHookAnalysis}
+              setShowHookAnalysis={setShowHookAnalysis}
             />
           )}
 
@@ -884,6 +958,10 @@ function OutputPanel({
   savingTemplate,
   chosenProfile,
   onGoHistory,
+  hookStrengthMutation,
+  hookStrength,
+  showHookAnalysis,
+  setShowHookAnalysis,
 }: {
   content: string;
   setContent: (v: string) => void;
@@ -897,6 +975,10 @@ function OutputPanel({
   savingTemplate: boolean;
   chosenProfile?: { label: string } | null;
   onGoHistory: () => void;
+  hookStrengthMutation: ReturnType<typeof useMutation>;
+  hookStrength: HookStrength | null;
+  showHookAnalysis: boolean;
+  setShowHookAnalysis: (v: boolean) => void;
 }) {
   return (
     <CropCard glow="gold" className="p-5 bp-rise">

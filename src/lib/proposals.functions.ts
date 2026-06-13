@@ -35,7 +35,22 @@ export const saveProposal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: z.input<typeof ProposalInput>) => ProposalInput.parse(d))
   .handler(async ({ data, context }) => {
-    const payload = { ...data, user_id: context.userId } as any;
+    const payload = {
+      id: data.id,
+      user_id: context.userId,
+      title: data.title,
+      job_description: data.job_description,
+      job_analysis: data.job_analysis,
+      hook: data.hook,
+      strategy: data.strategy,
+      length: data.length,
+      include_plan: data.include_plan,
+      portfolio_ids: data.portfolio_ids,
+      budget: data.budget,
+      milestones: data.milestones,
+      content: data.content,
+      explanation: data.explanation,
+    };
     const { data: row, error } = await context.supabase
       .from("proposals")
       .upsert(payload)
@@ -51,6 +66,7 @@ export const listProposals = createServerFn({ method: "GET" })
     const { data, error } = await (context.supabase as any)
       .from("proposals")
       .select("id,title,job_description,length,content,hook,strategy,client_responded,responded_at,created_at")
+      .eq("user_id", context.userId)
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(error.message);
@@ -118,6 +134,7 @@ export const getProposalAnalytics = createServerFn({ method: "GET" })
     const { data, error } = await (context.supabase as any)
       .from("proposals")
       .select("hook, strategy, client_responded")
+      .eq("user_id", context.userId)
       .order("created_at", { ascending: false })
       .limit(500) as { data: Array<{ hook: string | null; strategy: string | null; client_responded: boolean | null }> | null; error: unknown };
     if (error) throw new Error((error as { message: string }).message);

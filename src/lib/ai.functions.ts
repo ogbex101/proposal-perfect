@@ -223,6 +223,56 @@ Return a JSON object with this exact shape:
     }
   });
 
+// ---------- Hook Strength Analyzer ----------
+const HookStrengthSchema = z.object({
+  score: z.number().min(1).max(10),
+  verdict: z.string(),
+  strengths: z.array(z.string()).max(3),
+  weaknesses: z.array(z.string()).max(3),
+  rewrite: z.string(),
+  rewriteRationale: z.string(),
+});
+export type HookStrength = z.infer<typeof HookStrengthSchema>;
+
+export const analyzeHookStrength = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { hookText: string; jobDescription: string }) =>
+    z.object({
+      hookText: z.string().min(10).max(2000),
+      jobDescription: z.string().min(10).max(15000),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      return await structured(
+        HookStrengthSchema,
+        `You are a proposal conversion expert. You score the opening paragraph of a freelance proposal.
+
+Scoring criteria (each worth up to 2 points):
+1. Specificity — does it reference concrete details from the job post?
+2. Insight — does it reveal understanding deeper than what the client wrote?
+3. Pattern interrupt — does it open in a surprising, non-generic way?
+4. Client focus — is it about the client's outcome, not the freelancer's skills?
+5. Compellingness — would a busy client stop scanning and actually read this?
+
+After scoring, write a BETTER version of the hook that scores 9-10.
+
+Return a JSON object with this exact shape:
+{
+  "score": <integer 1-10>,
+  "verdict": "<one punchy sentence summarizing the quality>",
+  "strengths": ["<what works>", ...],
+  "weaknesses": ["<what kills it>", ...],
+  "rewrite": "<the improved hook opening paragraph — ready to paste>",
+  "rewriteRationale": "<one sentence explaining what you changed and why>"
+}`,
+        `Job post:\n${data.jobDescription}\n\nHook paragraph to score:\n${data.hookText}`,
+      );
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
 // ---------- Generate Proposal ----------
 const ProposalSchema = z.object({
   content: z.string(),
@@ -248,6 +298,8 @@ export const generateProposal = createServerFn({ method: "POST" })
     milestones?: Array<{ title: string; description: string; amount?: string }>;
     budget?: string;
     targetLanguage?: string;
+    toneAssertiveness?: number;
+    toneFormalness?: number;
   }) =>
     z.object({
       jobDescription: z.string().min(10),
@@ -266,6 +318,8 @@ export const generateProposal = createServerFn({ method: "POST" })
         .optional(),
       budget: z.string().optional(),
       targetLanguage: z.string().optional(),
+      toneAssertiveness: z.number().min(1).max(5).optional(),
+      toneFormalness: z.number().min(1).max(5).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -297,10 +351,22 @@ export const generateProposal = createServerFn({ method: "POST" })
         ? `\n- LANGUAGE: Write the ENTIRE proposal in ${data.targetLanguage}. Every sentence, word, and phrase must be in ${data.targetLanguage}. Do not mix languages.`
         : "";
 
+      const toneInstruction = (() => {
+        const a = data.toneAssertiveness ?? 3;
+        const f = data.toneFormalness ?? 3;
+        const assertStyle = a <= 2 ? "consultative and exploratory — ask questions, show curiosity, invite collaboration"
+          : a >= 4 ? "assertive and direct — make confident statements, give recommendations, show authority"
+          : "balanced — confident but open to dialogue";
+        const formalStyle = f <= 2 ? "conversational and plain-spoken — write like a smart colleague in a Slack message"
+          : f >= 4 ? "professional and structured — clean, precise business prose"
+          : "semi-formal — clear and direct without being stiff";
+        return `\n- TONE: Be ${assertStyle}. Write in a ${formalStyle} style.`;
+      })();
+
       const result = await structured(
         ProposalSchema,
         `You write human, high-converting freelance proposals. Hard rules:
-- No greeting. No "Hi". Start directly with the hook.${languageInstruction}
+- No greeting. No "Hi". Start directly with the hook.${languageInstruction}${toneInstruction}
 - DO NOT parrot or restate the job post. Echo the client's stated needs only lightly — at most ~30% of the proposal may reflect their requirements; the other ~70% must be YOUR original interpretation, insight, approach, and value they did NOT explicitly ask for. Show you understand the problem more deeply than they described it. Never copy the client's wording verbatim.
 - Forbidden phrases (NEVER use any of these or close variants):
 ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
