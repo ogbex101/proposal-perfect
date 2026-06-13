@@ -882,7 +882,7 @@ function SubProfileForm({
         currentUrl={value.avatar_signed_url ?? value.avatar_url}
         userName={value.name ?? value.label}
         bio={value.bio}
-        profileKey={value.id ?? (value.label || "persona").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "persona"}
+        profileKey={value.id ?? ((value.label || "persona").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "persona")}
         onUploadComplete={(path) => onChange({ ...value, avatar_url: path, avatar_signed_url: undefined })}
         onClear={() => onChange({ ...value, avatar_url: null, avatar_signed_url: null })}
       />
