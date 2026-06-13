@@ -34,7 +34,7 @@ type ConversionRow = {
 function ConversionPage() {
   const qc = useQueryClient();
   const [clientMsg, setClientMsg] = useState("");
-  const [replies, setReplies] = useState<string[]>([]);
+  const [replies, setReplies] = useState<Array<{ mode: string; reply: string }>>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [replyLanguage, setReplyLanguage] = useState("English");
 
@@ -49,9 +49,9 @@ function ConversionPage() {
     onSuccess: async (result) => {
       const options = result ?? [];
       setReplies(options);
-      // Save to history
       if (options.length) {
-        await saveConversion({ data: { input: clientMsg, outputs: options } });
+        // Save replies as plain strings for history
+        await saveConversion({ data: { input: clientMsg, outputs: options.map((o) => `${o.mode}: ${o.reply}`) } });
         qc.invalidateQueries({ queryKey: ["conversions"] });
       }
       toast.success("Replies generated");
@@ -70,7 +70,7 @@ function ConversionPage() {
       <PageHeader
         eyebrow="Follow-up"
         title="Conversion Messages"
-        description="Paste what the client said. Get 3 professional reply options that move toward a close."
+        description="Paste what the client said. Get 6 reply options — each in a different tone and approach."
       />
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
@@ -107,31 +107,43 @@ function ConversionPage() {
               ) : (
                 <Wand2 className="mr-1.5 h-4 w-4" />
               )}
-              Generate 3 reply options
+              Generate 6 reply options
             </Button>
           </CropCard>
 
           {replies.length > 0 && (
             <div className="space-y-3">
               <Eyebrow>Reply options</Eyebrow>
-              {replies.map((reply, i) => (
-                <CropCard key={i} className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono text-[10px] text-gold">Option {i + 1}</span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={async () => {
-                        await copyText(reply);
-                        toast.success("Copied");
-                      }}
-                    >
-                      <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
-                    </Button>
-                  </div>
-                  <p className="text-sm leading-relaxed text-foreground/90">{reply}</p>
-                </CropCard>
-              ))}
+              {(() => {
+                const modeColors: Record<string, string> = {
+                  "Founder-to-Founder": "text-gold",
+                  "As a Friend": "text-teal",
+                  "Show Knowledge": "text-blue-400",
+                  "Strong Understanding": "text-purple-400",
+                  "As an Expert": "text-orange-400",
+                  "Sharp & Brief": "text-red-400",
+                };
+                return replies.map((reply, i) => (
+                  <CropCard key={i} className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={cn("font-mono text-[10px] font-semibold", modeColors[reply.mode] ?? "text-gold")}>
+                        {reply.mode}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          await copyText(reply.reply);
+                          toast.success("Copied");
+                        }}
+                      >
+                        <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
+                      </Button>
+                    </div>
+                    <p className="text-sm leading-relaxed text-foreground/90">{reply.reply}</p>
+                  </CropCard>
+                ));
+              })()}
             </div>
           )}
         </div>

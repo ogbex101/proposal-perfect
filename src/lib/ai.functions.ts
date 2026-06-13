@@ -561,7 +561,12 @@ Return a JSON object with this exact shape:
   });
 
 // ---------- Conversion Messages ----------
-const ConversionSchema = z.object({ options: z.array(z.string()).min(1).max(3) });
+const ConversionSchema = z.object({
+  options: z.array(z.object({
+    mode: z.string(),
+    reply: z.string(),
+  })),
+});
 
 export const generateConversionResponses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -571,20 +576,27 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     try {
       const customFlags = await loadCustomFlags(context);
-      const languageInstruction = data.replyLanguage && data.replyLanguage.toLowerCase() !== "english"
-        ? `\n\nWRITE ALL REPLIES IN ${data.replyLanguage}. Every word must be in ${data.replyLanguage}.`
-        : "";
       const result = await structured(
         ConversionSchema,
-        `You write professional, human follow-up replies for a freelancer to send to a client. Three distinct options, each 2-5 sentences, each addressing what the client said and moving toward a close. No "Hi". No "Let me know if you have questions". No fluff.${languageInstruction}
+        `You write 6 distinct professional follow-up replies for a freelancer to send to a client. Each reply must use a completely different tone and approach as labeled. No "Hi". No "Let me know if you have questions". No fluff. Each reply is 2-5 sentences, direct, and moves toward a close.
 
 Return a JSON object with this exact shape:
 {
-  "options": ["reply 1 text", "reply 2 text", "reply 3 text"]
-}${redFlagPromptBlock(customFlags)}`,
-        `Client said:\n"${data.clientMessage}"\n\nGive me 3 reply options.`,
+  "options": [
+    { "mode": "Founder-to-Founder", "reply": "<strategic reply, vision-focused, peer-to-peer, treats client as a fellow builder>" },
+    { "mode": "As a Friend", "reply": "<warm, genuine, casual but still professional — like texting a trusted colleague>" },
+    { "mode": "Show Knowledge", "reply": "<demonstrates deep domain expertise about the client's specific problem — references what they likely face>" },
+    { "mode": "Strong Understanding", "reply": "<leads with empathy — shows you fully understand their situation, constraints, and goal>" },
+    { "mode": "As an Expert", "reply": "<authoritative, confident — you've solved this exact problem before and you're guiding them>" },
+    { "mode": "Sharp & Brief", "reply": "<ultra-concise — 1-2 sentences max — for clients who are clearly busy or direct>" }
+  ]
+}${redFlagPromptBlock(customFlags)}${data.replyLanguage && data.replyLanguage !== "English" ? `\n\nWRITE ALL REPLIES IN ${data.replyLanguage}.` : ""}`,
+        `Client said:\n"${data.clientMessage}"\n\nGive me 6 reply options.`,
       );
-      return result.options.map((o) => scrubRedFlags(o, customFlags));
+      return result.options.map((o) => ({
+        mode: o.mode,
+        reply: scrubRedFlags(o.reply, customFlags),
+      }));
     } catch (err) {
       handleAiError(err);
     }

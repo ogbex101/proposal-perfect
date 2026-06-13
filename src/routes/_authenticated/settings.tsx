@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Loader2,
@@ -214,6 +215,17 @@ function SettingsPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [defaultLength, setDefaultLength] = useState<LengthId>("robust");
   const [defaultPlan, setDefaultPlan] = useState(false);
+  const [subAvatarSignedUrl, setSubAvatarSignedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeSubId || !merged?.avatar_url) {
+      setSubAvatarSignedUrl(null);
+      return;
+    }
+    supabase.storage.from("avatars").createSignedUrl(merged.avatar_url, 3600).then(({ data }) => {
+      setSubAvatarSignedUrl(data?.signedUrl ?? null);
+    });
+  }, [activeSubId, merged?.avatar_url]);
 
   useEffect(() => {
     if (!merged) return;
@@ -378,10 +390,10 @@ function SettingsPage() {
           <div className="mt-6">
             <AvatarUploader
               key={activeSubId ?? "head"}
-              currentUrl={activeSubId && merged?.avatar_url ? merged.avatar_url : (avatarSignedUrl ?? undefined)}
-              profileKey={activeSubId ? `sub-${activeSubId}` : undefined}
+              currentUrl={activeSubId ? subAvatarSignedUrl : (avatarSignedUrl ?? undefined)}
               userName={name || profile?.email}
               bio={bio}
+              profileKey={activeSubId ? `sub-${activeSubId}` : undefined}
               onUploadComplete={(path) => setAvatarUrl(path)}
               onClear={() => setAvatarUrl(null)}
             />
