@@ -45,6 +45,7 @@ import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocum
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
+import { listGeneratedPortfolios } from "@/lib/portfolio-generate.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
 type FreelancerProfile = { id: string; label: string };
 import { saveItem } from "@/lib/saved.functions";
@@ -127,6 +128,12 @@ function NewProposal() {
 
   const portfolioQuery = useQuery({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
   const portfolio = portfolioQuery.data ?? [];
+
+  const generatedPortfoliosQuery = useQuery({
+    queryKey: ["generated-portfolios"],
+    queryFn: () => listGeneratedPortfolios(),
+  });
+  const generatedPortfolios = generatedPortfoliosQuery.data ?? [];
   const analyticsQuery = useQuery({ queryKey: ["proposal-analytics"], queryFn: () => getProposalAnalytics() });
   const analytics = analyticsQuery.data;
 
@@ -142,6 +149,17 @@ function NewProposal() {
     ...STRATEGIES,
     ...(customStrategiesQuery.data ?? []).map((s) => ({ id: `custom_strat_${s.id}`, name: `★ ${s.name}`, description: s.content })),
   ];
+
+  const matchedPortfolio = useMemo(() => {
+    const niche = analysis?.detectedNiche?.toLowerCase().trim();
+    if (!niche || !generatedPortfolios.length) return null;
+    return generatedPortfolios.find((gp) => {
+      const gpNiche = (gp.niche ?? "").toLowerCase().trim();
+      // Check if niche strings share significant words
+      const nicheWords = niche.split(/\s+/).filter((w) => w.length > 3);
+      return nicheWords.some((w) => gpNiche.includes(w)) || gpNiche.includes(niche) || niche.includes(gpNiche);
+    }) ?? null;
+  }, [analysis?.detectedNiche, generatedPortfolios]);
 
   // Compose the effective job description from whichever input method is active.
   const effectiveJob = useMemo(() => {
@@ -497,6 +515,40 @@ function NewProposal() {
           </CropCard>
 
           {analysis && <AnalysisPanel analysis={analysis} />}
+
+          {/* Niche-matched portfolio banner */}
+          {analysis && matchedPortfolio && (
+            <div className="rounded-lg border border-gold/25 bg-gold/[0.06] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-gold mb-1">
+                    Portfolio match found — {matchedPortfolio.niche ?? analysis.detectedNiche}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {matchedPortfolio.title} — tailored for this niche. Use it in your proposal to show the client relevant work.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-gold/30 text-gold hover:bg-gold/10 text-xs h-7"
+                  onClick={() => {
+                    const url = `/p/${matchedPortfolio.slug}`;
+                    setPortfolioLink(url);
+                    toast.success("Portfolio linked to this proposal");
+                  }}
+                >
+                  Use this portfolio
+                </Button>
+              </div>
+              {matchedPortfolio.niche && (
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold/60" />
+                  <span className="text-[10px] text-muted-foreground">Niche: {matchedPortfolio.niche} · Detected: {analysis.detectedNiche}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* RIGHT: configure + output */}

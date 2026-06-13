@@ -198,6 +198,8 @@ function SettingsPage() {
   const isAdmin = data?.isAdmin ?? false;
   const avatarSignedUrl = data?.avatarSignedUrl ?? null;
 
+  const { subs, activeSubId, activeSub, setActiveSubId, merged } = useActiveProfile();
+
   // ── Form state ──
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -214,24 +216,47 @@ function SettingsPage() {
   const [defaultPlan, setDefaultPlan] = useState(false);
 
   useEffect(() => {
-    if (!profile) return;
-    setName(profile.name ?? "");
-    setPhone(profile.phone ?? "");
-    setWhatsapp(profile.whatsapp ?? "");
-    setBio(profile.bio ?? "");
-    setMyStory(profile.my_story ?? "");
-    setSkills(profile.skills ?? []);
-    setCredentials((profile.credentials as Credential[]) ?? []);
-    setBrands(profile.brands_worked ?? []);
-    setNiches((profile.niches as string[]) ?? []);
-    setAvatarUrl(profile.avatar_url ?? null);
-    setDefaultLength((profile.default_length as LengthId) ?? "robust");
-    setDefaultPlan(profile.default_plan ?? false);
-  }, [profile]);
+    if (!merged) return;
+    setName(merged.name ?? "");
+    setPhone(merged.phone ?? "");
+    setWhatsapp(merged.whatsapp ?? "");
+    setBio(merged.bio ?? "");
+    setMyStory(merged.my_story ?? "");
+    setSkills(merged.skills ?? []);
+    setCredentials((merged.credentials as Credential[]) ?? []);
+    setBrands(merged.brands_worked ?? []);
+    setAvatarUrl(merged.avatar_url ?? null);
+    setDefaultLength((merged.default_length as LengthId) ?? "robust");
+    setDefaultPlan(merged.default_plan ?? false);
+    // niches always from head profile
+    if (!activeSubId) {
+      setNiches((profile?.niches as string[]) ?? []);
+    }
+  }, [merged, activeSubId]);
 
   const save = useMutation({
-    mutationFn: () =>
-      updateProfile({
+    mutationFn: () => {
+      if (activeSubId && activeSub) {
+        // Save to sub-profile
+        return upsertSubProfile({
+          data: {
+            id: activeSubId,
+            label: activeSub.label,
+            niche: activeSub.niche ?? null,
+            name,
+            phone,
+            whatsapp,
+            bio,
+            my_story: myStory,
+            skills,
+            credentials,
+            brands_worked: brands,
+            avatar_url: avatarUrl,
+          },
+        });
+      }
+      // Save to head profile
+      return updateProfile({
         data: {
           name,
           phone,
@@ -246,10 +271,12 @@ function SettingsPage() {
           default_length: defaultLength,
           default_plan: defaultPlan,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["profile"] });
-      toast.success("Profile saved");
+      qc.invalidateQueries({ queryKey: ["sub-profiles"] });
+      toast.success(activeSubId ? "Sub-profile saved" : "Profile saved");
     },
     onError: (e: Error) => toast.error(e.message || "Could not save"),
   });
@@ -283,6 +310,45 @@ function SettingsPage() {
       />
 
       <div className="space-y-5">
+        {/* Profile switcher — switches which profile you're editing */}
+        {subs.length > 0 && (
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-background/60 px-4 py-3">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-muted-foreground mb-1">Editing profile:</p>
+              <Select
+                value={activeSubId ?? "head"}
+                onValueChange={(v) => setActiveSubId(v === "head" ? null : v)}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="head">
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-gold inline-block" />
+                      Head Profile (main)
+                    </span>
+                  </SelectItem>
+                  {subs.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-teal inline-block" />
+                        {s.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {activeSubId && (
+              <div className="text-right">
+                <p className="text-[10px] text-teal font-medium">Sub-profile active</p>
+                <p className="text-[10px] text-muted-foreground">Email &amp; contact from head profile</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {completenessScore < 100 && (
           <div className="mb-6 rounded-lg border border-border bg-background/60 p-4">
             <div className="mb-2 flex items-center justify-between">
@@ -471,57 +537,59 @@ function SettingsPage() {
         </CropCard>
 
         {/* ── 09 · Proposal defaults ── */}
-        <CropCard className="p-6">
-          <Eyebrow index="09">proposal defaults</Eyebrow>
-          <div className="mt-4 space-y-5">
-            <div className="space-y-2">
-              <Label>Default length</Label>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {LENGTHS.map((l) => {
-                  const active = defaultLength === l.id;
-                  return (
-                    <button
-                      key={l.id}
-                      onClick={() => setDefaultLength(l.id)}
-                      className={cn(
-                        "rounded-lg border p-3 text-left transition-colors",
-                        active
-                          ? "border-gold/60 bg-gold/10"
-                          : "border-line/60 hover:border-teal/40",
-                      )}
-                    >
-                      <span
+        {!activeSubId && (
+          <CropCard className="p-6">
+            <Eyebrow index="09">proposal defaults</Eyebrow>
+            <div className="mt-4 space-y-5">
+              <div className="space-y-2">
+                <Label>Default length</Label>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {LENGTHS.map((l) => {
+                    const active = defaultLength === l.id;
+                    return (
+                      <button
+                        key={l.id}
+                        onClick={() => setDefaultLength(l.id)}
                         className={cn(
-                          "block text-sm font-medium",
-                          active ? "text-gold" : "text-white",
+                          "rounded-lg border p-3 text-left transition-colors",
+                          active
+                            ? "border-gold/60 bg-gold/10"
+                            : "border-line/60 hover:border-teal/40",
                         )}
                       >
-                        {l.name}
-                      </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {l.id === "brief"
-                          ? "< 1500 chars"
-                          : l.id === "robust"
-                            ? "2000–3000 chars"
-                            : "3000–5000 chars"}
-                      </span>
-                    </button>
-                  );
-                })}
+                        <span
+                          className={cn(
+                            "block text-sm font-medium",
+                            active ? "text-gold" : "text-white",
+                          )}
+                        >
+                          {l.name}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {l.id === "brief"
+                            ? "< 1500 chars"
+                            : l.id === "robust"
+                              ? "2000–3000 chars"
+                              : "3000–5000 chars"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between rounded-lg border border-line/60 p-3">
-              <div>
-                <p className="text-sm font-medium text-white">Include execution plan</p>
-                <p className="text-xs text-muted-foreground">
-                  Pre-enable the plan toggle on new proposals.
-                </p>
+              <div className="flex items-center justify-between rounded-lg border border-line/60 p-3">
+                <div>
+                  <p className="text-sm font-medium text-white">Include execution plan</p>
+                  <p className="text-xs text-muted-foreground">
+                    Pre-enable the plan toggle on new proposals.
+                  </p>
+                </div>
+                <Switch checked={defaultPlan} onCheckedChange={setDefaultPlan} />
               </div>
-              <Switch checked={defaultPlan} onCheckedChange={setDefaultPlan} />
             </div>
-          </div>
-        </CropCard>
+          </CropCard>
+        )}
 
         {/* ── 10 · Security ── */}
         <CropCard className="p-6">
@@ -572,74 +640,76 @@ function SettingsPage() {
         </CropCard>
 
         {/* ── Niches ── */}
-        <CropCard className="p-6">
-          <Eyebrow index="00">
-            <Layers className="inline h-3 w-3 mr-1" />
-            niches
-          </Eyebrow>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Add up to 10 niches (e.g. "Full-Stack Developer", "Video Editor"). Enable them to AI-generate your bio, story, and skills.
-          </p>
-          <div className="mt-4 space-y-3">
-            <div className="space-y-3">
-              <Label>Your niches ({niches.length}/10)</Label>
-              <NichePicker
-                selected={niches}
-                max={10}
-                onAdd={(n) => setNiches([...niches, n])}
-              />
-              {niches.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {niches.map((n) => (
-                    <span
-                      key={n}
-                      className="flex items-center gap-1.5 rounded-full border border-line/60 bg-sidebar px-2.5 py-0.5 text-xs text-white"
-                    >
-                      {n}
-                      <button
-                        onClick={() => setNiches(niches.filter((x) => x !== n))}
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label={`Remove ${n}`}
+        {!activeSubId && (
+          <CropCard className="p-6">
+            <Eyebrow index="00">
+              <Layers className="inline h-3 w-3 mr-1" />
+              niches
+            </Eyebrow>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Add up to 10 niches (e.g. "Full-Stack Developer", "Video Editor"). Enable them to AI-generate your bio, story, and skills.
+            </p>
+            <div className="mt-4 space-y-3">
+              <div className="space-y-3">
+                <Label>Your niches ({niches.length}/10)</Label>
+                <NichePicker
+                  selected={niches}
+                  max={10}
+                  onAdd={(n) => setNiches([...niches, n])}
+                />
+                {niches.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {niches.map((n) => (
+                      <span
+                        key={n}
+                        className="flex items-center gap-1.5 rounded-full border border-line/60 bg-sidebar px-2.5 py-0.5 text-xs text-white"
                       >
-                        <X className="h-3 w-3" />
+                        {n}
+                        <button
+                          onClick={() => setNiches(niches.filter((x) => x !== n))}
+                          className="text-muted-foreground hover:text-destructive"
+                          aria-label={`Remove ${n}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {niches.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Enable niches for AI generation:</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {niches.map((n) => (
+                      <button
+                        key={n}
+                        onClick={() =>
+                          setActiveNiches((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(n)) next.delete(n); else next.add(n);
+                            return next;
+                          })
+                        }
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                          activeNiches.has(n)
+                            ? "border-gold/60 bg-gold/10 text-gold"
+                            : "border-line/60 text-muted-foreground hover:border-teal/40 hover:text-white"
+                        )}
+                      >
+                        {n}
                       </button>
-                    </span>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-            {niches.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Enable niches for AI generation:</Label>
-                <div className="flex flex-wrap gap-2">
-                  {niches.map((n) => (
-                    <button
-                      key={n}
-                      onClick={() =>
-                        setActiveNiches((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(n)) next.delete(n); else next.add(n);
-                          return next;
-                        })
-                      }
-                      className={cn(
-                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                        activeNiches.has(n)
-                          ? "border-gold/60 bg-gold/10 text-gold"
-                          : "border-line/60 text-muted-foreground hover:border-teal/40 hover:text-white"
-                      )}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </CropCard>
+          </CropCard>
+        )}
 
         {/* ── AI Profile Generator ── */}
-        {niches.length > 0 && activeNiches.size > 0 && (
+        {!activeSubId && niches.length > 0 && activeNiches.size > 0 && (
           <AiProfileGenerator
             activeNiches={[...activeNiches]}
             onApply={(sections) => {

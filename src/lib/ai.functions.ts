@@ -96,6 +96,7 @@ const AnalysisSchema = z.object({
   strategyReason: z.string(),
   detectedLanguage: z.string().default("English"),
   suggestedLength: z.enum(["brief", "robust", "explanatory"]).default("robust"),
+  detectedNiche: z.string().default(""),
 });
 export type JobAnalysis = z.infer<typeof AnalysisSchema>;
 
@@ -129,7 +130,8 @@ Return a JSON object with these exact keys:
   "suggestedStrategyId": "<exact id from list>",
   "strategyReason": "...",
   "detectedLanguage": "<full English name of the language this job post is written in, e.g. English, French, Spanish, German, Portuguese, Arabic, etc.>",
-  "suggestedLength": "<brief|robust|explanatory — brief for simple/quick tasks under $500 or short gigs, robust for most jobs, explanatory for complex technical or high-budget projects over $2000>"
+  "suggestedLength": "<brief|robust|explanatory — brief for simple/quick tasks under $500 or short gigs, robust for most jobs, explanatory for complex technical or high-budget projects over $2000>",
+  "detectedNiche": "<the primary freelance niche this job belongs to — e.g. Full-Stack Development, UI/UX Design, Email Marketing, Content Writing, Video Editing, Virtual Assistant, Social Media Management, Automation & Workflows, Data Analysis, Mobile Development, etc.>"
 }${redFlagPromptBlock()}`,
         `Analyze this job post:\n\n${data.jobDescription}`,
       );
