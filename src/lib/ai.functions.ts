@@ -388,7 +388,7 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 - Use the assigned HOOK: ${hookLabel}
 - Use the assigned STRATEGY: ${strategyLabel}
 - LENGTH ENFORCEMENT (this is a hard rule):
-  * brief: MAXIMUM 1500 characters total. Every single sentence must carry a concrete, specific point — no transitions, no filler adjectives, no scene-setting. Structure: 3-4 sentence hook paragraph (each sentence a distinct insight about their problem), one razor-targeted open question, one crisp CTA. NO portfolio section. NO execution plan. NO milestones. These 1500 characters must feel denser and more valuable than a 4000-character generic proposal.
+  * brief: MAXIMUM 1500 characters total. This is for Freelancer.com where character limits are strict. Structure (in this order): Hook paragraph (3-4 sentences, each a distinct insight about THEIR specific problem — no filler, no transitions), one razor-sharp question that pivots from problem to solution, one confident CTA that gives a specific next step (e.g. timeline, a quick call, a scope doc — never "let me know"). Zero portfolio links. Zero milestones. Zero execution plan. These 1500 characters must hit harder than a 4000-character generic proposal.
   * robust: 2000–3000 characters. Hook → portfolio (2-3 links) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
   * explanatory: 3000–5000 characters. All sections fully developed. Detailed execution plan. Full milestones if provided.
   You are writing a "${length.name}" proposal so the rules for "${length.id}" apply.
@@ -411,9 +411,20 @@ Return a JSON object with this exact shape:
         const MAX = 1500;
         let text = result.content;
         if (text.length > MAX) {
+          // Find the last question mark before MAX — keep the CTA after it
           const cut = text.slice(0, MAX);
-          const lastPunct = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "), cut.lastIndexOf(".\n"));
-          text = lastPunct > 800 ? cut.slice(0, lastPunct + 1).trimEnd() : cut.trimEnd();
+          const lastQ = cut.lastIndexOf("?");
+          if (lastQ > 800) {
+            // Keep through the question, then find the first sentence end after it
+            const afterQ = text.slice(lastQ + 1).trimStart();
+            const firstEnd = afterQ.search(/[.!?]/);
+            text = firstEnd > -1 && (lastQ + firstEnd + 2) < MAX + 300
+              ? text.slice(0, lastQ + firstEnd + 3).trimEnd()
+              : cut.slice(0, lastQ + 1).trimEnd();
+          } else {
+            const lastPunct = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
+            text = lastPunct > 800 ? cut.slice(0, lastPunct + 1).trimEnd() : cut.trimEnd();
+          }
           finalResult = { ...result, content: text };
         }
       }

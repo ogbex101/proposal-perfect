@@ -377,7 +377,9 @@ function SettingsPage() {
           <Eyebrow index="01">profile picture</Eyebrow>
           <div className="mt-6">
             <AvatarUploader
-              currentUrl={avatarSignedUrl}
+              key={activeSubId ?? "head"}
+              currentUrl={activeSubId && merged?.avatar_url ? merged.avatar_url : (avatarSignedUrl ?? undefined)}
+              profileKey={activeSubId ? `sub-${activeSubId}` : undefined}
               userName={name || profile?.email}
               bio={bio}
               onUploadComplete={(path) => setAvatarUrl(path)}
@@ -389,7 +391,7 @@ function SettingsPage() {
 
         {/* ── 03 · Basic info ── */}
         <CropCard className="p-6">
-          <Eyebrow index="03">basic info</Eyebrow>
+          <Eyebrow index="02">basic info</Eyebrow>
           <div className="mt-4 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -436,7 +438,7 @@ function SettingsPage() {
 
         {/* ── 03 · Bio & story ── */}
         <CropCard className="p-6">
-          <Eyebrow index="04">bio &amp; story</Eyebrow>
+          <Eyebrow index="03">bio &amp; story</Eyebrow>
           <div className="mt-4 space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="bio">Bio</Label>
@@ -473,7 +475,7 @@ function SettingsPage() {
 
         {/* ── 04 · Skills ── */}
         <CropCard className="p-6">
-          <Eyebrow index="05">
+          <Eyebrow index="04">
             <Zap className="inline h-3 w-3 mr-1" />
             skills
           </Eyebrow>
@@ -487,9 +489,9 @@ function SettingsPage() {
           </div>
         </CropCard>
 
-        {/* ── 06 · Credentials ── */}
+        {/* ── 05 · Credentials ── */}
         <CropCard className="p-6">
-          <Eyebrow index="06">
+          <Eyebrow index="05">
             <GraduationCap className="inline h-3 w-3 mr-1" />
             credentials
           </Eyebrow>
@@ -857,25 +859,6 @@ function SubProfilesPanel() {
 
   return (
     <div className="space-y-3">
-      {/* Switcher */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Active profile:</span>
-        <Select
-          value={activeSubId ?? "head"}
-          onValueChange={(v) => setActiveSubId(v === "head" ? null : v)}
-        >
-          <SelectTrigger className="h-8 w-48 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="head">Head Profile (main)</SelectItem>
-            {subs.map((s) => (
-              <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       {/* List */}
       <div className="space-y-2">
         {subs.map((s) => (
