@@ -172,6 +172,57 @@ Omit "amount" if no budget was given.`,
     }
   });
 
+// ---------- Generate AI Hook + Strategy ----------
+const AiHookStrategySchema = z.object({
+  hookName: z.string(),
+  hookOpeningLine: z.string(),
+  hookRationale: z.string(),
+  strategyName: z.string(),
+  strategyApproach: z.string(),
+  strategyRationale: z.string(),
+});
+export type AiHookStrategy = z.infer<typeof AiHookStrategySchema>;
+
+export const generateAiHookStrategy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { jobDescription: string; analysis?: unknown }) =>
+    z.object({
+      jobDescription: z.string().min(10).max(15000),
+      analysis: z.any().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      return await structured(
+        AiHookStrategySchema,
+        `You are an expert freelance proposal strategist. Based on the job description, craft ONE highly specific hook opening and ONE tailored strategy that are uniquely designed for THIS job — not generic templates.
+
+The hook should:
+- Be specific to details visible in this job post (mention their industry, problem, or an insight they wouldn't expect)
+- Immediately signal the freelancer has done this exact kind of work before
+- Not start with "I" — use an observation, a question, a fact, or a reframe
+
+The strategy should:
+- Define how the ENTIRE proposal flows (not just the opening)
+- Be shaped by what this client actually cares about (urgency, quality, cost, trust)
+- Give a structural approach the proposal writer can execute
+
+Return a JSON object with this exact shape:
+{
+  "hookName": "<short memorable name for this hook, 2-4 words>",
+  "hookOpeningLine": "<the actual opening sentence or two the freelancer should use — ready to paste>",
+  "hookRationale": "<why this specific hook works for this specific job>",
+  "strategyName": "<short memorable name for this strategy, 2-4 words>",
+  "strategyApproach": "<describe how the proposal should be structured from hook to CTA — specific to this job>",
+  "strategyRationale": "<why this strategy will work for this client>"
+}`,
+        `Job post:\n${data.jobDescription}\n\n${data.analysis ? `Analysis:\n${JSON.stringify(data.analysis, null, 2)}` : ""}`,
+      );
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
 // ---------- Generate Proposal ----------
 const ProposalSchema = z.object({
   content: z.string(),
@@ -189,6 +240,8 @@ export const generateProposal = createServerFn({ method: "POST" })
     analysis?: JobAnalysis | null;
     hookId: string;
     strategyId: string;
+    customHookText?: string;
+    customStrategyText?: string;
     length: "brief" | "robust" | "explanatory";
     includePlan: boolean;
     portfolioItems: Array<{ title: string; url: string; description: string }>;
@@ -201,6 +254,8 @@ export const generateProposal = createServerFn({ method: "POST" })
       analysis: z.any().optional().nullable(),
       hookId: z.string(),
       strategyId: z.string(),
+      customHookText: z.string().optional(),
+      customStrategyText: z.string().optional(),
       length: z.enum(["brief", "robust", "explanatory"]),
       includePlan: z.boolean(),
       portfolioItems: z.array(
@@ -216,6 +271,14 @@ export const generateProposal = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     try {
       const customFlags = await loadCustomFlags(context);
+      // Use AI-generated custom text if provided, otherwise fall back to preset lists
+      const hookLabel = data.customHookText
+        ? `AI-Generated Custom Hook — ${data.customHookText}`
+        : (() => { const h = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0]; return `${h.name} — ${h.description}`; })();
+      const strategyLabel = data.customStrategyText
+        ? `AI-Generated Custom Strategy — ${data.customStrategyText}`
+        : (() => { const s = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0]; return `${s.name} — ${s.description}`; })();
+      // Keep legacy hook/strategy for non-AI paths
       const hook = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0];
       const strategy = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0];
       const length = LENGTHS.find((l) => l.id === data.length) ?? LENGTHS[1];
@@ -241,10 +304,10 @@ export const generateProposal = createServerFn({ method: "POST" })
 - DO NOT parrot or restate the job post. Echo the client's stated needs only lightly — at most ~30% of the proposal may reflect their requirements; the other ~70% must be YOUR original interpretation, insight, approach, and value they did NOT explicitly ask for. Show you understand the problem more deeply than they described it. Never copy the client's wording verbatim.
 - Forbidden phrases (NEVER use any of these or close variants):
 ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
-- Use the assigned HOOK: "${hook.name}" — ${hook.description}
-- Use the assigned STRATEGY: "${strategy.name}" — ${strategy.description}
+- Use the assigned HOOK: ${hookLabel}
+- Use the assigned STRATEGY: ${strategyLabel}
 - LENGTH ENFORCEMENT (this is a hard rule):
-  * brief: MAXIMUM 1500 characters total. One tight paragraph (3-4 sentences hook + deliverable insight) + one question + one CTA. NO portfolio section, NO execution plan, NO milestones list. Stop at 1500 chars — cut ruthlessly.
+  * brief: MAXIMUM 1500 characters total. Every single sentence must carry a concrete, specific point — no transitions, no filler adjectives, no scene-setting. Structure: 3-4 sentence hook paragraph (each sentence a distinct insight about their problem), one razor-targeted open question, one crisp CTA. NO portfolio section. NO execution plan. NO milestones. If you find yourself writing "I will" or "I can" — delete and rewrite from the client's outcome perspective instead. These 1500 characters must feel denser and more valuable than a 4000-character generic proposal.
   * robust: 2000–3000 characters. Hook → portfolio (2-3 links) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
   * explanatory: 3000–5000 characters. All sections fully developed. Detailed execution plan. Full milestones if provided.
   You are writing a "${length.name}" proposal so the rules for "${length.id}" apply.

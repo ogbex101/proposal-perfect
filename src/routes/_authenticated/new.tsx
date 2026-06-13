@@ -38,7 +38,7 @@ import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-consta
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
 import { useActiveProfile } from "@/hooks/use-active-profile";
-import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
+import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, generateAiHookStrategy, type JobAnalysis, type StrategyDocument, type AiHookStrategy } from "@/lib/ai.functions";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
@@ -90,6 +90,11 @@ function NewProposal() {
 
   // Language: "english" keeps proposal in English, "detected" writes it in the job's language
   const [proposalLanguage, setProposalLanguage] = useState<"english" | "detected">("english");
+
+  // AI-generated custom hook/strategy
+  const [aiHookStrategy, setAiHookStrategy] = useState<AiHookStrategy | null>(null);
+  const AI_HOOK_ID = "__ai__";
+  const AI_STRATEGY_ID = "__ai__";
 
   const [chosenProfile, setChosenProfile] = useState<FreelancerProfile | null>(null);
 
@@ -180,12 +185,20 @@ function NewProposal() {
         proposalLanguage === "detected" && detectedLang && detectedLang.toLowerCase() !== "english"
           ? detectedLang
           : undefined;
+      const customHookText = hookId === AI_HOOK_ID && aiHookStrategy
+        ? `${aiHookStrategy.hookName}: ${aiHookStrategy.hookOpeningLine} (${aiHookStrategy.hookRationale})`
+        : undefined;
+      const customStrategyText = strategyId === AI_STRATEGY_ID && aiHookStrategy
+        ? `${aiHookStrategy.strategyName}: ${aiHookStrategy.strategyApproach}`
+        : undefined;
       return generateProposal({
         data: {
           jobDescription: effectiveJob,
           analysis,
-          hookId,
-          strategyId,
+          hookId: hookId === AI_HOOK_ID ? HOOKS[0].id : hookId,
+          strategyId: strategyId === AI_STRATEGY_ID ? STRATEGIES[0].id : strategyId,
+          customHookText,
+          customStrategyText,
           length,
           includePlan,
           portfolioItems: items,
@@ -227,6 +240,19 @@ function NewProposal() {
       }
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Generation failed"),
+  });
+
+  const aiHookStrategyMutation = useMutation({
+    mutationFn: () => generateAiHookStrategy({ data: { jobDescription: effectiveJob, analysis } }),
+    onSuccess: (result) => {
+      if (result) {
+        setAiHookStrategy(result);
+        setHookId(AI_HOOK_ID);
+        setStrategyId(AI_STRATEGY_ID);
+        toast.success("AI hook + strategy crafted for this job");
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not generate hook/strategy"),
   });
 
   const strategyMutation = useMutation({
@@ -306,6 +332,7 @@ function NewProposal() {
     setStrategyDoc(null);
     setShowStrategy(false);
     setProposalLanguage("english");
+    setAiHookStrategy(null);
   }
 
   function requestSave() {
@@ -437,27 +464,81 @@ function NewProposal() {
               </div>
             )}
             <div className="mt-4 space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Hook">
-                  <Select value={hookId} onValueChange={setHookId}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {allHooks.map((h) => (
-                        <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Strategy">
-                  <Select value={strategyId} onValueChange={setStrategyId}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {allStrategies.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
+              <div className="space-y-3">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Hook">
+                    <Select value={hookId} onValueChange={(v) => { setHookId(v); if (v !== AI_HOOK_ID) setAiHookStrategy(null); }}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={AI_HOOK_ID}>
+                          <span className="flex items-center gap-1.5">
+                            <Sparkles className="h-3.5 w-3.5 text-teal" />
+                            {aiHookStrategy ? `✓ ${aiHookStrategy.hookName}` : "AI-crafted for this job"}
+                          </span>
+                        </SelectItem>
+                        {allHooks.map((h) => (
+                          <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Strategy">
+                    <Select value={strategyId} onValueChange={(v) => { setStrategyId(v); if (v !== AI_STRATEGY_ID) setAiHookStrategy(null); }}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={AI_STRATEGY_ID}>
+                          <span className="flex items-center gap-1.5">
+                            <Sparkles className="h-3.5 w-3.5 text-teal" />
+                            {aiHookStrategy ? `✓ ${aiHookStrategy.strategyName}` : "AI-crafted for this job"}
+                          </span>
+                        </SelectItem>
+                        {allStrategies.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+
+                {/* Generate AI hook+strategy button (shown when either is set to AI) */}
+                {(hookId === AI_HOOK_ID || strategyId === AI_STRATEGY_ID) && !aiHookStrategy && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full border-teal/30 text-teal hover:bg-teal/10"
+                    disabled={!canAnalyze || aiHookStrategyMutation.isPending}
+                    onClick={() => aiHookStrategyMutation.mutate()}
+                  >
+                    {aiHookStrategyMutation.isPending ? (
+                      <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Crafting…</>
+                    ) : (
+                      <><Sparkles className="mr-1.5 h-3.5 w-3.5" /> Generate AI hook + strategy</>
+                    )}
+                  </Button>
+                )}
+
+                {/* Preview of the AI-generated hook */}
+                {aiHookStrategy && (hookId === AI_HOOK_ID || strategyId === AI_STRATEGY_ID) && (
+                  <div className="rounded-md border border-teal/20 bg-teal/[0.04] p-3 space-y-2">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-teal mb-0.5">{aiHookStrategy.hookName}</p>
+                      <p className="text-xs text-white/90 italic">"{aiHookStrategy.hookOpeningLine}"</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gold mb-0.5">{aiHookStrategy.strategyName}</p>
+                      <p className="text-xs text-muted-foreground">{aiHookStrategy.strategyApproach}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[10px] text-muted-foreground hover:text-white"
+                      onClick={() => aiHookStrategyMutation.mutate()}
+                      disabled={aiHookStrategyMutation.isPending}
+                    >
+                      {aiHookStrategyMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "↻ Regenerate"}
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div>
