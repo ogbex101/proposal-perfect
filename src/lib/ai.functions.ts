@@ -298,6 +298,7 @@ export const generateProposal = createServerFn({ method: "POST" })
     milestones?: Array<{ title: string; description: string; amount?: string }>;
     budget?: string;
     targetLanguage?: string;
+    strategyDocument?: string;
     toneAssertiveness?: number;
     toneFormalness?: number;
   }) =>
@@ -318,6 +319,7 @@ export const generateProposal = createServerFn({ method: "POST" })
         .optional(),
       budget: z.string().optional(),
       targetLanguage: z.string().optional(),
+      strategyDocument: z.string().max(5000).optional(),
       toneAssertiveness: z.number().min(1).max(5).optional(),
       toneFormalness: z.number().min(1).max(5).optional(),
     }).parse(d),
@@ -345,6 +347,9 @@ export const generateProposal = createServerFn({ method: "POST" })
         : "";
       const analysisBlock = data.analysis
         ? `Job analysis:\n${JSON.stringify(data.analysis, null, 2)}`
+        : "";
+      const strategyBlock = data.strategyDocument
+        ? `\nSTRATEGY DOCUMENT (you prepared this for the client — reference it naturally in the proposal):\n${data.strategyDocument}`
         : "";
 
       const languageInstruction = data.targetLanguage && data.targetLanguage.toLowerCase() !== "english"
@@ -375,6 +380,7 @@ Hard rules:
 - CONFIDENCE WITHOUT ARROGANCE: Write like someone who has solved this exact type of problem before and is not anxious about it. Calm. Certain. But not boastful. The confidence comes from the quality of the insight, not from self-promotion.
 - DO NOT parrot or restate the job post. Echo the client's stated needs at most ~30%. The other ~70% must be YOUR original interpretation, deeper insight, and value they did NOT explicitly ask for. Show you understand the problem more deeply than they described it.
 - Every sentence must advance a thought. No filler, no transitions that carry no meaning ("Additionally", "Furthermore", "As mentioned above").
+- STRATEGY REFERENCE (only if a strategy document was provided): Weave the strategy into the proposal in a way that feels invested, not promotional. The freelancer already prepared a custom strategy document for this exact job BEFORE even being hired — that's the signal of genuine commitment. Reference it with confidence: something like "Before applying, I mapped out a full project strategy for this — phase breakdown, risk factors, success metrics — because I wanted you to see exactly how I'd approach it, not just what I'd do." Then invite them to review it. Never say "I drafted a strategy document" in a generic way — make it feel like the freelancer stayed up thinking about their specific problem.
 - Forbidden phrases (NEVER use any of these or close variants):
 ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 - Use the assigned HOOK: ${hookLabel}
@@ -395,7 +401,7 @@ Return a JSON object with this exact shape:
     "question": "<why this closing question works>"
   }
 }${redFlagPromptBlock(customFlags)}`,
-        `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}${data.targetLanguage && data.targetLanguage.toLowerCase() !== "english" ? `\n\nOUTPUT LANGUAGE: ${data.targetLanguage}` : ""}`,
+        `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}${data.strategyDocument ? `\n\nStrategy reference:\n${data.strategyDocument}` : ""}\n\n${strategyBlock}${data.targetLanguage && data.targetLanguage.toLowerCase() !== "english" ? `\n\nOUTPUT LANGUAGE: ${data.targetLanguage}` : ""}`,
       );
       return { ...result, content: scrubRedFlags(result.content, customFlags) };
     } catch (err) {

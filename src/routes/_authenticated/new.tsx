@@ -228,6 +228,9 @@ function NewProposal() {
           milestones: useMilestones ? milestones : undefined,
           budget: budget || undefined,
           targetLanguage,
+          strategyDocument: strategyDoc
+            ? `Project: ${strategyDoc.projectTitle}. Overview: ${strategyDoc.overview}. Phases: ${strategyDoc.phases.map((p) => `${p.name} (${p.days}): ${p.deliverables.join(", ")}`).join(" → ")}. Critical path: ${strategyDoc.criticalPath.join(", ")}. Total: ${strategyDoc.totalDays} days.`
+            : undefined,
           toneAssertiveness,
           toneFormalness,
         },
@@ -763,6 +766,28 @@ function NewProposal() {
               )}
 
               <Button
+                variant="outline"
+                disabled={!canGenerate || strategyMutation.isPending}
+                onClick={() => strategyMutation.mutate()}
+                className="w-full border-teal/40 text-teal hover:bg-teal/10"
+              >
+                {strategyMutation.isPending ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Map className="mr-1.5 h-4 w-4" />
+                )}
+                Generate strategy doc
+              </Button>
+
+              {strategyDoc && (
+                <div className="rounded-md border border-teal/20 bg-teal/[0.04] px-3 py-2">
+                  <p className="text-xs text-teal">
+                    ✓ Strategy document ready — the proposal will reference it to show the client your preparation.
+                  </p>
+                </div>
+              )}
+
+              <Button
                 onClick={() => generateMutation.mutate()}
                 disabled={!canGenerate || generateMutation.isPending}
                 className="w-full bg-gold text-primary-foreground hover:bg-gold-bright"
@@ -799,23 +824,6 @@ function NewProposal() {
               showHookAnalysis={showHookAnalysis}
               setShowHookAnalysis={setShowHookAnalysis}
             />
-          )}
-
-          {content && canGenerate && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={strategyMutation.isPending}
-              onClick={() => strategyMutation.mutate()}
-              className="border-teal/40 text-teal hover:bg-teal/10"
-            >
-              {strategyMutation.isPending ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Map className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              Generate strategy doc
-            </Button>
           )}
 
           {/* Strategy Document */}
