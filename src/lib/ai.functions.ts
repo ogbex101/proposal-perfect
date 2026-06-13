@@ -548,6 +548,36 @@ Return a JSON object with this exact shape:
     }
   });
 
+// ---------- AI Proposal Editor ----------
+export const applyProposalEdit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { proposalText: string; instruction: string }) =>
+    z.object({
+      proposalText: z.string().min(10).max(10000),
+      instruction: z.string().min(3).max(500),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    try {
+      const customFlags = await loadCustomFlags(context);
+      const text = await generateWithFallback({
+        system: `You are a professional proposal editor. The user gives you a freelance proposal and an instruction to improve it. Apply the instruction surgically — change ONLY what is asked. Preserve the overall structure and voice unless instructed otherwise. Return ONLY the revised proposal text with no commentary, no preamble, no "Here is the revised..." prefix. Just the proposal text itself.
+
+Rules:
+- Never add greeting lines ("Hi", "Hello", "Dear")
+- Never add generic openers
+- Preserve line breaks and paragraph structure
+- If asked to shorten, cut filler but keep every specific point
+- If asked to change tone, apply it throughout consistently
+- Return the complete revised proposal, not just the changed part`,
+        prompt: `INSTRUCTION: ${data.instruction}\n\nCURRENT PROPOSAL:\n${data.proposalText}`,
+      });
+      return { text: scrubRedFlags(text.trim(), customFlags) };
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
 // ---------- Conversion Messages ----------
 const ConversionSchema = z.object({
   options: z.array(z.object({

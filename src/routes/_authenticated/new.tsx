@@ -17,6 +17,8 @@ import {
   Map,
   Star,
   Zap,
+  MessageSquarePlus,
+  Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,7 +43,7 @@ import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-consta
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
 import { useActiveProfile } from "@/hooks/use-active-profile";
-import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, generateAiHookStrategy, analyzeHookStrength, type JobAnalysis, type StrategyDocument, type AiHookStrategy, type HookStrength } from "@/lib/ai.functions";
+import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, generateAiHookStrategy, analyzeHookStrength, applyProposalEdit, type JobAnalysis, type StrategyDocument, type AiHookStrategy, type HookStrength } from "@/lib/ai.functions";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
@@ -913,6 +915,29 @@ function NewProposal() {
                   >
                     <FileDown className="mr-1.5 h-3.5 w-3.5" /> Download PDF
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      try {
+                        const encoded = btoa(JSON.stringify(strategyDoc));
+                        const url = `${window.location.origin}/strategy?d=${encoded}`;
+                        navigator.clipboard.writeText(url).then(() => toast.success("Link copied — share it with your client")).catch(() => {
+                          const ta = document.createElement("textarea");
+                          ta.value = url;
+                          document.body.appendChild(ta);
+                          ta.select();
+                          document.execCommand("copy");
+                          document.body.removeChild(ta);
+                          toast.success("Link copied");
+                        });
+                      } catch {
+                        toast.error("Could not generate link");
+                      }
+                    }}
+                  >
+                    <Link2 className="mr-1.5 h-3.5 w-3.5" /> Share Link
+                  </Button>
                 </div>
               </div>
               <div ref={strategyRef}>
@@ -1057,6 +1082,24 @@ function OutputPanel({
   showHookAnalysis: boolean;
   setShowHookAnalysis: (v: boolean) => void;
 }) {
+  const [aiInstruction, setAiInstruction] = useState("");
+  const [prevContent, setPrevContent] = useState<string | null>(null);
+
+  const applyEditMutation = useMutation({
+    mutationFn: () => applyProposalEdit({
+      data: { proposalText: content, instruction: aiInstruction },
+    }),
+    onSuccess: (result) => {
+      if (result?.text) {
+        setPrevContent(content);
+        setContent(result.text);
+        setAiInstruction("");
+        toast.success("AI edit applied — review and save");
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || "Edit failed"),
+  });
+
   return (
     <CropCard glow="gold" className="p-5 bp-rise">
       <div className="flex items-center justify-between">
@@ -1110,6 +1153,54 @@ function OutputPanel({
           </Button>
         )}
       </div>
+
+      {content && (
+        <div className="mt-4 rounded-xl border border-teal/30 bg-teal/5 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <MessageSquarePlus className="h-4 w-4 text-teal" />
+            <span className="text-sm font-semibold text-teal">AI Editor</span>
+            <span className="text-xs text-muted-foreground ml-1">— tell the AI what to change</span>
+          </div>
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-lg border border-input bg-background/60 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-teal/40"
+              placeholder='e.g. "make the hook more confident", "shorten by 40%", "add urgency to the CTA"…'
+              value={aiInstruction}
+              onChange={(e) => setAiInstruction(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && aiInstruction.trim().length >= 3) {
+                  e.preventDefault();
+                  applyEditMutation.mutate();
+                }
+              }}
+              disabled={applyEditMutation.isPending}
+            />
+            <Button
+              size="sm"
+              className="bg-teal text-primary-foreground hover:bg-teal/80 shrink-0"
+              disabled={applyEditMutation.isPending || aiInstruction.trim().length < 3}
+              onClick={() => applyEditMutation.mutate()}
+            >
+              {applyEditMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Apply"
+              )}
+            </Button>
+          </div>
+          {prevContent && (
+            <button
+              className="mt-2 text-[11px] text-muted-foreground underline-offset-2 hover:underline hover:text-white transition-colors"
+              onClick={() => { setContent(prevContent); setPrevContent(null); toast.info("Reverted to previous version"); }}
+            >
+              ↩ Undo last edit
+            </button>
+          )}
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            Try: "make it more assertive" · "shorten by 30%" · "translate to French" · "add a stronger CTA" · "remove portfolio section"
+          </p>
+        </div>
+      )}
 
       {hookStrength && showHookAnalysis && (
         <div className="mt-3 rounded-lg border border-border bg-background/60 p-4 space-y-3">
