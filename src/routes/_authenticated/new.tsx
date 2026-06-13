@@ -902,7 +902,7 @@ function NewProposal() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => downloadPdf(`Strategy-${strategyDoc.projectTitle}`, formatStrategyAsText(strategyDoc))}
+                    onClick={() => downloadPdf(`Strategy-${strategyDoc.projectTitle}`, formatStrategyAsText(strategyDoc)).then(() => toast.success("Strategy PDF downloaded")).catch(() => toast.error("PDF download failed — try again"))}
                   >
                     <FileDown className="mr-1.5 h-3.5 w-3.5" /> Download PDF
                   </Button>
