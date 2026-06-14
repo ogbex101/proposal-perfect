@@ -20,6 +20,10 @@ import {
   Wand2,
   Flag,
   ExternalLink,
+  HardDrive,
+  FolderOpen,
+  Check,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -404,20 +408,12 @@ function SettingsPage() {
         <CropCard className="p-6">
           <Eyebrow index="01b">
             <ExternalLink className="inline h-3 w-3 mr-1 text-teal" />
-            google drive link
+            google drive
           </Eyebrow>
           <p className="mt-1 text-xs text-muted-foreground">
-            Your designated Google Drive folder for this profile. Not shared with other profiles.
+            Connect your Google Drive folder for project files. Sign in with Google to enable browsing.
           </p>
-          <div className="mt-4 space-y-1.5">
-            <Label htmlFor="drive-link">Drive link</Label>
-            <Input
-              id="drive-link"
-              value={driveLink}
-              onChange={(e) => setDriveLink(e.target.value)}
-              placeholder="https://drive.google.com/drive/folders/…"
-            />
-          </div>
+          <GoogleDrivePanel driveLink={driveLink} onLinkChange={setDriveLink} />
         </CropCard>
 
         {/* ── 03 · Basic info ── */}
@@ -1237,6 +1233,127 @@ function RedFlagPanel() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Google Drive Panel ───────────────────────────────────────────────────────
+
+type DriveFolder = { id: string; name: string; webViewLink: string };
+
+function GoogleDrivePanel({ driveLink, onLinkChange }: { driveLink: string; onLinkChange: (v: string) => void }) {
+  const [providerToken, setProviderToken] = useState<string | null>(null);
+  const [folders, setFolders] = useState<DriveFolder[]>([]);
+  const [loadingFolders, setLoadingFolders] = useState(false);
+  const [foldersError, setFoldersError] = useState<string | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<DriveFolder | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const token = (data.session as any)?.provider_token ?? null;
+      setProviderToken(token);
+    });
+  }, []);
+
+  async function loadFolders() {
+    if (!providerToken) return;
+    setLoadingFolders(true);
+    setFoldersError(null);
+    try {
+      const res = await fetch(
+        "https://www.googleapis.com/drive/v3/files?q=mimeType%3D%22application%2Fvnd.google-apps.folder%22+and+trashed%3Dfalse&fields=files(id,name,webViewLink)&pageSize=50",
+        { headers: { Authorization: `Bearer ${providerToken}` } },
+      );
+      if (!res.ok) throw new Error(res.status === 401 ? "Google token expired — sign in with Google again to reconnect." : "Failed to load folders");
+      const json = await res.json();
+      setFolders((json.files ?? []) as DriveFolder[]);
+    } catch (e: any) {
+      setFoldersError(e.message || "Failed to load folders");
+    } finally {
+      setLoadingFolders(false);
+    }
+  }
+
+  function pickFolder(folder: DriveFolder) {
+    setSelectedFolder(folder);
+    onLinkChange(folder.webViewLink);
+  }
+
+  const isGoogleConnected = !!providerToken;
+
+  return (
+    <div className="mt-4 space-y-3">
+      {!isGoogleConnected ? (
+        <div className="rounded-lg border border-line/40 bg-background/40 p-4 flex items-center gap-3">
+          <HardDrive className="h-4 w-4 text-muted-foreground shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm text-foreground/80">Not connected with Google</p>
+            <p className="text-xs text-muted-foreground">Sign out and sign back in with Google to enable Drive access.</p>
+          </div>
+          <a
+            href="/auth?mode=login"
+            className="shrink-0 text-xs font-medium text-teal hover:underline"
+          >
+            Sign in with Google →
+          </a>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 rounded-full bg-teal/10 border border-teal/30 px-2.5 py-1 text-xs text-teal">
+              <Check className="h-3 w-3" /> Google connected
+            </div>
+            <Button size="sm" variant="outline" className="h-7 text-xs border-line/40" onClick={loadFolders} disabled={loadingFolders}>
+              {loadingFolders ? <Loader2 className="h-3 w-3 animate-spin" /> : <><FolderOpen className="h-3 w-3 mr-1" /> Browse folders</>}
+            </Button>
+          </div>
+
+          {foldersError && (
+            <p className="text-xs text-red-400">{foldersError}</p>
+          )}
+
+          {folders.length > 0 && (
+            <div className="rounded-lg border border-line/40 overflow-hidden max-h-48 overflow-y-auto">
+              {folders.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => pickFolder(f)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors border-b border-line/20 last:border-0 hover:bg-white/5 ${selectedFolder?.id === f.id || driveLink === f.webViewLink ? "bg-gold/10 text-gold" : "text-foreground/80"}`}
+                >
+                  <FolderOpen className="h-3.5 w-3.5 shrink-0 text-gold/60" />
+                  <span className="truncate">{f.name}</span>
+                  {(selectedFolder?.id === f.id || driveLink === f.webViewLink) && (
+                    <Check className="h-3.5 w-3.5 ml-auto shrink-0 text-gold" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="drive-link" className="text-xs text-muted-foreground">
+          Drive folder link {isGoogleConnected && <span className="text-muted-foreground/60">— or paste manually</span>}
+        </Label>
+        <Input
+          id="drive-link"
+          value={driveLink}
+          onChange={(e) => onLinkChange(e.target.value)}
+          placeholder="https://drive.google.com/drive/folders/…"
+        />
+      </div>
+
+      {driveLink && (
+        <a
+          href={driveLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs text-teal hover:underline"
+        >
+          <ExternalLink className="h-3 w-3" /> Open in Google Drive
+        </a>
+      )}
     </div>
   );
 }
