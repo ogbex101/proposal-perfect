@@ -81,6 +81,7 @@ export const getProposal = createServerFn({ method: "POST" })
       .from("proposals")
       .select("*")
       .eq("id", data.id)
+      .eq("user_id", context.userId)
       .single();
     if (error) throw new Error(error.message);
     return row;
@@ -90,7 +91,11 @@ export const deleteProposal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase.from("proposals").delete().eq("id", data.id);
+    const { error } = await context.supabase
+      .from("proposals")
+      .delete()
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

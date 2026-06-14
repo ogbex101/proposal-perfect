@@ -67,16 +67,16 @@ export const getPageViewStats = createServerFn({ method: "GET" })
   });
 
 export const recordPageView = createServerFn({ method: "POST" })
-  .inputValidator((d: { path: string; fingerprint?: string; referrer?: string; userAgent?: string; userId?: string }) =>
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { path: string; fingerprint?: string; referrer?: string; userAgent?: string }) =>
     z.object({
-      path: z.string().max(500),
+      path: z.string().min(1).max(500),
       fingerprint: z.string().max(200).optional(),
       referrer: z.string().max(500).optional(),
       userAgent: z.string().max(500).optional(),
-      userId: z.string().uuid().optional(),
-    }).parse(d),
+    }).strict().parse(d),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       await (supabaseAdmin as any).from("page_views").insert({
@@ -84,7 +84,7 @@ export const recordPageView = createServerFn({ method: "POST" })
         fingerprint: data.fingerprint ?? null,
         referrer: data.referrer ?? null,
         user_agent: data.userAgent ?? null,
-        user_id: data.userId ?? null,
+        user_id: context.userId,
       });
     } catch {
       // Never crash the page over analytics
