@@ -162,24 +162,8 @@ function AdminPanel() {
       </CropCard>
 
       <p className="mt-4 text-[11px] text-muted-foreground">
-        Anonymous visitors are tracked by browser fingerprint (screen size + timezone + user-agent hash) stored in the <code>page_views</code> table.
-        Run this SQL in Lovable Cloud → SQL Editor to enable visitor tracking:
+        Visitor analytics are collected by the trusted server and can only be viewed by administrators.
       </p>
-      <pre className="mt-2 rounded-md bg-black/40 p-3 text-[10px] text-muted-foreground overflow-x-auto">{`CREATE TABLE IF NOT EXISTS public.page_views (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  path text NOT NULL,
-  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  fingerprint text,
-  referrer text,
-  user_agent text,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE public.page_views ENABLE ROW LEVEL SECURITY;
-GRANT INSERT ON public.page_views TO anon, authenticated;
-GRANT SELECT ON public.page_views TO authenticated;
-CREATE POLICY "admin_read" ON public.page_views FOR SELECT USING (true);
-CREATE POLICY "anyone_insert" ON public.page_views FOR INSERT WITH CHECK (true);
-NOTIFY pgrst, 'reload schema';`}</pre>
     </div>
   );
 }
