@@ -88,15 +88,32 @@ function imageSource(): ImageSource {
   return v === "stock" || v === "lovable" ? v : "pollinations";
 }
 
-// Produce a project image as a data URL using the configured FREE source.
+// Produce a project image as a data URL — Pollinations AI primary, stock fallback.
 async function freeProjectImage(keywords: string, seed: number, projectTitle?: string, niche?: string): Promise<string> {
   if (imageSource() === "stock") {
     return fetchImageAsDataUrl(stockImageUrl(keywords, seed));
   }
-  // Rich, context-specific prompt so the image actually relates to the project
-  const context = [projectTitle && `Project: "${projectTitle}"`, niche && `Niche: ${niche}`, `Keywords: ${keywords}`].filter(Boolean).join(". ");
-  const prompt = `High-quality professional photograph for a freelance portfolio. ${context}. Ultra-realistic, editorial quality. Either: a clean UI/app screenshot mockup on a device, or a professional workspace with relevant tools and equipment, or a finished product shot. No watermarks, no text overlays, no stock-photo clichés. Cinematic lighting.`;
-  return fetchImageAsDataUrl(pollinationsUrl(prompt, seed));
+
+  const titleCtx = projectTitle ? `for a project titled "${projectTitle}"` : "";
+  const nicheCtx = niche ? `in the ${niche} field` : "";
+  const prompt = `Stunning professional portfolio photograph ${titleCtx} ${nicheCtx}. Keywords: ${keywords}. Choose the most fitting visual: a photorealistic MacBook or widescreen monitor displaying a polished dashboard or app UI, OR a professional studio workspace with industry-specific equipment and tools, OR a high-end product or deliverable mockup. Dark modern aesthetic, cinematic depth of field, sharp focus, dramatic lighting. No people, no faces, no watermarks, no overlaid text, no generic stock clichés. Award-winning editorial quality.`;
+
+  try {
+    return await fetchImageAsDataUrl(pollinationsUrl(prompt, seed, 900, 600));
+  } catch {
+    // First fallback: simpler prompt
+    try {
+      const simplePrompt = `Professional workspace ${nicheCtx}, ${keywords}, modern, clean, high quality photo, no text`;
+      return await fetchImageAsDataUrl(pollinationsUrl(simplePrompt, seed + 1000, 800, 600));
+    } catch {
+      // Final fallback: stock keyword image
+      try {
+        return await fetchImageAsDataUrl(stockImageUrl(keywords, seed));
+      } catch {
+        return await fetchImageAsDataUrl(`https://picsum.photos/seed/${seed}/800/600`);
+      }
+    }
+  }
 }
 
 // ─── generate (no DB write yet — returns data for preview) ─────────────────────
@@ -248,14 +265,14 @@ export const generatePortfolio = createServerFn({ method: "POST" })
       }),
     );
 
-    // 4b. Hero background image — niche-specific wide landscape.
+    // 4b. Hero background image — niche-specific wide cinematic landscape.
     let heroImageUrl = "";
     try {
-      const heroPrompt = `Professional workspace photograph representing ${copy.niche}. Wide landscape format. Modern, clean, well-lit. No people, no faces, no text, no logos. Cinematic depth of field. High quality editorial photo.`;
-      const heroDataUrl = await freeProjectImage(heroPrompt, 99, undefined, copy.niche);
+      const heroPrompt = `Cinematic wide-format hero background photograph for a ${copy.niche} professional's portfolio website. Abstract or atmospheric — tools of the trade, a beautifully lit workspace, a skyline or architectural detail relevant to the niche. No people, no faces, no overlaid text, no logos. Ultra high quality, editorial magazine style, 16:9 ratio, dark moody tone with teal or gold accent lighting.`;
+      const heroDataUrl = await fetchImageAsDataUrl(pollinationsUrl(heroPrompt, 999, 1200, 600));
       heroImageUrl = await uploadImage(context.supabase, `${folder}/hero-bg.png`, heroDataUrl);
     } catch {
-      // fallback: no hero image, gradient used instead
+      // no hero image — gradient background used as fallback
     }
 
     // 5. Assemble — factual fields straight from the profile.

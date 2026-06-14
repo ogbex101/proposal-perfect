@@ -97,6 +97,8 @@ function NewProposal() {
   const [strategyDoc, setStrategyDoc] = useState<StrategyDocument | null>(null);
   const [showStrategy, setShowStrategy] = useState(false);
   const strategyRef = useRef<HTMLDivElement>(null);
+  const [strategyLink, setStrategyLink] = useState<string | null>(null);
+  const strategyLinkApplied = useRef(false);
 
   // Language: "english" keeps proposal in English, "detected" writes it in the job's language
   const [proposalLanguage, setProposalLanguage] = useState<"english" | "detected">("english");
@@ -205,11 +207,10 @@ function NewProposal() {
         const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
         if (primaries.length) setSelectedPortfolio(primaries);
       }
-      // Auto-trigger strategy + proposal immediately after analysis
-      setTimeout(() => {
-        strategyMutation.mutate();
-        generateMutation.mutate();
-      }, 100);
+      // Pass fresh normalized analysis directly — React state update is async
+      // so reading `analysis` inside the mutations would give stale null.
+      strategyMutation.mutate(normalized);
+      generateMutation.mutate(normalized);
       toast.success("Analyzing… generating proposal & strategy");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Analysis failed"),
@@ -225,11 +226,13 @@ function NewProposal() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: async () => {
+    // Accept an analysisOverride so the auto-trigger can pass fresh analysis
+    // without waiting for React state to flush.
+    mutationFn: async (analysisOverride?: JobAnalysis | null) => {
+      const activeAnalysis = analysisOverride !== undefined ? analysisOverride : analysis;
       const items = portfolio
         .filter((p) => selectedPortfolio.includes(p.id))
         .map((p) => ({ title: p.title, url: p.url, description: p.description }));
-      // Prepend the tailored AI/saved/pasted portfolio link, if one was chosen.
       if (portfolioLink) {
         items.unshift({
           title: "Portfolio",
@@ -237,7 +240,7 @@ function NewProposal() {
           description: "A portfolio tailored to this job.",
         });
       }
-      const detectedLang = analysis?.detectedLanguage;
+      const detectedLang = activeAnalysis?.detectedLanguage;
       const targetLanguage =
         proposalLanguage === "detected" && detectedLang && detectedLang.toLowerCase() !== "english"
           ? detectedLang
@@ -251,7 +254,7 @@ function NewProposal() {
       return generateProposal({
         data: {
           jobDescription: effectiveJob,
-          analysis,
+          analysis: activeAnalysis,
           hookId: hookId === AI_HOOK_ID ? HOOKS[0].id : hookId,
           strategyId: strategyId === AI_STRATEGY_ID ? STRATEGIES[0].id : strategyId,
           customHookText,
@@ -333,24 +336,33 @@ function NewProposal() {
   });
 
   const strategyMutation = useMutation({
-    mutationFn: () =>
-      generateStrategyDocument({
+    mutationFn: (analysisOverride?: JobAnalysis | null) => {
+      const activeAnalysis = analysisOverride !== undefined ? analysisOverride : analysis;
+      const detectedLang = activeAnalysis?.detectedLanguage;
+      return generateStrategyDocument({
         data: {
           jobDescription: effectiveJob,
-          analysis,
+          analysis: activeAnalysis,
           budget: budget || undefined,
-          targetLanguage: (() => {
-            const detectedLang = analysis?.detectedLanguage;
-            return proposalLanguage === "detected" && detectedLang && detectedLang.toLowerCase() !== "english"
-              ? detectedLang
-              : undefined;
-          })(),
+          targetLanguage: proposalLanguage === "detected" && detectedLang && detectedLang.toLowerCase() !== "english"
+            ? detectedLang
+            : undefined,
         },
-      }),
-    onSuccess: (result) => {
+      });
+    },
+    onSuccess: async (result) => {
       if (result) {
         setStrategyDoc(result);
         setShowStrategy(true);
+        // Compute the shareable link — will be auto-appended to the proposal
+        try {
+          const LZString = (await import("lz-string")).default;
+          const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(result));
+          const url = `${window.location.origin}/strategy?d=${encoded}`;
+          setStrategyLink(url);
+        } catch {
+          /* link generation failed, skip auto-attach */
+        }
         toast.success("Strategy document generated");
       }
     },
@@ -436,6 +448,15 @@ function NewProposal() {
   const canAnalyze = effectiveJob.length >= 20;
   const canGenerate = effectiveJob.length >= 10;
 
+  // Auto-append the strategy link to the proposal once both are ready.
+  // Use a ref flag so it fires exactly once per generation session.
+  useEffect(() => {
+    if (!strategyLink || !content || strategyLinkApplied.current) return;
+    if (content.includes("/strategy?")) return; // already has a link
+    setContent((prev) => prev + `\n\nI've prepared a full project strategy document for this — timeline, phases, risk factors, and success metrics. You can review it here: ${strategyLink}`);
+    strategyLinkApplied.current = true;
+  }, [strategyLink, content]);
+
   function reset() {
     setAnalysis(null);
     setContent("");
@@ -444,6 +465,8 @@ function NewProposal() {
     setChosenProfile(null);
     setStrategyDoc(null);
     setShowStrategy(false);
+    setStrategyLink(null);
+    strategyLinkApplied.current = false;
     setProposalLanguage("english");
     setAiHookStrategy(null);
     setToneAssertiveness(3);
@@ -948,7 +971,7 @@ function NewProposal() {
               <Button
                 variant="outline"
                 disabled={!canGenerate || strategyMutation.isPending}
-                onClick={() => strategyMutation.mutate()}
+                onClick={() => strategyMutation.mutate(undefined)}
                 className="w-full border-teal/40 text-teal hover:bg-teal/10"
               >
                 {strategyMutation.isPending ? (
@@ -968,7 +991,7 @@ function NewProposal() {
               )}
 
               <Button
-                onClick={() => generateMutation.mutate()}
+                onClick={() => generateMutation.mutate(undefined)}
                 disabled={!canGenerate || generateMutation.isPending}
                 className="w-full bg-gold text-primary-foreground hover:bg-gold-bright"
               >
