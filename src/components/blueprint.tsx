@@ -11,7 +11,7 @@ export function CropCard({
   return (
     <div
       className={cn(
-        "relative rounded-lg border bg-card/70 backdrop-blur-sm",
+        "relative rounded-lg border bg-card/70 backdrop-blur-sm hover-lift scroll-fade-up",
         glow === "teal" && "glow-teal",
         glow === "gold" && "glow-gold",
         className,

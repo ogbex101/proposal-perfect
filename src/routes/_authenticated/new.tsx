@@ -64,6 +64,13 @@ export const Route = createFileRoute("/_authenticated/new")({
 
 type Milestone = { title: string; description: string; amount?: string };
 
+function nichematch(item: { title: string; description: string }, niche: string): number {
+  if (!niche) return 0;
+  const text = (item.title + " " + item.description).toLowerCase();
+  const words = niche.toLowerCase().split(/[\s,/&\-]+/).filter((w) => w.length > 3);
+  return words.filter((w) => text.includes(w)).length;
+}
+
 function NewProposal() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -212,8 +219,23 @@ function NewProposal() {
       if (s) setStrategyId(s.id);
       if (result.suggestedLength) setLength(result.suggestedLength as LengthId);
       if (selectedPortfolio.length === 0) {
-        const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
-        if (primaries.length) setSelectedPortfolio(primaries);
+        const niche = result.detectedNiche ?? "";
+        if (niche) {
+          const byNiche = [...portfolio]
+            .map((p) => ({ p, score: nichematch(p, niche) + (p.is_primary ? 0.3 : 0) }))
+            .filter((x) => x.score > 0)
+            .sort((a, b) => b.score - a.score);
+          const ids = byNiche.slice(0, 3).map((x) => x.p.id);
+          if (ids.length) {
+            setSelectedPortfolio(ids);
+          } else {
+            const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
+            if (primaries.length) setSelectedPortfolio(primaries);
+          }
+        } else {
+          const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
+          if (primaries.length) setSelectedPortfolio(primaries);
+        }
       }
       // Pass fresh normalized analysis directly — React state update is async
       // so reading `analysis` inside the mutations would give stale null.
@@ -745,8 +767,23 @@ function NewProposal() {
             )}
             <div className="mt-4 space-y-5">
               <div className="space-y-3">
+                {analysis && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="h-3 w-3 text-teal" />
+                    <span className="text-[11px] text-teal">AI auto-selected hook &amp; strategy from analysis · change below if needed</span>
+                  </div>
+                )}
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Hook">
+                  <Field label={
+                    <span className="flex items-center gap-1.5">
+                      Hook
+                      {analysis && hookId === analysis.suggestedHookId && hookId !== AI_HOOK_ID && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-teal/15 border border-teal/30 px-1.5 py-0.5 text-[9px] font-semibold text-teal">
+                          <Sparkles className="h-2 w-2" /> matched
+                        </span>
+                      )}
+                    </span>
+                  }>
                     <Select value={hookId} onValueChange={(v) => { setHookId(v); if (v !== AI_HOOK_ID) setAiHookStrategy(null); }}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -762,7 +799,16 @@ function NewProposal() {
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="Strategy">
+                  <Field label={
+                    <span className="flex items-center gap-1.5">
+                      Strategy
+                      {analysis && strategyId === analysis.suggestedStrategyId && strategyId !== AI_STRATEGY_ID && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-teal/15 border border-teal/30 px-1.5 py-0.5 text-[9px] font-semibold text-teal">
+                          <Sparkles className="h-2 w-2" /> matched
+                        </span>
+                      )}
+                    </span>
+                  }>
                     <Select value={strategyId} onValueChange={(v) => { setStrategyId(v); if (v !== AI_STRATEGY_ID) setAiHookStrategy(null); }}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -898,40 +944,58 @@ function NewProposal() {
                     No portfolio items yet. Add them under Portfolio to weave links into proposals.
                   </p>
                 ) : (
-                  <div className="space-y-2">
-                    {portfolio.map((p) => {
-                      const checked = selectedPortfolio.includes(p.id);
-                      return (
-                        <label
-                          key={p.id}
-                          className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border bg-background/40 p-2.5"
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(v) => {
-                              if (v) {
-                                if (selectedPortfolio.length >= 3) {
-                                  toast.info("Three portfolio links max per proposal");
-                                  return;
-                                }
-                                setSelectedPortfolio([...selectedPortfolio, p.id]);
-                              } else {
-                                setSelectedPortfolio(selectedPortfolio.filter((id) => id !== p.id));
-                              }
-                            }}
-                            className="mt-0.5"
-                          />
-                          <span className="min-w-0">
-                            <span className="flex items-center gap-2 text-sm font-medium text-white">
-                              {p.title}
-                              {p.is_primary && <span className="annotation !text-gold">Primary</span>}
-                            </span>
-                            <span className="block truncate text-xs text-muted-foreground">{p.url}</span>
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <>
+                    {analysis?.detectedNiche && (
+                      <p className="mb-1 text-[10px] text-muted-foreground">Sorted by niche match · {analysis.detectedNiche}</p>
+                    )}
+                    <div className="space-y-2">
+                      {[...portfolio]
+                        .sort((a, b) => {
+                          const niche = analysis?.detectedNiche ?? "";
+                          const scoreB = nichematch(b, niche) + (b.is_primary ? 0.3 : 0);
+                          const scoreA = nichematch(a, niche) + (a.is_primary ? 0.3 : 0);
+                          return scoreB - scoreA;
+                        })
+                        .map((p) => {
+                          const checked = selectedPortfolio.includes(p.id);
+                          const matchScore = nichematch(p, analysis?.detectedNiche ?? "");
+                          return (
+                            <label
+                              key={p.id}
+                              className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border bg-background/40 p-2.5"
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => {
+                                  if (v) {
+                                    if (selectedPortfolio.length >= 3) {
+                                      toast.info("Three portfolio links max per proposal");
+                                      return;
+                                    }
+                                    setSelectedPortfolio([...selectedPortfolio, p.id]);
+                                  } else {
+                                    setSelectedPortfolio(selectedPortfolio.filter((id) => id !== p.id));
+                                  }
+                                }}
+                                className="mt-0.5"
+                              />
+                              <span className="min-w-0">
+                                <span className="flex items-center gap-2 text-sm font-medium text-white flex-wrap">
+                                  {p.title}
+                                  {p.is_primary && <span className="annotation !text-gold">Primary</span>}
+                                  {matchScore > 0 && (
+                                    <span className="inline-flex items-center gap-0.5 rounded-full bg-gold/15 border border-gold/30 px-1.5 py-0.5 text-[9px] font-semibold text-gold">
+                                      <Sparkles className="h-2 w-2" /> niche match
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="block truncate text-xs text-muted-foreground">{p.url}</span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -1682,7 +1746,7 @@ function Segment({ active, onClick, children }: { active: boolean; onClick: () =
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
