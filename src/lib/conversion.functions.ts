@@ -2,6 +2,16 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
+async function requireOwnedThread(supabase: any, threadId: string, userId: string) {
+  const { data, error } = await supabase
+    .from("conversion_threads")
+    .select("id")
+    .eq("id", threadId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) throw new Error("Conversation not found or access denied.");
+}
+
 // ── Threads ──────────────────────────────────────────────────────────────────
 
 export const listThreads = createServerFn({ method: "GET" })
@@ -81,6 +91,7 @@ export const listMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { threadId: string }) => z.object({ threadId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireOwnedThread(context.supabase, data.threadId, context.userId);
     const { data: rows, error } = await (context.supabase as any)
       .from("conversion_thread_messages")
       .select("id, thread_id, role, content, created_at")
@@ -100,6 +111,7 @@ export const addMessage = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    await requireOwnedThread(context.supabase, data.threadId, context.userId);
     const { data: row, error } = await (context.supabase as any)
       .from("conversion_thread_messages")
       .insert({ thread_id: data.threadId, role: data.role, content: data.content })
@@ -119,6 +131,13 @@ export const deleteMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    const { data: message, error: lookupError } = await (context.supabase as any)
+      .from("conversion_thread_messages")
+      .select("thread_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (lookupError || !message) throw new Error("Message not found or access denied.");
+    await requireOwnedThread(context.supabase, message.thread_id, context.userId);
     const { error } = await (context.supabase as any)
       .from("conversion_thread_messages")
       .delete()
