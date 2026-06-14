@@ -141,7 +141,8 @@ export const deleteMessage = createServerFn({ method: "POST" })
     const { error } = await (context.supabase as any)
       .from("conversion_thread_messages")
       .delete()
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .eq("thread_id", message.thread_id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
