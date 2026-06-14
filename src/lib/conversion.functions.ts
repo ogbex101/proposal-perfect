@@ -19,7 +19,7 @@ export const listThreads = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await (context.supabase as any)
       .from("conversion_threads")
-      .select("id, title, job_description, sent_proposal, created_at, updated_at")
+      .select("id, title, job_description, sent_proposal, stage, context_dump, extracted, created_at, updated_at")
       .eq("user_id", context.userId)
       .order("updated_at", { ascending: false })
       .limit(80);
@@ -53,23 +53,28 @@ export const createThread = createServerFn({ method: "POST" })
 
 export const updateThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string; title?: string; job_description?: string; sent_proposal?: string }) =>
+  .inputValidator((d: { id: string; title?: string; job_description?: string; sent_proposal?: string; stage?: number; context_dump?: string; extracted?: Record<string, unknown> }) =>
     z.object({
       id: z.string().uuid(),
       title: z.string().max(200).optional(),
       job_description: z.string().max(10000).optional(),
       sent_proposal: z.string().max(10000).optional(),
+      stage: z.number().int().min(1).max(4).optional(),
+      context_dump: z.string().max(20000).optional(),
+      extracted: z.record(z.unknown()).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const { id, ...fields } = data;
-    const { error } = await (context.supabase as any)
+    const { data: row, error } = await (context.supabase as any)
       .from("conversion_threads")
       .update({ ...fields, updated_at: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", context.userId);
+      .eq("user_id", context.userId)
+      .select()
+      .single();
     if (error) throw new Error(error.message);
-    return { ok: true };
+    return row;
   });
 
 export const deleteThread = createServerFn({ method: "POST" })

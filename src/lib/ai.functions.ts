@@ -594,7 +594,31 @@ const ConversionSchema = z.object({
     mode: z.string(),
     reply: z.string(),
   })),
+  stageAssessment: z.object({
+    canAdvance: z.boolean(),
+    reason: z.string(),
+    extracted: z.object({
+      deliverables: z.array(z.string()).optional(),
+      painPoints: z.array(z.string()).optional(),
+      scopeOfWork: z.string().optional(),
+      timeline: z.string().optional(),
+    }),
+  }),
 });
+
+const STAGE_LABELS = [
+  "Understand the problem",
+  "Build relationship",
+  "Gradually convert",
+  "Close the deal",
+];
+
+const STAGE_CRITERIA = [
+  "Core client problem has been clearly identified in the conversation",
+  "Genuine rapport has been established — client is warm and engaged",
+  "Scope, timeline, and rough budget have been discussed",
+  "Client is ready to move forward — next step is contract or hire",
+];
 
 export const generateConversionResponses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -604,6 +628,9 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
     sentProposal?: string;
     replyLanguage?: string;
     chatHistory?: Array<{ role: "client" | "you"; content: string }>;
+    stage?: number;
+    contextDump?: string;
+    currentExtracted?: Record<string, unknown>;
   }) =>
     z.object({
       clientMessage: z.string().min(5).max(5000),
@@ -611,11 +638,18 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
       sentProposal: z.string().max(5000).optional(),
       replyLanguage: z.string().optional(),
       chatHistory: z.array(z.object({ role: z.enum(["client", "you"]), content: z.string() })).optional(),
+      stage: z.number().int().min(1).max(4).optional(),
+      contextDump: z.string().max(10000).optional(),
+      currentExtracted: z.record(z.unknown()).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
     try {
       const customFlags = await loadCustomFlags(context);
+      const stage = data.stage ?? 1;
+      const stageLabel = STAGE_LABELS[stage - 1];
+      const stageCriteria = STAGE_CRITERIA[stage - 1];
+      const nextStageLabel = stage < 4 ? STAGE_LABELS[stage] : null;
 
       // Build a readable chat thread so the AI has full context
       const historyBlock = data.chatHistory && data.chatHistory.length > 0
@@ -624,22 +658,39 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
             .join("\n\n")}\n\n---\n\n`
         : "";
 
+      const contextDumpBlock = data.contextDump
+        ? `PRIOR CONVERSATION CONTEXT (deep learning — use to sound human):\n${data.contextDump}\n\n---\n\n`
+        : "";
+
       const contextBlock = [
         data.jobDescription ? `JOB DESCRIPTION:\n${data.jobDescription}` : null,
         data.sentProposal ? `YOUR SENT PROPOSAL:\n${data.sentProposal}` : null,
+        contextDumpBlock || null,
         historyBlock || null,
         `CLIENT'S LATEST MESSAGE:\n${data.clientMessage}`,
       ].filter(Boolean).join("\n\n---\n\n");
       const langInstruction = data.replyLanguage && data.replyLanguage !== "English"
         ? `\n\nWRITE ALL REPLIES IN ${data.replyLanguage}.`
         : "";
+
+      const stageBlock = `
+CURRENT CONVERSATION STAGE: ${stage}/4 — "${stageLabel}"
+Stage ${stage} success criteria: "${stageCriteria}"
+${nextStageLabel ? `Next stage to unlock: "${nextStageLabel}"` : "This is the final stage — focus on closing."}
+
+Based on the FULL conversation history, assess: has Stage ${stage}'s criteria been met yet?
+- canAdvance: true only if the criteria is CLEARLY met based on what was said so far
+- reason: 1 sentence explaining your assessment
+- Also extract from the conversation: deliverables mentioned, client pain points, scope of work, timeline discussed (leave fields empty if not yet mentioned)`;
+
       const result = await structured(
         ConversionSchema,
         `You are a rapid-response conversion coach for freelancers. The client is waiting. Read the FULL conversation history carefully so you can continue the thread naturally — do not restart or summarize what was already said. Generate:
 
-1. The single BEST reply — the one most likely to move the conversation toward a hire RIGHT NOW. Take into account the entire thread dynamic: what was already agreed, what objections were raised, what the client's tone reveals.
+1. The single BEST reply — the one most likely to move the conversation toward a hire RIGHT NOW, serving Stage ${stage} goal: "${stageLabel}".
 2. A brief reason (1-2 sentences) explaining why this reply wins given the full context.
 3. 5 alternative replies, each with a distinct approach.
+4. A stage assessment (stageAssessment object).
 
 CRITICAL RULES (the client must NEVER suspect AI):
 - Write like a human who typed this on their phone in 30 seconds — natural rhythm, occasional contractions, no polished corporate prose
@@ -649,6 +700,9 @@ CRITICAL RULES (the client must NEVER suspect AI):
 - If the thread shows the client is already warm, reflect that; if they're cautious, match that energy
 - Reference specifics from the job/proposal/prior messages — never be generic
 - Each alternative must be genuinely different in approach, not just rephrased
+- If a prior context dump is provided, use the writing style and patterns from it to sound more human
+
+${stageBlock}
 
 Return a JSON object:
 {
@@ -660,7 +714,17 @@ Return a JSON object:
     { "mode": "Show Knowledge", "reply": "<demonstrates domain expertise>" },
     { "mode": "Strong Understanding", "reply": "<leads with empathy and precision>" },
     { "mode": "Sharp & Brief", "reply": "<1-2 sentences, for busy clients>" }
-  ]
+  ],
+  "stageAssessment": {
+    "canAdvance": true/false,
+    "reason": "<one sentence>",
+    "extracted": {
+      "deliverables": ["<item>"],
+      "painPoints": ["<item>"],
+      "scopeOfWork": "<brief description or empty string>",
+      "timeline": "<e.g. '3 weeks' or empty string>"
+    }
+  }
 }${redFlagPromptBlock(customFlags)}${langInstruction}`,
         contextBlock,
       );
@@ -668,6 +732,7 @@ Return a JSON object:
         bestReply: scrubRedFlags(result.bestReply, customFlags),
         bestReplyReason: result.bestReplyReason,
         alternatives: result.alternatives.map((a) => ({ ...a, reply: scrubRedFlags(a.reply, customFlags) })),
+        stageAssessment: result.stageAssessment,
       };
     } catch (err) {
       handleAiError(err);

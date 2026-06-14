@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MessagesSquare, Loader2, Copy, Trash2, Zap, Plus,
   ChevronRight, Send, RotateCcw, Check, Pencil, X,
+  BookOpen, ChevronDown, ChevronUp, Brain, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CropCard, Eyebrow, PageHeader, EmptyState } from "@/components/blueprint";
@@ -28,6 +29,14 @@ type Thread = {
   title: string;
   job_description: string;
   sent_proposal: string;
+  stage: number;
+  context_dump: string;
+  extracted: {
+    deliverables?: string[];
+    painPoints?: string[];
+    scopeOfWork?: string;
+    timeline?: string;
+  };
   created_at: string;
   updated_at: string;
 };
@@ -44,7 +53,31 @@ type ConversionResult = {
   bestReply: string;
   bestReplyReason: string;
   alternatives: Array<{ mode: string; reply: string }>;
+  stageAssessment?: {
+    canAdvance: boolean;
+    reason: string;
+    extracted: {
+      deliverables?: string[];
+      painPoints?: string[];
+      scopeOfWork?: string;
+      timeline?: string;
+    };
+  };
 };
+
+const STAGE_LABELS = [
+  "Understand the problem",
+  "Build relationship",
+  "Gradually convert",
+  "Close the deal",
+];
+
+const STAGE_DESCRIPTIONS = [
+  "Identify the core client problem clearly",
+  "Establish genuine rapport and trust",
+  "Discuss scope, timeline, and approach",
+  "Guide client toward hire or contract",
+];
 
 const modeColors: Record<string, string> = {
   "Founder-to-Founder": "text-gold",
@@ -53,6 +86,167 @@ const modeColors: Record<string, string> = {
   "Strong Understanding": "text-purple-400",
   "Sharp & Brief": "text-red-400",
 };
+
+// ── Stage indicator ──────────────────────────────────────────────────────────
+
+function StageBar({ stage, canAdvance, onAdvance }: {
+  stage: number;
+  canAdvance: boolean;
+  onAdvance: () => void;
+}) {
+  return (
+    <div className="mb-4 shrink-0">
+      <div className="flex items-center gap-1 mb-2">
+        {STAGE_LABELS.map((label, i) => {
+          const s = i + 1;
+          const done = stage > s;
+          const active = stage === s;
+          return (
+            <div key={s} className="flex items-center flex-1">
+              <div className={cn(
+                "flex flex-col items-center flex-1",
+              )}>
+                <div className={cn(
+                  "h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold border transition-all",
+                  done ? "bg-teal border-teal text-primary-foreground" :
+                  active ? "bg-gold/20 border-gold text-gold" :
+                  "bg-background/40 border-line/40 text-muted-foreground/50",
+                )}>
+                  {done ? <Check className="h-3 w-3" /> : s}
+                </div>
+                <span className={cn(
+                  "text-[9px] text-center mt-0.5 leading-tight max-w-[60px]",
+                  active ? "text-gold font-medium" : done ? "text-teal" : "text-muted-foreground/40",
+                )}>
+                  {label}
+                </span>
+              </div>
+              {s < 4 && (
+                <div className={cn(
+                  "h-px flex-1 mx-1 transition-colors",
+                  done ? "bg-teal" : "bg-line/40",
+                )} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-muted-foreground text-center">{STAGE_DESCRIPTIONS[stage - 1]}</p>
+      {canAdvance && stage < 4 && (
+        <div className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-teal/30 bg-teal/8 px-3 py-1.5">
+          <Check className="h-3 w-3 text-teal" />
+          <span className="text-[11px] text-teal">Stage {stage} complete!</span>
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-teal hover:bg-teal/10 ml-1" onClick={onAdvance}>
+            Advance to Stage {stage + 1} →
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Deep learning panel ──────────────────────────────────────────────────────
+
+function DeepLearningPanel({
+  contextDump,
+  onSave,
+}: {
+  contextDump: string;
+  onSave: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(contextDump);
+
+  useEffect(() => { setDraft(contextDump); }, [contextDump]);
+
+  return (
+    <div className="shrink-0 mb-3">
+      <button
+        className="flex w-full items-center justify-between rounded-lg border border-line/40 bg-background/40 px-3 py-2 text-left transition-colors hover:border-teal/30"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <div className="flex items-center gap-1.5">
+          <Brain className="h-3.5 w-3.5 text-teal" />
+          <span className="text-xs font-medium text-white">Deep Learning</span>
+          {contextDump && <span className="text-[9px] bg-teal/20 text-teal px-1.5 py-0.5 rounded-full">Active</span>}
+        </div>
+        {open ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+      </button>
+      {open && (
+        <div className="mt-1.5 rounded-lg border border-teal/20 bg-background/60 p-3 space-y-2">
+          <p className="text-[10px] text-muted-foreground">
+            Paste a prior conversation with this client (or similar clients). The AI will study your writing style, their communication patterns, and prior agreements — making replies sound genuinely human and context-aware.
+          </p>
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={5}
+            placeholder="Paste any prior conversation, messages, or notes about this client…"
+            className="resize-y bg-background/60 text-xs"
+          />
+          <Button
+            size="sm"
+            className="w-full bg-teal/20 text-teal hover:bg-teal/30 border border-teal/30"
+            onClick={() => { onSave(draft); setOpen(false); toast.success("Deep learning context saved"); }}
+          >
+            <Brain className="h-3.5 w-3.5 mr-1.5" /> Save context
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Extracted intel panel ────────────────────────────────────────────────────
+
+function ExtractedPanel({ extracted }: {
+  extracted: Thread["extracted"];
+}) {
+  const hasData = (extracted.deliverables?.length ?? 0) > 0 ||
+    (extracted.painPoints?.length ?? 0) > 0 ||
+    extracted.scopeOfWork || extracted.timeline;
+
+  if (!hasData) return null;
+
+  return (
+    <div className="shrink-0 mb-3 rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 space-y-2">
+      <div className="flex items-center gap-1.5 mb-1">
+        <BookOpen className="h-3.5 w-3.5 text-purple-400" />
+        <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Extracted intel</span>
+      </div>
+      <div className="grid gap-2 text-[10px]">
+        {extracted.timeline && (
+          <div>
+            <span className="text-muted-foreground font-mono">TIMELINE</span>
+            <p className="text-white mt-0.5">{extracted.timeline}</p>
+          </div>
+        )}
+        {extracted.scopeOfWork && (
+          <div>
+            <span className="text-muted-foreground font-mono">SCOPE</span>
+            <p className="text-white mt-0.5">{extracted.scopeOfWork}</p>
+          </div>
+        )}
+        {extracted.painPoints && extracted.painPoints.length > 0 && (
+          <div>
+            <span className="text-muted-foreground font-mono">PAIN POINTS</span>
+            <ul className="mt-0.5 space-y-0.5">
+              {extracted.painPoints.map((p, i) => <li key={i} className="text-white">· {p}</li>)}
+            </ul>
+          </div>
+        )}
+        {extracted.deliverables && extracted.deliverables.length > 0 && (
+          <div>
+            <span className="text-muted-foreground font-mono">DELIVERABLES</span>
+            <ul className="mt-0.5 space-y-0.5">
+              {extracted.deliverables.map((d, i) => <li key={i} className="text-white">· {d}</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ── New-thread dialog ────────────────────────────────────────────────────────
 
@@ -169,15 +363,15 @@ function NewThreadPanel({
 
 // ── Chat thread view ─────────────────────────────────────────────────────────
 
-function ThreadView({ thread }: { thread: Thread }) {
+function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate: (t: Thread) => void }) {
   const qc = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
   const [clientInput, setClientInput] = useState("");
   const [result, setResult] = useState<ConversionResult | null>(null);
-  const [chosenReply, setChosenReply] = useState<string | null>(null);
   const [replyLanguage, setReplyLanguage] = useState("English");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(thread.title);
+  const [pendingAdvance, setPendingAdvance] = useState(false);
 
   const messagesQ = useQuery({
     queryKey: ["messages", thread.id],
@@ -185,10 +379,30 @@ function ThreadView({ thread }: { thread: Thread }) {
   });
   const messages = (messagesQ.data ?? []) as Message[];
 
-  // Scroll to bottom whenever messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, result]);
+
+  const saveContextDump = useMutation({
+    mutationFn: (contextDump: string) =>
+      updateThread({ data: { id: thread.id, context_dump: contextDump } }),
+    onSuccess: (row) => {
+      qc.invalidateQueries({ queryKey: ["threads"] });
+      onThreadUpdate({ ...thread, context_dump: (row as any)?.context_dump ?? thread.context_dump });
+    },
+  });
+
+  const advanceStage = useMutation({
+    mutationFn: () =>
+      updateThread({ data: { id: thread.id, stage: Math.min(thread.stage + 1, 4) } }),
+    onSuccess: (row) => {
+      qc.invalidateQueries({ queryKey: ["threads"] });
+      const updated = { ...thread, stage: Math.min(thread.stage + 1, 4), ...((row as any) ?? {}) };
+      onThreadUpdate(updated);
+      setPendingAdvance(false);
+      toast.success(`Advanced to Stage ${updated.stage}: ${STAGE_LABELS[updated.stage - 1]}`);
+    },
+  });
 
   const generate = useMutation({
     mutationFn: () =>
@@ -199,16 +413,27 @@ function ThreadView({ thread }: { thread: Thread }) {
           sentProposal: thread.sent_proposal || undefined,
           replyLanguage: replyLanguage !== "English" ? replyLanguage : undefined,
           chatHistory: messages.map((m) => ({ role: m.role, content: m.content })),
+          stage: thread.stage,
+          contextDump: thread.context_dump || undefined,
+          currentExtracted: thread.extracted ?? undefined,
         },
       }),
     onSuccess: async (data) => {
       if (!data) return;
-      // Save the client message first
       await addMessage({ data: { threadId: thread.id, role: "client", content: clientInput } });
       qc.invalidateQueries({ queryKey: ["messages", thread.id] });
       qc.invalidateQueries({ queryKey: ["threads"] });
       setResult(data);
-      setChosenReply(null);
+      // Merge extracted intel
+      if (data.stageAssessment?.extracted) {
+        const merged = mergeExtracted(thread.extracted, data.stageAssessment.extracted);
+        await updateThread({ data: { id: thread.id, extracted: merged } });
+        qc.invalidateQueries({ queryKey: ["threads"] });
+        onThreadUpdate({ ...thread, extracted: merged });
+      }
+      if (data.stageAssessment?.canAdvance && thread.stage < 4) {
+        setPendingAdvance(true);
+      }
     },
     onError: (e: Error) => toast.error(e.message || "Could not generate"),
   });
@@ -221,7 +446,6 @@ function ThreadView({ thread }: { thread: Thread }) {
       qc.invalidateQueries({ queryKey: ["threads"] });
       setResult(null);
       setClientInput("");
-      setChosenReply(null);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -247,7 +471,7 @@ function ThreadView({ thread }: { thread: Thread }) {
   return (
     <div className="flex flex-col h-full">
       {/* Thread header */}
-      <div className="flex items-center gap-2 mb-4 shrink-0">
+      <div className="flex items-center gap-2 mb-3 shrink-0">
         {editingTitle ? (
           <div className="flex flex-1 items-center gap-2">
             <input
@@ -281,6 +505,22 @@ function ThreadView({ thread }: { thread: Thread }) {
           {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
       </div>
+
+      {/* Stage bar */}
+      <StageBar
+        stage={thread.stage ?? 1}
+        canAdvance={pendingAdvance}
+        onAdvance={() => advanceStage.mutate()}
+      />
+
+      {/* Deep learning panel */}
+      <DeepLearningPanel
+        contextDump={thread.context_dump ?? ""}
+        onSave={(v) => saveContextDump.mutate(v)}
+      />
+
+      {/* Extracted intel */}
+      <ExtractedPanel extracted={thread.extracted ?? {}} />
 
       {/* Chat history */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
@@ -317,9 +557,24 @@ function ThreadView({ thread }: { thread: Thread }) {
           ))
         )}
 
-        {/* AI result panel — shown after generation */}
+        {/* AI result panel */}
         {result && (
           <div className="space-y-3 mt-2">
+            {/* Stage assessment badge */}
+            {result.stageAssessment && (
+              <div className={cn(
+                "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[10px]",
+                result.stageAssessment.canAdvance
+                  ? "border-teal/30 bg-teal/8 text-teal"
+                  : "border-line/30 bg-background/40 text-muted-foreground",
+              )}>
+                {result.stageAssessment.canAdvance
+                  ? <Check className="h-3 w-3 shrink-0" />
+                  : <AlertCircle className="h-3 w-3 shrink-0" />}
+                <span>{result.stageAssessment.reason}</span>
+              </div>
+            )}
+
             {/* Best reply */}
             <div className="ml-auto max-w-[90%]">
               <CropCard className="p-4 border-gold/40 bg-gold/8">
@@ -379,7 +634,7 @@ function ThreadView({ thread }: { thread: Thread }) {
 
             <div className="flex justify-end">
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7"
-                onClick={() => { setResult(null); setClientInput(""); }}>
+                onClick={() => { setResult(null); setClientInput(""); setPendingAdvance(false); }}>
                 <RotateCcw className="h-3 w-3 mr-1" /> Discard & retype
               </Button>
             </div>
@@ -389,7 +644,7 @@ function ThreadView({ thread }: { thread: Thread }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area — only shown when no pending result */}
+      {/* Input area */}
       {!result && (
         <div className="mt-4 shrink-0 space-y-2">
           <Label className="annotation !text-muted-foreground">
@@ -409,7 +664,7 @@ function ThreadView({ thread }: { thread: Thread }) {
           >
             {generate.isPending
               ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Generating reply…</>
-              : <><Zap className="mr-1.5 h-4 w-4" /> Generate reply</>}
+              : <><Zap className="mr-1.5 h-4 w-4" /> Generate reply — Stage {thread.stage}: {STAGE_LABELS[(thread.stage ?? 1) - 1]}</>}
           </Button>
         </div>
       )}
@@ -445,11 +700,13 @@ function ConversionPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Sync active thread when list refreshes (title updates etc.)
+  // Sync active thread when list refreshes
   useEffect(() => {
     if (!activeThread) return;
     const refreshed = threads.find((t) => t.id === activeThread.id);
-    if (refreshed && refreshed.title !== activeThread.title) setActiveThread(refreshed);
+    if (refreshed && JSON.stringify(refreshed) !== JSON.stringify(activeThread)) {
+      setActiveThread(refreshed);
+    }
   }, [threads]);
 
   return (
@@ -457,7 +714,7 @@ function ConversionPage() {
       <PageHeader
         eyebrow="Follow-up"
         title="Conversion Messages"
-        description="Maintain ongoing conversations with clients. Each thread keeps full history so every reply is grounded in context — and sounds entirely human."
+        description="Maintain ongoing conversations with clients. 4-step system: understand → relate → convert → close."
       />
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]" style={{ height: "calc(100vh - 220px)" }}>
@@ -502,9 +759,17 @@ function ConversionPage() {
                     <p className={cn("text-sm font-medium truncate", activeThread?.id === t.id ? "text-gold" : "text-white")}>
                       {t.title}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {new Date(t.updated_at).toLocaleDateString()}
-                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="flex gap-0.5">
+                        {[1,2,3,4].map((s) => (
+                          <div key={s} className={cn(
+                            "h-1 w-3 rounded-full",
+                            s <= (t.stage ?? 1) ? "bg-gold" : "bg-line/40",
+                          )} />
+                        ))}
+                      </div>
+                      <span className="text-[9px] text-muted-foreground">Stage {t.stage ?? 1}</span>
+                    </div>
                   </div>
                   <div className="flex items-center shrink-0">
                     <Button
@@ -526,7 +791,11 @@ function ConversionPage() {
         {/* Right: active thread */}
         <CropCard className="p-5 flex flex-col min-h-0 overflow-hidden">
           {activeThread ? (
-            <ThreadView key={activeThread.id} thread={activeThread} />
+            <ThreadView
+              key={activeThread.id}
+              thread={activeThread}
+              onThreadUpdate={setActiveThread}
+            />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center gap-4">
               <MessagesSquare className="h-10 w-10 text-muted-foreground/40" />
@@ -546,7 +815,6 @@ function ConversionPage() {
         </CropCard>
       </div>
 
-      {/* New thread modal */}
       {showNew && (
         <NewThreadPanel
           proposals={proposals}
@@ -556,4 +824,22 @@ function ConversionPage() {
       )}
     </div>
   );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function mergeExtracted(
+  current: Thread["extracted"],
+  fresh: { deliverables?: string[]; painPoints?: string[]; scopeOfWork?: string; timeline?: string },
+): Thread["extracted"] {
+  const merged = { ...current };
+  if (fresh.deliverables?.length) {
+    merged.deliverables = [...new Set([...(merged.deliverables ?? []), ...fresh.deliverables])];
+  }
+  if (fresh.painPoints?.length) {
+    merged.painPoints = [...new Set([...(merged.painPoints ?? []), ...fresh.painPoints])];
+  }
+  if (fresh.scopeOfWork) merged.scopeOfWork = fresh.scopeOfWork;
+  if (fresh.timeline) merged.timeline = fresh.timeline;
+  return merged;
 }
