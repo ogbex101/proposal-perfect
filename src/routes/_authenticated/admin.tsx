@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Users, Activity, Shield, Terminal, Play, X, Loader2 } from "lucide-react";
+import { Users, Activity, Shield, Terminal, Play, X, Loader2, Database, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
 import { PageHeader, CropCard, Eyebrow } from "@/components/blueprint";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -88,6 +88,9 @@ function AdminPanel() {
         title="Admin Panel"
         description="User accounts and visitor analytics across the platform."
       />
+
+      {/* ── Pending Migrations ── */}
+      <MigrationsPanel onLoadSql={(s) => { setSql(s); setSqlResult(null); setSqlError(null); window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); }} />
 
       {/* Stats strip */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -266,6 +269,177 @@ function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string
         <span className="text-xs">{label}</span>
       </div>
       <p className="text-2xl font-bold text-white">{value.toLocaleString()}</p>
+    </CropCard>
+  );
+}
+
+// ─── Pending Migrations Panel ─────────────────────────────────────────────────
+
+const MIGRATIONS: { label: string; description: string; sql: string }[] = [
+  {
+    label: "Conversion threads & messages",
+    description: "Required for the Conversion Messages feature. Creates conversion_threads and conversion_thread_messages tables.",
+    sql: `-- Conversion chat threads
+CREATE TABLE IF NOT EXISTS public.conversion_threads (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title text NOT NULL DEFAULT 'Untitled conversation',
+  job_description text NOT NULL DEFAULT '',
+  sent_proposal text NOT NULL DEFAULT '',
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS conversion_threads_user_idx ON public.conversion_threads (user_id);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversion_threads TO authenticated;
+GRANT ALL ON public.conversion_threads TO service_role;
+ALTER TABLE public.conversion_threads ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='conversion_threads' AND policyname='Users manage own conversion_threads') THEN
+    CREATE POLICY "Users manage own conversion_threads" ON public.conversion_threads FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+
+-- Thread messages
+CREATE TABLE IF NOT EXISTS public.conversion_thread_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id uuid NOT NULL REFERENCES public.conversion_threads(id) ON DELETE CASCADE,
+  role text NOT NULL CHECK (role IN ('client', 'you')),
+  content text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS conversion_thread_messages_thread_idx ON public.conversion_thread_messages (thread_id);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversion_thread_messages TO authenticated;
+GRANT ALL ON public.conversion_thread_messages TO service_role;
+ALTER TABLE public.conversion_thread_messages ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='conversion_thread_messages' AND policyname='Users manage own conversion_thread_messages') THEN
+    CREATE POLICY "Users manage own conversion_thread_messages" ON public.conversion_thread_messages FOR ALL
+      USING (EXISTS (SELECT 1 FROM public.conversion_threads t WHERE t.id = thread_id AND t.user_id = auth.uid()))
+      WITH CHECK (EXISTS (SELECT 1 FROM public.conversion_threads t WHERE t.id = thread_id AND t.user_id = auth.uid()));
+  END IF;
+END $$;`,
+  },
+  {
+    label: "Conversation stages, deep learning & Drive link",
+    description: "Adds stage, context_dump, extracted, and drive_link columns to conversion_threads. Also creates custom_strategies table.",
+    sql: `-- Conversation stages + deep learning columns
+ALTER TABLE public.conversion_threads
+  ADD COLUMN IF NOT EXISTS stage integer NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS context_dump text DEFAULT '',
+  ADD COLUMN IF NOT EXISTS extracted jsonb DEFAULT '{}';
+
+-- Drive link on sub_profiles / profiles (if those tables exist)
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS drive_link text;
+ALTER TABLE public.sub_profiles ADD COLUMN IF NOT EXISTS drive_link text;
+
+-- Custom strategies table
+CREATE TABLE IF NOT EXISTS public.custom_strategies (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  created_at timestamptz DEFAULT now()
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.custom_strategies TO authenticated;
+GRANT ALL ON public.custom_strategies TO service_role;
+ALTER TABLE public.custom_strategies ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='custom_strategies' AND policyname='own custom_strategies') THEN
+    CREATE POLICY "own custom_strategies" ON public.custom_strategies FOR ALL TO authenticated USING (auth.uid() = user_id);
+  END IF;
+END $$;`,
+  },
+  {
+    label: "SQL runner function + follow-up reminders",
+    description: "Creates the run_admin_sql() function for this SQL runner, and adds reminder_at to conversion_threads.",
+    sql: `-- Admin SQL runner (service_role only)
+CREATE OR REPLACE FUNCTION public.run_admin_sql(sql text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE result jsonb;
+BEGIN
+  EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || sql || ') t' INTO result;
+  RETURN COALESCE(result, '[]'::jsonb);
+EXCEPTION WHEN OTHERS THEN
+  RAISE EXCEPTION '%', SQLERRM;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.run_admin_sql(text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.run_admin_sql(text) FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.run_admin_sql(text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.run_admin_sql(text) TO service_role;
+
+-- Follow-up reminder column
+ALTER TABLE public.conversion_threads ADD COLUMN IF NOT EXISTS reminder_at timestamptz;`,
+  },
+];
+
+function MigrationsPanel({ onLoadSql }: { onLoadSql: (sql: string) => void }) {
+  const [open, setOpen] = useState(true);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  function copy(sql: string, key: string) {
+    navigator.clipboard.writeText(sql).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  }
+
+  return (
+    <CropCard className="mb-6 border-gold/30 bg-gold/5 p-5">
+      <button className="flex w-full items-center justify-between" onClick={() => setOpen((v) => !v)}>
+        <div className="flex items-center gap-2">
+          <Database className="h-4 w-4 text-gold" />
+          <Eyebrow className="text-gold">pending migrations — run these in supabase sql editor</Eyebrow>
+        </div>
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+
+      {open && (
+        <div className="mt-4 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Run each migration <strong className="text-white">in order</strong> in your{" "}
+            <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-teal underline-offset-2 hover:underline">
+              Supabase Dashboard → SQL Editor
+            </a>
+            {" "}or load it into the SQL runner below.
+          </p>
+
+          {MIGRATIONS.map((m, i) => (
+            <div key={i} className="rounded-lg border border-line/40 bg-background/60 p-4">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <p className="text-sm font-semibold text-white">{i + 1}. {m.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 border-line/40 text-[11px]"
+                    onClick={() => copy(m.sql, String(i))}
+                  >
+                    {copied === String(i) ? <><Check className="h-3 w-3 mr-1 text-teal" /> Copied</> : <><Copy className="h-3 w-3 mr-1" /> Copy</>}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 bg-gold/20 text-gold border border-gold/30 hover:bg-gold/30 text-[11px]"
+                    onClick={() => onLoadSql(m.sql)}
+                  >
+                    <Play className="h-3 w-3 mr-1" /> Load & run
+                  </Button>
+                </div>
+              </div>
+              <pre className="rounded bg-sidebar/80 p-2 text-[10px] font-mono text-muted-foreground overflow-x-auto max-h-24 overflow-y-auto whitespace-pre-wrap">
+                {m.sql.slice(0, 300)}{m.sql.length > 300 ? "\n…" : ""}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
     </CropCard>
   );
 }
