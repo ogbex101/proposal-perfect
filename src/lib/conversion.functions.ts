@@ -19,7 +19,7 @@ export const listThreads = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await (context.supabase as any)
       .from("conversion_threads")
-      .select("id, title, job_description, sent_proposal, stage, context_dump, extracted, created_at, updated_at")
+      .select("id, title, job_description, sent_proposal, stage, context_dump, extracted, reminder_at, created_at, updated_at")
       .eq("user_id", context.userId)
       .order("updated_at", { ascending: false })
       .limit(80);
@@ -53,7 +53,7 @@ export const createThread = createServerFn({ method: "POST" })
 
 export const updateThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string; title?: string; job_description?: string; sent_proposal?: string; stage?: number; context_dump?: string; extracted?: Record<string, unknown> }) =>
+  .inputValidator((d: { id: string; title?: string; job_description?: string; sent_proposal?: string; stage?: number; context_dump?: string; extracted?: Record<string, unknown>; reminder_at?: string | null }) =>
     z.object({
       id: z.string().uuid(),
       title: z.string().max(200).optional(),
@@ -62,6 +62,7 @@ export const updateThread = createServerFn({ method: "POST" })
       stage: z.number().int().min(1).max(4).optional(),
       context_dump: z.string().max(20000).optional(),
       extracted: z.record(z.unknown()).optional(),
+      reminder_at: z.string().nullable().optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {

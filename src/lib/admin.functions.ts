@@ -91,3 +91,17 @@ export const recordPageView = createServerFn({ method: "POST" })
     }
     return { ok: true };
   });
+
+export const runAdminSql = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { sql: string }) =>
+    z.object({ sql: z.string().min(1).max(50000) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await (supabaseAdmin as any).rpc("run_admin_sql", { sql: data.sql });
+    if (error) throw new Error(error.message);
+    // Serialize to plain JSON string to avoid TS serialization constraints
+    return JSON.stringify(rows ?? []);
+  });

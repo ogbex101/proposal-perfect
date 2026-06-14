@@ -1,9 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { Users, FileText, Briefcase, Activity, Shield, Clock, Mail } from "lucide-react";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Users, Activity, Shield, Terminal, Play, X, Loader2 } from "lucide-react";
 import { PageHeader, CropCard, Eyebrow } from "@/components/blueprint";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/use-auth";
-import { listAdminUsers, getPageViewStats } from "@/lib/admin.functions";
+import { listAdminUsers, getPageViewStats, runAdminSql } from "@/lib/admin.functions";
 import type { AdminUser } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -27,6 +30,15 @@ function timeSince(date: string | null): string {
 
 function AdminPanel() {
   const auth = useAuth();
+  const [sql, setSql] = useState("");
+  const [sqlResult, setSqlResult] = useState<Record<string, unknown>[] | null>(null);
+  const [sqlError, setSqlError] = useState<string | null>(null);
+
+  const sqlMutation = useMutation({
+    mutationFn: () => runAdminSql({ data: { sql } }),
+    onSuccess: (rows) => { setSqlResult(JSON.parse(rows as string) as Record<string, unknown>[]); setSqlError(null); },
+    onError: (e: Error) => { setSqlError(e.message); setSqlResult(null); },
+  });
 
   const usersQuery = useQuery({
     queryKey: ["admin-users"],
@@ -157,6 +169,84 @@ function AdminPanel() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </CropCard>
+
+      {/* ── SQL Runner ── */}
+      <CropCard className="mt-6 p-5 border-destructive/20">
+        <Eyebrow>
+          <Terminal className="inline h-3 w-3 mr-1 text-destructive" />
+          sql runner
+        </Eyebrow>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Run raw SQL against the database using the service role. Results appear below.
+        </p>
+        <Textarea
+          value={sql}
+          onChange={(e) => setSql(e.target.value)}
+          rows={6}
+          placeholder={"SELECT * FROM profiles LIMIT 10;\n\n-- Or paste a migration:"}
+          className="mt-3 resize-y bg-background/60 font-mono text-xs"
+        />
+        <div className="mt-2 flex gap-2">
+          <Button
+            size="sm"
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
+            disabled={sqlMutation.isPending || !sql.trim()}
+            onClick={() => { setSqlResult(null); setSqlError(null); sqlMutation.mutate(); }}
+          >
+            {sqlMutation.isPending
+              ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Running…</>
+              : <><Play className="mr-1.5 h-3.5 w-3.5" /> Run SQL</>}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => { setSql(""); setSqlResult(null); setSqlError(null); }}
+          >
+            <X className="mr-1.5 h-3.5 w-3.5" /> Clear
+          </Button>
+        </div>
+        {sqlError && (
+          <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3">
+            <p className="font-mono text-xs text-red-400 whitespace-pre-wrap">{sqlError}</p>
+          </div>
+        )}
+        {sqlResult !== null && (
+          <div className="mt-3">
+            <p className="text-[10px] text-muted-foreground mb-2 font-mono">{sqlResult.length} row(s) returned</p>
+            {sqlResult.length > 0 && (
+              <div className="overflow-x-auto rounded-lg border border-line/40">
+                <table className="w-full text-xs">
+                  <thead className="bg-sidebar/60">
+                    <tr>
+                      {Object.keys(sqlResult[0]).map((col) => (
+                        <th key={col} className="border-b border-line/40 px-3 py-2 text-left font-mono text-muted-foreground whitespace-nowrap">
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sqlResult.slice(0, 200).map((row, i) => (
+                      <tr key={i} className="border-b border-line/20 hover:bg-white/[0.02]">
+                        {Object.values(row).map((val, j) => (
+                          <td key={j} className="px-3 py-1.5 font-mono text-foreground/80 max-w-[300px] truncate">
+                            {val === null
+                              ? <span className="text-muted-foreground/50">NULL</span>
+                              : String(typeof val === "object" ? JSON.stringify(val) : val)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {sqlResult.length === 0 && (
+              <p className="text-xs text-muted-foreground italic">Query executed successfully — no rows returned.</p>
+            )}
           </div>
         )}
       </CropCard>

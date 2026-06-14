@@ -738,3 +738,103 @@ Return a JSON object:
       handleAiError(err);
     }
   });
+
+// ─── Research Agent ───────────────────────────────────────────────────────────
+
+const ResearchBriefSchema = z.object({
+  clientProfile: z.object({
+    likely_industry: z.string(),
+    company_size_estimate: z.string(),
+    pain_points: z.array(z.string()),
+    decision_making_style: z.string(),
+    red_flags: z.array(z.string()),
+  }),
+  jobAnalysis: z.object({
+    real_problem: z.string(),
+    unstated_needs: z.array(z.string()),
+    likely_budget_tier: z.string(),
+    competition_level: z.string(),
+    win_probability: z.string(),
+  }),
+  proposalStrategy: z.object({
+    opening_angle: z.string(),
+    key_credibility_signals: z.array(z.string()),
+    objections_to_pre_empt: z.array(z.string()),
+    recommended_tone: z.string(),
+    one_line_hook: z.string(),
+  }),
+  quickFacts: z.array(z.string()),
+});
+
+export type ResearchBrief = z.infer<typeof ResearchBriefSchema>;
+
+export const researchClientAndJob = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { jobText: string; clientInfo?: string }) =>
+    z.object({
+      jobText: z.string().min(10).max(8000),
+      clientInfo: z.string().max(2000).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const contextBlock = [
+        `JOB POST / DESCRIPTION:\n${data.jobText}`,
+        data.clientInfo ? `CLIENT INFO / COMPANY:\n${data.clientInfo}` : null,
+      ].filter(Boolean).join("\n\n---\n\n");
+
+      const result = await structured(
+        ResearchBriefSchema,
+        `You are a senior business intelligence analyst for a freelance consultant. Analyze the job post and client information. Give a concise intel brief so the freelancer knows exactly how to win this job BEFORE writing their proposal.
+
+Be specific, not generic. Read between the lines. Identify what the client ACTUALLY needs vs what they said.
+
+Return JSON:
+{
+  "clientProfile": {
+    "likely_industry": "<specific industry>",
+    "company_size_estimate": "<e.g. Solo founder, Small team 5-20, Mid-size 50-200>",
+    "pain_points": ["<pain 1>", "<pain 2>", "<pain 3>"],
+    "decision_making_style": "<e.g. Fast and intuitive, Risk-averse needs proof, Price-sensitive>",
+    "red_flags": ["<warning sign if any, or leave empty>"]
+  },
+  "jobAnalysis": {
+    "real_problem": "<what they ACTUALLY need vs what they asked for>",
+    "unstated_needs": ["<thing they didnt say but clearly need>", "<another>"],
+    "likely_budget_tier": "<e.g. Under $500 price-shopper, $500-2k serious buyer, $2k+ quality-first>",
+    "competition_level": "<e.g. High — generic job many applicants, Low — niche requirement>",
+    "win_probability": "<High/Medium/Low — one sentence reason>"
+  },
+  "proposalStrategy": {
+    "opening_angle": "<the single best angle for the first 2 sentences>",
+    "key_credibility_signals": ["<what proof to mention>", "<another>"],
+    "objections_to_pre_empt": ["<likely objection>", "<another>"],
+    "recommended_tone": "<e.g. Peer-to-peer confident, Warm educational, Efficient direct>",
+    "one_line_hook": "<one powerful opening sentence to start the proposal with>"
+  },
+  "quickFacts": ["<fact 1>", "<fact 2>", "<fact 3>", "<fact 4>", "<fact 5>"]
+}`,
+        contextBlock,
+      );
+      return result;
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
+// ─── Proposal Image Generator ─────────────────────────────────────────────────
+
+export const generateProposalImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { prompt: string }) =>
+    z.object({ prompt: z.string().min(3).max(500) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const { generateImagePrompted } = await import("./avatar-ai.server");
+      const dataUrl = await generateImagePrompted(data.prompt);
+      return { dataUrl };
+    } catch (err) {
+      handleAiError(err);
+    }
+  });

@@ -22,6 +22,7 @@ import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedConversionRouteImport } from './routes/_authenticated/conversion'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedResearchRouteImport } from './routes/_authenticated/research'
 
 const StrategyRoute = StrategyRouteImport.update({
   id: '/strategy',
@@ -87,12 +88,18 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedResearchRoute = AuthenticatedResearchRouteImport.update({
+  id: '/research',
+  path: '/research',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/strategy': typeof StrategyRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/research': typeof AuthenticatedResearchRoute
   '/conversion': typeof AuthenticatedConversionRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/strategy': typeof StrategyRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/research': typeof AuthenticatedResearchRoute
   '/conversion': typeof AuthenticatedConversionRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/strategy': typeof StrategyRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/research': typeof AuthenticatedResearchRoute
   '/_authenticated/conversion': typeof AuthenticatedConversionRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
@@ -139,6 +148,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/strategy'
     | '/admin'
+    | '/research'
     | '/conversion'
     | '/dashboard'
     | '/history'
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/strategy'
     | '/admin'
+    | '/research'
     | '/conversion'
     | '/dashboard'
     | '/history'
@@ -168,6 +179,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/strategy'
     | '/_authenticated/admin'
+    | '/_authenticated/research'
     | '/_authenticated/conversion'
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
@@ -279,11 +291,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/research': {
+      id: '/_authenticated/research'
+      path: '/research'
+      fullPath: '/research'
+      preLoaderRoute: typeof AuthenticatedResearchRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedResearchRoute: typeof AuthenticatedResearchRoute
   AuthenticatedConversionRoute: typeof AuthenticatedConversionRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
@@ -295,6 +315,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedResearchRoute: AuthenticatedResearchRoute,
   AuthenticatedConversionRoute: AuthenticatedConversionRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,

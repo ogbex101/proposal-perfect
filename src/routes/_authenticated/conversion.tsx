@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MessagesSquare, Loader2, Copy, Trash2, Zap, Plus,
   ChevronRight, Send, RotateCcw, Check, Pencil, X,
-  BookOpen, ChevronDown, ChevronUp, Brain, AlertCircle,
+  BookOpen, ChevronDown, ChevronUp, Brain, AlertCircle, Bell,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CropCard, Eyebrow, PageHeader, EmptyState } from "@/components/blueprint";
+import { MicButton } from "@/components/MicButton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -31,6 +32,7 @@ type Thread = {
   sent_proposal: string;
   stage: number;
   context_dump: string;
+  reminder_at: string | null;
   extracted: {
     deliverables?: string[];
     painPoints?: string[];
@@ -513,6 +515,52 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
         onAdvance={() => advanceStage.mutate()}
       />
 
+      {/* Reminder banner */}
+      {thread.reminder_at && new Date(thread.reminder_at) <= new Date() && (
+        <div className="mb-3 shrink-0 flex items-center gap-2 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2">
+          <Bell className="h-3.5 w-3.5 text-gold shrink-0" />
+          <span className="text-xs text-gold font-medium">Follow-up reminder due today!</span>
+          <button
+            className="ml-auto text-[10px] text-muted-foreground hover:text-white"
+            onClick={() => updateThread({ data: { id: thread.id, reminder_at: null } }).then(() => {
+              qc.invalidateQueries({ queryKey: ["threads"] });
+              onThreadUpdate({ ...thread, reminder_at: null });
+            })}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Reminder setter */}
+      <div className="mb-3 shrink-0 flex items-center gap-2">
+        <Bell className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <span className="text-[10px] text-muted-foreground">Follow-up reminder:</span>
+        <input
+          type="date"
+          value={thread.reminder_at ? thread.reminder_at.slice(0, 10) : ""}
+          onChange={(e) => {
+            const val = e.target.value ? new Date(e.target.value).toISOString() : null;
+            updateThread({ data: { id: thread.id, reminder_at: val } }).then(() => {
+              qc.invalidateQueries({ queryKey: ["threads"] });
+              onThreadUpdate({ ...thread, reminder_at: val });
+            });
+          }}
+          className="rounded border border-input bg-background/60 px-2 py-0.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        {thread.reminder_at && (
+          <button
+            className="text-[10px] text-muted-foreground hover:text-destructive"
+            onClick={() => updateThread({ data: { id: thread.id, reminder_at: null } }).then(() => {
+              qc.invalidateQueries({ queryKey: ["threads"] });
+              onThreadUpdate({ ...thread, reminder_at: null });
+            })}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+
       {/* Deep learning panel */}
       <DeepLearningPanel
         contextDump={thread.context_dump ?? ""}
@@ -647,9 +695,12 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
       {/* Input area */}
       {!result && (
         <div className="mt-4 shrink-0 space-y-2">
-          <Label className="annotation !text-muted-foreground">
-            Paste client's message <span className="text-destructive text-[10px]">*</span>
-          </Label>
+          <div className="flex items-center gap-2">
+            <Label className="annotation !text-muted-foreground">
+              Paste client's message <span className="text-destructive text-[10px]">*</span>
+            </Label>
+            <MicButton onTranscript={(t) => setClientInput((prev) => prev ? prev + " " + t : t)} />
+          </div>
           <Textarea
             value={clientInput}
             onChange={(e) => setClientInput(e.target.value)}
@@ -769,6 +820,9 @@ function ConversionPage() {
                         ))}
                       </div>
                       <span className="text-[9px] text-muted-foreground">Stage {t.stage ?? 1}</span>
+                      {t.reminder_at && new Date(t.reminder_at) <= new Date() && (
+                        <Bell className="h-2.5 w-2.5 text-gold" />
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center shrink-0">

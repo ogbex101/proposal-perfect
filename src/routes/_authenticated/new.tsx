@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 
 import { CropCard, Eyebrow, PageHeader } from "@/components/blueprint";
+import { MicButton } from "@/components/MicButton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -45,7 +46,7 @@ import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-consta
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
 import { useActiveProfile } from "@/hooks/use-active-profile";
-import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, generateAiHookStrategy, analyzeHookStrength, applyProposalEdit, type JobAnalysis, type StrategyDocument, type AiHookStrategy, type HookStrength } from "@/lib/ai.functions";
+import { analyzeJob, generateProposalImage, generateProposal, generateMilestones, generateStrategyDocument, generateAiHookStrategy, analyzeHookStrength, applyProposalEdit, type JobAnalysis, type StrategyDocument, type AiHookStrategy, type HookStrength } from "@/lib/ai.functions";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
 import { saveStrategyDoc } from "@/lib/strategy.functions";
@@ -122,13 +123,19 @@ function NewProposal() {
   const [bidAmount, setBidAmount] = useState("");
   const [deliveryDays, setDeliveryDays] = useState("7");
 
-  // Prefill from history "Use as template"
+  // Prefill from history "Use as template" or Research Agent
+  const [researchHookSuggestion, setResearchHookSuggestion] = useState<string | null>(null);
   useEffect(() => {
     const prefill = sessionStorage.getItem("prefill_job");
     if (prefill) {
       setJobText(prefill);
       setMethod("paste");
       sessionStorage.removeItem("prefill_job");
+    }
+    const hook = sessionStorage.getItem("prefill_hook");
+    if (hook) {
+      setResearchHookSuggestion(hook);
+      sessionStorage.removeItem("prefill_hook");
     }
   }, []);
 
@@ -498,6 +505,26 @@ function NewProposal() {
         }
       />
 
+      {researchHookSuggestion && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-teal/40 bg-teal/8 px-4 py-3">
+          <Zap className="mt-0.5 h-4 w-4 shrink-0 text-teal" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-teal mb-1">Research Agent hook suggestion</p>
+            <p className="text-sm text-white leading-relaxed">"{researchHookSuggestion}"</p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] text-teal hover:bg-teal/10"
+              onClick={() => { copyText(researchHookSuggestion).then(() => toast.success("Copied")); }}>
+              <Copy className="h-3 w-3 mr-1" /> Copy
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] text-muted-foreground hover:text-white"
+              onClick={() => setResearchHookSuggestion(null)}>
+              ✕
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
         {/* LEFT: input + analysis */}
         <div className="space-y-6">
@@ -614,7 +641,10 @@ function NewProposal() {
             {method === "paste" ? (
               <div>
                 <div className="mb-2 flex items-center justify-between">
-                  <Label className="annotation !text-muted-foreground">Job post</Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="annotation !text-muted-foreground">Job post</Label>
+                    <MicButton onTranscript={(t) => setJobText((prev) => prev ? prev + " " + t : t)} />
+                  </div>
                   <span className="font-mono text-[10px] text-muted-foreground">
                     {jobText.length} chars
                   </span>
@@ -1277,14 +1307,8 @@ function OutputPanel({
             </div>
 
             {preview ? (
-              <div className="mt-3 rounded-lg border border-line/40 bg-background/40 p-4 min-h-[14rem] max-h-[32rem] overflow-y-auto">
-                {content.split(/\n\n+/).map((para, i) => (
-                  <p key={i} className={cn("text-sm leading-relaxed text-foreground/90", i > 0 && "mt-4")}>
-                    {para.split(/\n/).map((line, j) => (
-                      <span key={j}>{line}{j < para.split(/\n/).length - 1 && <br />}</span>
-                    ))}
-                  </p>
-                ))}
+              <div className="mt-3 rounded-lg border border-line/40 bg-background/40 p-5 min-h-[14rem] max-h-[36rem] overflow-y-auto">
+                <ProposalPreview content={content} />
               </div>
             ) : (
               <Textarea
@@ -1314,6 +1338,7 @@ function OutputPanel({
         <Button size="sm" variant="ghost" onClick={onSaveTemplate} disabled={savingTemplate} className="text-muted-foreground">
           Save as template
         </Button>
+        <ProposalImageGenerator />
         <Button
           size="sm"
           variant="outline"
@@ -1337,6 +1362,7 @@ function OutputPanel({
             <span className="text-xs text-muted-foreground ml-1">— tell the AI what to change</span>
           </div>
           <div className="flex gap-2">
+            <MicButton onTranscript={(t) => setAiInstruction((prev) => prev ? prev + " " + t : t)} className="shrink-0" />
             <input
               className="flex-1 rounded-lg border border-input bg-background/60 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-teal/40"
               placeholder='e.g. "make the hook more confident", "shorten by 40%", "add urgency to the CTA"…'
@@ -1463,6 +1489,129 @@ function OutputPanel({
       )}
     </CropCard>
   );
+}
+
+// ─── Proposal image generator ─────────────────────────────────────────────────
+
+function ProposalImageGenerator() {
+  const [prompt, setPrompt] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+
+  const genMutation = useMutation({
+    mutationFn: () => generateProposalImage({ data: { prompt } }),
+    onSuccess: (res) => { if (res?.dataUrl) setImageUrl(res.dataUrl); },
+    onError: (e: Error) => toast.error(e.message || "Image generation failed"),
+  });
+
+  if (!open) {
+    return (
+      <Button size="sm" variant="outline" className="border-gold/30 text-gold hover:bg-gold/10 mt-2"
+        onClick={() => setOpen(true)}>
+        <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Generate an image for this proposal
+      </Button>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-gold/30 bg-gold/5 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Sparkles className="h-4 w-4 text-gold" />
+        <span className="text-sm font-semibold text-gold">Image Generator</span>
+        <button className="ml-auto text-muted-foreground hover:text-white text-xs" onClick={() => setOpen(false)}>✕</button>
+      </div>
+      <input
+        className="w-full rounded-lg border border-input bg-background/60 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-gold/40"
+        placeholder='e.g. "modern dashboard UI screenshot, dark theme" or "mobile app design, clean minimal"'
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && prompt.trim().length >= 3) genMutation.mutate(); }}
+        disabled={genMutation.isPending}
+      />
+      <div className="mt-2 flex gap-2">
+        <Button size="sm" className="bg-gold text-primary-foreground hover:bg-gold-bright"
+          disabled={genMutation.isPending || prompt.trim().length < 3}
+          onClick={() => genMutation.mutate()}>
+          {genMutation.isPending
+            ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Generating…</>
+            : <><Sparkles className="mr-1.5 h-3.5 w-3.5" /> Generate</>}
+        </Button>
+        {imageUrl && (
+          <Button size="sm" variant="outline" className="border-line/40"
+            onClick={() => { const a = document.createElement("a"); a.href = imageUrl; a.download = "proposal-image.png"; a.click(); }}>
+            <FileDown className="mr-1.5 h-3.5 w-3.5" /> Download
+          </Button>
+        )}
+      </div>
+      {imageUrl && (
+        <div className="mt-3">
+          <img src={imageUrl} alt="Generated" className="rounded-lg border border-line/40 w-full object-cover max-h-64" />
+          <p className="mt-1.5 text-[10px] text-muted-foreground">Right-click or download to save. Use in your portfolio or attach to your proposal.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Proposal preview renderer ─────────────────────────────────────────────────
+
+function renderInline(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    if (m[1]) parts.push(<strong key={m.index} className="font-semibold text-white">{m[1]}</strong>);
+    else if (m[2]) parts.push(<em key={m.index} className="italic text-foreground/80">{m[2]}</em>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+function ProposalPreview({ content }: { content: string }) {
+  const lines = content.split(/\n/);
+  const nodes: React.ReactNode[] = [];
+  let key = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) {
+      nodes.push(<div key={key++} className="h-3" />);
+    } else if (/^##\s+/.test(line)) {
+      nodes.push(
+        <div key={key++} className="mt-5 mb-2 first:mt-0">
+          <p className="text-xs font-bold uppercase tracking-widest text-gold/80">{line.replace(/^##\s+/, "")}</p>
+          <div className="mt-1 h-px bg-gold/20" />
+        </div>,
+      );
+    } else if (/^#\s+/.test(line)) {
+      nodes.push(
+        <p key={key++} className="mt-6 mb-1 text-base font-bold text-white first:mt-0">{line.replace(/^#\s+/, "")}</p>,
+      );
+    } else if (/^[-•*]\s+/.test(line)) {
+      nodes.push(
+        <div key={key++} className="flex gap-2 my-0.5">
+          <span className="mt-[3px] shrink-0 text-gold/60 text-sm">·</span>
+          <span className="text-sm leading-relaxed text-foreground/90">{renderInline(line.replace(/^[-•*]\s+/, ""))}</span>
+        </div>,
+      );
+    } else if (/^\d+\.\s+/.test(line)) {
+      const num = line.match(/^(\d+)\./)?.[1];
+      nodes.push(
+        <div key={key++} className="flex gap-2 my-0.5">
+          <span className="mt-[3px] shrink-0 font-mono text-[11px] text-gold/60 w-4 text-right">{num}.</span>
+          <span className="text-sm leading-relaxed text-foreground/90">{renderInline(line.replace(/^\d+\.\s+/, ""))}</span>
+        </div>,
+      );
+    } else {
+      nodes.push(
+        <p key={key++} className="text-sm leading-relaxed text-foreground/90">{renderInline(line)}</p>,
+      );
+    }
+  }
+  return <div className="space-y-0.5">{nodes}</div>;
 }
 
 function Explain({ label, children }: { label: string; children: React.ReactNode }) {
