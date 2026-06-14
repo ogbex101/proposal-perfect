@@ -65,6 +65,7 @@ const profileUpdateSchema = z.object({
   // avatar_url now holds a storage PATH (e.g. "<uid>/avatar.jpg"), not a URL,
   // because the bucket is private and we sign on read.
   avatar_url: z.string().max(500).nullable().optional(),
+  drive_link: z.string().max(500).nullable().optional(),
 });
 
 // ─── Profile ─────────────────────────────────────────────────────────────────

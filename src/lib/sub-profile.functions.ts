@@ -23,6 +23,7 @@ const subProfileSchema = z.object({
   })).max(20).optional(),
   brands_worked: z.array(z.string().max(100)).max(50).optional(),
   avatar_url: z.string().max(500).nullable().optional(),
+  drive_link: z.string().max(500).nullable().optional(),
 });
 
 export type SubProfileInput = z.input<typeof subProfileSchema>;
@@ -43,6 +44,7 @@ export type SubProfile = {
   brands_worked: string[];
   avatar_url: string | null;
   avatar_signed_url?: string | null;
+  drive_link: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -78,7 +80,7 @@ export const upsertSubProfile = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => subProfileSchema.parse(d))
   .handler(async ({ data, context }) => {
     if (data.id) {
-      const { data: row, error } = await context.supabase
+      const { data: row, error } = await (context.supabase as any)
         .from("sub_profiles")
         .update({ ...data, updated_at: new Date().toISOString() })
         .eq("id", data.id)
@@ -98,7 +100,7 @@ export const upsertSubProfile = createServerFn({ method: "POST" })
       throw new Error(`You can have at most ${MAX_SUB_PROFILES} sub-profiles (10 including head).`);
     }
 
-    const { data: row, error } = await context.supabase
+    const { data: row, error } = await (context.supabase as any)
       .from("sub_profiles")
       .insert({ ...data, user_id: context.userId })
       .select()

@@ -48,6 +48,7 @@ import { useActiveProfile } from "@/hooks/use-active-profile";
 import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, generateAiHookStrategy, analyzeHookStrength, applyProposalEdit, type JobAnalysis, type StrategyDocument, type AiHookStrategy, type HookStrength } from "@/lib/ai.functions";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
+import { saveStrategyDoc } from "@/lib/strategy.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
 import { listGeneratedPortfolios } from "@/lib/portfolio-generate.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
@@ -354,11 +355,10 @@ function NewProposal() {
       if (result) {
         setStrategyDoc(result);
         setShowStrategy(true);
-        // Compute the shareable link — will be auto-appended to the proposal
+        // Save to DB and compute a short shareable link
         try {
-          const LZString = (await import("lz-string")).default;
-          const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(result));
-          const url = `${window.location.origin}/strategy?d=${encoded}`;
+          const { slug } = await saveStrategyDoc({ data: { doc: result } });
+          const url = `${window.location.origin}/s/${slug}`;
           setStrategyLink(url);
         } catch {
           /* link generation failed, skip auto-attach */
@@ -1061,18 +1061,15 @@ function NewProposal() {
                     size="sm"
                     onClick={async () => {
                       try {
-                        const LZString = (await import("lz-string")).default;
-                        const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(strategyDoc));
-                        const url = `${window.location.origin}/strategy?d=${encoded}`;
-                        navigator.clipboard.writeText(url).then(() => toast.success("Link copied — share it with your client")).catch(() => {
-                          const ta = document.createElement("textarea");
-                          ta.value = url;
-                          document.body.appendChild(ta);
-                          ta.select();
-                          document.execCommand("copy");
-                          document.body.removeChild(ta);
-                          toast.success("Link copied");
-                        });
+                        const url = strategyLink ?? await (async () => {
+                          const { slug } = await saveStrategyDoc({ data: { doc: strategyDoc } });
+                          const u = `${window.location.origin}/s/${slug}`;
+                          setStrategyLink(u);
+                          return u;
+                        })();
+                        navigator.clipboard.writeText(url)
+                          .then(() => toast.success("Short link copied — share with your client"))
+                          .catch(() => { toast.success("Link: " + url); });
                       } catch {
                         toast.error("Could not generate link");
                       }

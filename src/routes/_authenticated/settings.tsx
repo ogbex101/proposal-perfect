@@ -216,17 +216,7 @@ function SettingsPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [defaultLength, setDefaultLength] = useState<LengthId>("robust");
   const [defaultPlan, setDefaultPlan] = useState(false);
-  const [subAvatarSignedUrl, setSubAvatarSignedUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!activeSubId || !merged?.avatar_url) {
-      setSubAvatarSignedUrl(null);
-      return;
-    }
-    supabase.storage.from("avatars").createSignedUrl(merged.avatar_url, 3600).then(({ data }) => {
-      setSubAvatarSignedUrl(data?.signedUrl ?? null);
-    });
-  }, [activeSubId, merged?.avatar_url]);
+  const [driveLink, setDriveLink] = useState("");
 
   useEffect(() => {
     if (!merged) return;
@@ -241,11 +231,17 @@ function SettingsPage() {
     setAvatarUrl(merged.avatar_url ?? null);
     setDefaultLength((merged.default_length as LengthId) ?? "robust");
     setDefaultPlan(merged.default_plan ?? false);
+    // Drive link is standalone per profile — read from activeSub or head
+    if (activeSubId && activeSub) {
+      setDriveLink((activeSub as any).drive_link ?? "");
+    } else {
+      setDriveLink((profile as any)?.drive_link ?? "");
+    }
     // niches always from head profile
     if (!activeSubId) {
       setNiches((profile?.niches as string[]) ?? []);
     }
-  }, [merged, activeSubId]);
+  }, [merged, activeSubId, activeSub, profile]);
 
   const save = useMutation<unknown, Error, void>({
     mutationFn: () => {
@@ -265,6 +261,7 @@ function SettingsPage() {
             credentials,
             brands_worked: brands,
             avatar_url: avatarUrl,
+            drive_link: driveLink || null,
           },
         });
       }
@@ -283,6 +280,7 @@ function SettingsPage() {
           avatar_url: avatarUrl,
           default_length: defaultLength,
           default_plan: defaultPlan,
+          drive_link: driveLink || null,
         },
       });
     },
@@ -391,7 +389,7 @@ function SettingsPage() {
           <div className="mt-6">
             <AvatarUploader
               key={activeSubId ?? "head"}
-              currentUrl={activeSubId ? subAvatarSignedUrl : (avatarSignedUrl ?? undefined)}
+              currentUrl={activeSubId ? (activeSub?.avatar_signed_url ?? undefined) : (avatarSignedUrl ?? undefined)}
               userName={name || profile?.email}
               bio={bio}
               profileKey={activeSubId ? `sub-${activeSubId}` : undefined}
@@ -401,6 +399,26 @@ function SettingsPage() {
           </div>
         </CropCard>
 
+
+        {/* ── Drive link (standalone per profile) ── */}
+        <CropCard className="p-6">
+          <Eyebrow index="01b">
+            <ExternalLink className="inline h-3 w-3 mr-1 text-teal" />
+            google drive link
+          </Eyebrow>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Your designated Google Drive folder for this profile. Not shared with other profiles.
+          </p>
+          <div className="mt-4 space-y-1.5">
+            <Label htmlFor="drive-link">Drive link</Label>
+            <Input
+              id="drive-link"
+              value={driveLink}
+              onChange={(e) => setDriveLink(e.target.value)}
+              placeholder="https://drive.google.com/drive/folders/…"
+            />
+          </div>
+        </CropCard>
 
         {/* ── 03 · Basic info ── */}
         <CropCard className="p-6">
