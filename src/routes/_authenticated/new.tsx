@@ -26,6 +26,7 @@ import { toast } from "sonner";
 
 import { CropCard, Eyebrow, PageHeader } from "@/components/blueprint";
 import { MicButton } from "@/components/MicButton";
+import { VoiceEditPrompt } from "@/components/VoiceEditPrompt";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -1334,6 +1335,7 @@ function OutputPanel({
   });
 
   return (
+    <>
     <CropCard glow="gold" className="p-5 bp-rise">
       <div className="flex items-center justify-between">
         <Eyebrow>Generated proposal</Eyebrow>
@@ -1552,10 +1554,18 @@ function OutputPanel({
         </div>
       )}
     </CropCard>
+
+    {/* Floating voice edit orb */}
+    <VoiceEditPrompt
+      isPending={applyEditMutation.isPending}
+      onApply={(instruction) => {
+        setAiInstruction(instruction);
+        applyEditMutation.mutate();
+      }}
+    />
+    </>
   );
 }
-
-// ─── Proposal image generator ─────────────────────────────────────────────────
 
 function ProposalImageGenerator() {
   const [prompt, setPrompt] = useState("");
