@@ -383,7 +383,7 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, result]);
+  }, [messages.length]);
 
   const saveContextDump = useMutation({
     mutationFn: (contextDump: string) =>
@@ -426,7 +426,6 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
       qc.invalidateQueries({ queryKey: ["messages", thread.id] });
       qc.invalidateQueries({ queryKey: ["threads"] });
       setResult(data);
-      // Merge extracted intel
       if (data.stageAssessment?.extracted) {
         const merged = mergeExtracted(thread.extracted, data.stageAssessment.extracted);
         await updateThread({ data: { id: thread.id, extracted: merged } });
@@ -471,8 +470,8 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
   const LANGUAGES = ["English","French","Spanish","Portuguese","Arabic","German","Italian","Dutch","Russian","Chinese","Japanese","Korean"];
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Thread header */}
+    <div className="flex flex-col h-full gap-0">
+      {/* ── Thread header ── */}
       <div className="flex items-center gap-2 mb-3 shrink-0">
         {editingTitle ? (
           <div className="flex flex-1 items-center gap-2">
@@ -508,14 +507,14 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
         </select>
       </div>
 
-      {/* Stage bar */}
+      {/* ── Stage bar ── */}
       <StageBar
         stage={thread.stage ?? 1}
         canAdvance={pendingAdvance}
         onAdvance={() => advanceStage.mutate()}
       />
 
-      {/* Reminder banner */}
+      {/* ── Reminder banner ── */}
       {thread.reminder_at && new Date(thread.reminder_at) <= new Date() && (
         <div className="mb-3 shrink-0 flex items-center gap-2 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2">
           <Bell className="h-3.5 w-3.5 text-gold shrink-0" />
@@ -532,7 +531,7 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
         </div>
       )}
 
-      {/* Reminder setter */}
+      {/* ── Reminder setter ── */}
       <div className="mb-3 shrink-0 flex items-center gap-2">
         <Bell className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <span className="text-[10px] text-muted-foreground">Follow-up reminder:</span>
@@ -561,24 +560,20 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
         )}
       </div>
 
-      {/* Deep learning panel */}
-      <DeepLearningPanel
-        contextDump={thread.context_dump ?? ""}
-        onSave={(v) => saveContextDump.mutate(v)}
-      />
-
-      {/* Extracted intel */}
+      {/* ── Deep learning + Extracted (collapsed row) ── */}
+      <DeepLearningPanel contextDump={thread.context_dump ?? ""} onSave={(v) => saveContextDump.mutate(v)} />
       <ExtractedPanel extracted={thread.extracted ?? {}} />
 
-      {/* Chat history */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
+      {/* ── Chat history ── */}
+      <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0 border-y border-border/30 py-3 my-1">
         {messagesQ.isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         ) : messages.length === 0 ? (
           <div className="py-8 text-center">
-            <p className="text-sm text-muted-foreground">No messages yet. Paste the client's first message below.</p>
+            <p className="text-sm text-muted-foreground">No messages yet.</p>
+            <p className="text-xs text-muted-foreground mt-1">Paste the client's first message below and hit Generate.</p>
           </div>
         ) : (
           messages.map((msg) => (
@@ -604,100 +599,92 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
             </div>
           ))
         )}
-
-        {/* AI result panel */}
-        {result && (
-          <div className="space-y-3 mt-2">
-            {/* Stage assessment badge */}
-            {result.stageAssessment && (
-              <div className={cn(
-                "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[10px]",
-                result.stageAssessment.canAdvance
-                  ? "border-teal/30 bg-teal/8 text-teal"
-                  : "border-line/30 bg-background/40 text-muted-foreground",
-              )}>
-                {result.stageAssessment.canAdvance
-                  ? <Check className="h-3 w-3 shrink-0" />
-                  : <AlertCircle className="h-3 w-3 shrink-0" />}
-                <span>{result.stageAssessment.reason}</span>
-              </div>
-            )}
-
-            {/* Best reply */}
-            <div className="ml-auto max-w-[90%]">
-              <CropCard className="p-4 border-gold/40 bg-gold/8">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <Zap className="h-3 w-3 text-gold" />
-                    <span className="text-[10px] font-bold text-gold uppercase tracking-wider">Best reply</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" className="h-6 px-2 text-muted-foreground hover:text-white text-[10px]"
-                      onClick={async () => { await copyText(result.bestReply); toast.success("Copied"); }}>
-                      <Copy className="h-3 w-3 mr-1" /> Copy
-                    </Button>
-                    <Button size="sm" className="h-6 px-2 bg-gold text-primary-foreground hover:bg-gold-bright text-[10px]"
-                      disabled={sendReply.isPending}
-                      onClick={() => sendReply.mutate(result.bestReply)}>
-                      {sendReply.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Send className="h-3 w-3 mr-1" /> Use this</>}
-                    </Button>
-                  </div>
-                </div>
-                <p className="text-sm leading-relaxed text-foreground/95 whitespace-pre-wrap">{result.bestReply}</p>
-                {result.bestReplyReason && (
-                  <p className="text-[10px] text-muted-foreground border-t border-line/40 pt-2 mt-2 italic">
-                    {result.bestReplyReason}
-                  </p>
-                )}
-              </CropCard>
-            </div>
-
-            {/* Alternatives */}
-            <div className="space-y-2">
-              <p className="text-[10px] text-muted-foreground px-1 uppercase font-mono tracking-wider">Alternative angles</p>
-              {result.alternatives.map((alt, i) => (
-                <div key={i} className="ml-auto max-w-[90%]">
-                  <CropCard className="p-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className={cn("font-mono text-[10px] font-semibold", modeColors[alt.mode] ?? "text-muted-foreground")}>
-                        {alt.mode}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <Button size="sm" variant="ghost" className="h-6 px-2 text-muted-foreground hover:text-white text-[10px]"
-                          onClick={async () => { await copyText(alt.reply); toast.success("Copied"); }}>
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-6 px-2 text-muted-foreground hover:text-gold text-[10px]"
-                          disabled={sendReply.isPending}
-                          onClick={() => sendReply.mutate(alt.reply)}>
-                          <Send className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap">{alt.reply}</p>
-                  </CropCard>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex justify-end">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7"
-                onClick={() => { setResult(null); setClientInput(""); setPendingAdvance(false); }}>
-                <RotateCcw className="h-3 w-3 mr-1" /> Discard & retype
-              </Button>
-            </div>
-          </div>
-        )}
-
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
-      {!result && (
-        <div className="mt-4 shrink-0 space-y-2">
+      {/* ── AI Draft Reply panel (shown prominently at bottom after generation) ── */}
+      {result ? (
+        <div className="shrink-0 mt-2 space-y-2 overflow-y-auto max-h-[45%]">
+          {/* Stage assessment */}
+          {result.stageAssessment && (
+            <div className={cn(
+              "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[10px]",
+              result.stageAssessment.canAdvance
+                ? "border-teal/30 bg-teal/8 text-teal"
+                : "border-line/30 bg-background/40 text-muted-foreground",
+            )}>
+              {result.stageAssessment.canAdvance
+                ? <Check className="h-3 w-3 shrink-0" />
+                : <AlertCircle className="h-3 w-3 shrink-0" />}
+              <span>{result.stageAssessment.reason}</span>
+            </div>
+          )}
+
+          {/* Best reply — always at the top, prominent */}
+          <CropCard className="p-4 border-gold/50 bg-gold/10">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5">
+                <Zap className="h-4 w-4 text-gold" />
+                <span className="text-xs font-bold text-gold uppercase tracking-wider">Drafted reply</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-white text-[10px]"
+                  onClick={async () => { await copyText(result.bestReply); toast.success("Copied"); }}>
+                  <Copy className="h-3 w-3 mr-1" /> Copy
+                </Button>
+                <Button size="sm" className="h-7 px-2 bg-gold text-primary-foreground hover:bg-gold-bright text-[10px]"
+                  disabled={sendReply.isPending}
+                  onClick={() => sendReply.mutate(result.bestReply)}>
+                  {sendReply.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Send className="h-3 w-3 mr-1" /> Send this</>}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-white text-[10px]"
+                  onClick={() => { setResult(null); setClientInput(""); setPendingAdvance(false); }}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+            <p className="text-sm leading-relaxed text-foreground/95 whitespace-pre-wrap">{result.bestReply}</p>
+            {result.bestReplyReason && (
+              <p className="text-[10px] text-muted-foreground border-t border-line/40 pt-2 mt-2 italic">
+                {result.bestReplyReason}
+              </p>
+            )}
+          </CropCard>
+
+          {/* Alternatives */}
+          {result.alternatives.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-muted-foreground px-1 uppercase font-mono tracking-wider">Other angles</p>
+              {result.alternatives.map((alt, i) => (
+                <CropCard key={i} className="p-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={cn("font-mono text-[10px] font-semibold", modeColors[alt.mode] ?? "text-muted-foreground")}>
+                      {alt.mode}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-muted-foreground hover:text-white text-[10px]"
+                        onClick={async () => { await copyText(alt.reply); toast.success("Copied"); }}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-muted-foreground hover:text-gold text-[10px]"
+                        disabled={sendReply.isPending}
+                        onClick={() => sendReply.mutate(alt.reply)}>
+                        <Send className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap">{alt.reply}</p>
+                </CropCard>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── Input area ── */
+        <div className="mt-2 shrink-0 space-y-2">
           <div className="flex items-center gap-2">
             <Label className="annotation !text-muted-foreground">
-              Paste client's message <span className="text-destructive text-[10px]">*</span>
+              Client's latest message <span className="text-destructive text-[10px]">*</span>
             </Label>
             <MicButton onTranscript={(t) => setClientInput((prev) => prev ? prev + " " + t : t)} />
           </div>
@@ -705,8 +692,8 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
             value={clientInput}
             onChange={(e) => setClientInput(e.target.value)}
             rows={3}
-            placeholder="Paste exactly what the client sent you…"
-            className="resize-y bg-background/60 leading-relaxed"
+            placeholder="Paste what the client sent you — AI will draft your reply…"
+            className="resize-none bg-background/60 leading-relaxed"
           />
           <Button
             className="w-full bg-gold text-primary-foreground hover:bg-gold-bright"
@@ -714,8 +701,8 @@ function ThreadView({ thread, onThreadUpdate }: { thread: Thread; onThreadUpdate
             onClick={() => generate.mutate()}
           >
             {generate.isPending
-              ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Generating reply…</>
-              : <><Zap className="mr-1.5 h-4 w-4" /> Generate reply — Stage {thread.stage}: {STAGE_LABELS[(thread.stage ?? 1) - 1]}</>}
+              ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Drafting reply…</>
+              : <><Zap className="mr-1.5 h-4 w-4" /> Draft reply — Stage {thread.stage}: {STAGE_LABELS[(thread.stage ?? 1) - 1]}</>}
           </Button>
         </div>
       )}
