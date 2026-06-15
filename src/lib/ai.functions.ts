@@ -80,6 +80,13 @@ const AnalysisSchema = z.object({
   recommendedApproach: z.string(),
   suggestedHookId: z.string(),
   hookReason: z.string(),
+  hookSuggestions: z.array(z.object({
+    hookId: z.string(),
+    hookName: z.string(),
+    openingLine: z.string(),
+    score: z.number().int().min(1).max(100),
+    scoreReason: z.string(),
+  })).default([]),
   suggestedStrategyId: z.string(),
   strategyReason: z.string(),
   detectedLanguage: z.string().default("English"),
@@ -100,7 +107,7 @@ export const analyzeJob = createServerFn({ method: "POST" })
       return await structured(
         AnalysisSchema,
         `You analyze freelance job posts. Be specific, never generic. Interpret, don't repeat.
-Choose the single best matching hook id and strategy id from these exact lists:
+Choose the best matching hook id and strategy id from these exact lists:
 HOOKS:
 ${hookList}
 STRATEGIES:
@@ -113,14 +120,39 @@ Return a JSON object with these exact keys:
   "hiddenNeeds": "...",
   "technicalDifficulties": [{"title": "...", "explanation": "..."}],
   "recommendedApproach": "...",
-  "suggestedHookId": "<exact id from list>",
+  "suggestedHookId": "<the #1 best hook id from list>",
   "hookReason": "...",
+  "hookSuggestions": [
+    {
+      "hookId": "<exact hook id from list>",
+      "hookName": "<hook name>",
+      "openingLine": "<a ready-to-use opening sentence or two the freelancer can paste directly — specific to THIS job, not generic>",
+      "score": <integer 1-100 — how well this hook fits this specific job>,
+      "scoreReason": "<one sentence: why this score>"
+    },
+    {
+      "hookId": "<second best hook id — different from first>",
+      "hookName": "<hook name>",
+      "openingLine": "<ready-to-use opening line for this job>",
+      "score": <integer 1-100>,
+      "scoreReason": "..."
+    },
+    {
+      "hookId": "<third hook id — different from first two>",
+      "hookName": "<hook name>",
+      "openingLine": "<ready-to-use opening line for this job>",
+      "score": <integer 1-100>,
+      "scoreReason": "..."
+    }
+  ],
   "suggestedStrategyId": "<exact id from list>",
   "strategyReason": "...",
   "detectedLanguage": "<full English name of the language this job post is written in, e.g. English, French, Spanish, German, Portuguese, Arabic, etc.>",
   "suggestedLength": "<brief|robust|explanatory — brief for simple/quick tasks under $500 or short gigs, robust for most jobs, explanatory for complex technical or high-budget projects over $2000>",
   "detectedNiche": "<the primary freelance niche this job belongs to — e.g. Full-Stack Development, UI/UX Design, Email Marketing, Content Writing, Video Editing, Virtual Assistant, Social Media Management, Automation & Workflows, Data Analysis, Mobile Development, etc.>"
-}${redFlagPromptBlock()}`,
+}
+
+IMPORTANT for hookSuggestions: The openingLine must be a specific, concrete sentence written for THIS job — not a template or description. It should be ready to paste as the first line of the proposal. Score 85-100 = excellent fit, 70-84 = good fit, 50-69 = workable.${redFlagPromptBlock()}`,
         `Analyze this job post:\n\n${data.jobDescription}`,
       );
     } catch (err) {

@@ -212,6 +212,7 @@ function NewProposal() {
         detectedLanguage: result.detectedLanguage ?? "English",
         suggestedLength: result.suggestedLength ?? "robust",
         detectedNiche: result.detectedNiche ?? "",
+        hookSuggestions: result.hookSuggestions ?? [],
       };
       setAnalysis(normalized);
       const h = HOOKS.find((x) => x.id === result.suggestedHookId);
@@ -718,7 +719,7 @@ function NewProposal() {
             </Button>
           </CropCard>
 
-          {analysis && <AnalysisPanel analysis={analysis} />}
+          {analysis && <AnalysisPanel analysis={analysis} onUseHook={(hookId, line) => { setHookId(hookId); setAiHookStrategy(null); toast.success("Hook applied — regenerate proposal to use it"); }} />}
 
           {/* Niche-matched portfolio banner */}
           {analysis && matchedPortfolio && (
@@ -1218,9 +1219,21 @@ function formatStrategyAsText(doc: StrategyDocument): string {
 }
 
 /* ---------- Analysis panel ---------- */
-function AnalysisPanel({ analysis }: { analysis: JobAnalysis }) {
-  const hook = HOOKS.find((h) => h.id === analysis.suggestedHookId);
+function AnalysisPanel({ analysis, onUseHook }: { analysis: JobAnalysis; onUseHook: (hookId: string, line: string) => void }) {
   const strat = STRATEGIES.find((s) => s.id === analysis.suggestedStrategyId);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+
+  function scoreColor(score: number) {
+    if (score >= 85) return "text-teal";
+    if (score >= 70) return "text-gold";
+    return "text-muted-foreground";
+  }
+  function scoreBg(score: number) {
+    if (score >= 85) return "border-teal/30 bg-teal/8";
+    if (score >= 70) return "border-gold/30 bg-gold/8";
+    return "border-line/40 bg-background/40";
+  }
+
   return (
     <CropCard className="p-5 bp-rise">
       <Eyebrow index="A">Job analysis</Eyebrow>
@@ -1248,12 +1261,74 @@ function AnalysisPanel({ analysis }: { analysis: JobAnalysis }) {
 
         <Block title="Recommended approach">{analysis.recommendedApproach}</Block>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <SuggestionCard label="Suggested hook" name={hook?.name ?? analysis.suggestedHookId} reason={analysis.hookReason} />
-          <SuggestionCard label="Suggested strategy" name={strat?.name ?? analysis.suggestedStrategyId} reason={analysis.strategyReason} />
-        </div>
+        {/* Hook suggestions */}
+        {analysis.hookSuggestions && analysis.hookSuggestions.length > 0 ? (
+          <div>
+            <p className="annotation mb-3 !text-gold flex items-center gap-1.5">
+              <Sparkles className="h-3 w-3" /> Hook suggestions — rated for this job
+            </p>
+            <div className="space-y-3">
+              {analysis.hookSuggestions.map((h, i) => (
+                <div key={i} className={cn("rounded-xl border p-4", scoreBg(h.score))}>
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-mono text-muted-foreground">#{i + 1}</span>
+                      <span className="text-xs font-semibold text-white">{h.hookName}</span>
+                      {i === 0 && (
+                        <span className="rounded-full bg-gold/20 border border-gold/30 px-2 py-0.5 text-[9px] font-bold text-gold">
+                          TOP PICK
+                        </span>
+                      )}
+                    </div>
+                    {/* Score ring */}
+                    <div className={cn("shrink-0 flex flex-col items-center", scoreColor(h.score))}>
+                      <span className="text-lg font-black leading-none">{h.score}</span>
+                      <span className="text-[9px] font-mono opacity-70">/ 100</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-white leading-relaxed italic mb-2">
+                    "{h.openingLine}"
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mb-3">{h.scoreReason}</p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="h-7 px-3 text-[11px] bg-gold/20 text-gold border border-gold/30 hover:bg-gold/30"
+                      onClick={() => onUseHook(h.hookId, h.openingLine)}
+                    >
+                      <Zap className="h-3 w-3 mr-1" /> Use this hook
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-3 text-[11px] text-muted-foreground hover:text-white"
+                      onClick={() => {
+                        copyText(h.openingLine).then(() => {
+                          setCopiedIdx(i);
+                          setTimeout(() => setCopiedIdx(null), 2000);
+                        });
+                      }}
+                    >
+                      <Copy className="h-3 w-3 mr-1" />
+                      {copiedIdx === i ? "Copied!" : "Copy line"}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <SuggestionCard
+            label="Suggested hook"
+            name={HOOKS.find((h) => h.id === analysis.suggestedHookId)?.name ?? analysis.suggestedHookId}
+            reason={analysis.hookReason}
+          />
+        )}
+
+        <SuggestionCard label="Suggested strategy" name={strat?.name ?? analysis.suggestedStrategyId} reason={analysis.strategyReason} />
+
         <p className="annotation !text-muted-foreground">
-          Suggestions applied below — override the dropdowns any time.
+          Click "Use this hook" to apply it, then regenerate the proposal.
         </p>
       </div>
     </CropCard>
