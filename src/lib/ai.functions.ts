@@ -950,3 +950,124 @@ export const generateProposalImage = createServerFn({ method: "POST" })
       handleAiError(err);
     }
   });
+
+// ─── Scout Outreach Generator ─────────────────────────────────────────────────
+
+const DevPromptSchema = z.object({
+  projectTitle: z.string(),
+  jobType: z.enum(["vibe-coding", "full-stack", "automation", "ai-agent", "general-web"]),
+  jobTypeName: z.string(),
+  overview: z.string(),
+  techStack: z.array(z.string()),
+  coreFeatures: z.array(z.object({
+    feature: z.string(),
+    description: z.string(),
+    priority: z.enum(["Must Have", "Should Have", "Nice to Have"]),
+  })),
+  enhancements: z.array(z.object({
+    title: z.string(),
+    description: z.string(),
+    impact: z.string(),
+  })),
+  architecture: z.string(),
+  integrations: z.array(z.string()),
+  scalabilityNotes: z.string(),
+  vibeCodePrompt: z.string(),
+  estimatedComplexity: z.enum(["Simple", "Medium", "Complex", "Enterprise"]),
+});
+export type DevPrompt = z.infer<typeof DevPromptSchema>;
+
+const ScoutOutreachSchema = z.object({
+  subjectLine: z.string(),
+  emailBody: z.string(),
+  hookRationale: z.string(),
+  strategyNote: z.string(),
+  spamAvoidanceTips: z.array(z.string()),
+  devPrompt: DevPromptSchema,
+});
+export type ScoutOutreach = z.infer<typeof ScoutOutreachSchema>;
+
+export const generateScoutOutreach = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { jobDescription: string; freelancerContext?: string }) =>
+    z.object({
+      jobDescription: z.string().min(20).max(15000),
+      freelancerContext: z.string().max(3000).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      return await structured(
+        ScoutOutreachSchema,
+        `You are an elite cold-email strategist and senior software architect working for a freelance developer who scouts jobs from Upwork, Freelancer, and similar platforms and reaches out directly via email.
+
+Your job has two parts:
+
+PART 1 — COLD EMAIL (must not land in spam)
+Write an email that will get opened, read, and replied to. The client is busy and gets hundreds of emails. You have 3 seconds to stop them from deleting it.
+
+SUBJECT LINE RULES (most critical):
+- Under 50 characters
+- Specific to their project — reference something unique in the job post
+- No ALL CAPS, no excessive punctuation, no emoji, no spam words (free, guaranteed, urgent, limited offer, click here, act now)
+- Curiosity or specificity over hype: "Your checkout redesign idea" beats "Amazing web developer available!"
+- Should feel like it came from a colleague or someone they know, not a salesperson
+
+EMAIL BODY RULES:
+- Plain conversational text — no HTML, no bullet lists, no headers, no bold
+- First 2 sentences ARE the hook — must reference something specific from their job post that proves you actually read it (not a template)
+- Hook should create instant recognition: "that is exactly what I need" feeling
+- No "I saw your job post on..." openers — too generic
+- No desperate language, no groveling, no "I'd love the opportunity to..."
+- Write like a peer reaching out, not a vendor pitching
+- No portfolio links — instead, offer a specific, concrete piece of value in the email (a quick insight about their problem, a specific approach you'd take)
+- End with ONE simple, low-friction CTA: a specific question or "Worth a quick call?" — never "Let me know if interested"
+- 150-250 words maximum for the body
+
+PART 2 — DEVELOPMENT PROMPT
+Generate a comprehensive, production-quality development prompt the freelancer can paste directly into Cursor, Lovable, Bolt, v0, or any AI coding tool. This prompt becomes their "sample work" — it must be so detailed and thoughtful that the client would be impressed by it alone.
+
+Classify the job as one of: vibe-coding (no-code/low-code tools), full-stack (traditional code), automation (Zapier/Make/n8n type), ai-agent (LLM-based agents/tools), general-web
+
+The vibeCodePrompt field must be a single, long, paste-ready prompt (400-800 words) written AS IF you are speaking to an AI coding assistant. It should:
+- Start with "Build me a [description]..."
+- Describe EVERY screen, page, and feature
+- Include specific UI/UX details (colors, layout, components)
+- Mention integrations (auth, payments, databases, APIs)
+- Include error states, loading states, empty states
+- List every enhancement and edge case
+- Specify the tech stack to use
+- Sound like it came from a product manager who knows exactly what they want
+
+Return JSON:
+{
+  "subjectLine": "<under 50 chars, specific, not spammy>",
+  "emailBody": "<full email text, 150-250 words, plain text, no formatting>",
+  "hookRationale": "<why the opening lines work>",
+  "strategyNote": "<the core persuasion strategy behind this email>",
+  "spamAvoidanceTips": ["<tip 1>", "<tip 2>", "<tip 3>"],
+  "devPrompt": {
+    "projectTitle": "<short project name>",
+    "jobType": "<vibe-coding|full-stack|automation|ai-agent|general-web>",
+    "jobTypeName": "<human readable: Vibe Coding / No-Code, Full-Stack Development, etc.>",
+    "overview": "<2-3 sentence project overview>",
+    "techStack": ["<tech 1>", "<tech 2>"],
+    "coreFeatures": [
+      { "feature": "<name>", "description": "<what it does>", "priority": "Must Have" }
+    ],
+    "enhancements": [
+      { "title": "<enhancement name>", "description": "<what to build>", "impact": "<why it matters>" }
+    ],
+    "architecture": "<paragraph on system architecture, data flow, component structure>",
+    "integrations": ["<integration 1>", "<integration 2>"],
+    "scalabilityNotes": "<how to build this to scale from day 1>",
+    "vibeCodePrompt": "<the full paste-ready AI coding prompt, 400-800 words>",
+    "estimatedComplexity": "<Simple|Medium|Complex|Enterprise>"
+  }
+}`,
+        `JOB POST:\n${data.jobDescription}${data.freelancerContext ? `\n\nFREELANCER CONTEXT:\n${data.freelancerContext}` : ""}`,
+      );
+    } catch (err) {
+      handleAiError(err);
+    }
+  });

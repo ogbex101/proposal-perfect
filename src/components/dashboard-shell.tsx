@@ -15,6 +15,7 @@ import {
   X,
   Search,
   Trophy,
+  Radar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { to: "/saved", label: "Saved Items", icon: Bookmark },
   { to: "/conversion", label: "Conversion Messages", icon: MessagesSquare },
   { to: "/research", label: "Research Agent", icon: Search },
+  { to: "/scout", label: "Scout Outreach", icon: Radar },
   { to: "/contest", label: "Contest Entry", icon: Trophy },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/admin", label: "Admin Panel", icon: ShieldCheck, adminOnly: true },

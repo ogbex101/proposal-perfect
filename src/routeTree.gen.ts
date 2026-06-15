@@ -24,6 +24,7 @@ import { Route as AuthenticatedConversionRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedResearchRouteImport } from './routes/_authenticated/research'
 import { Route as AuthenticatedContestRouteImport } from './routes/_authenticated/contest'
+import { Route as AuthenticatedScoutRouteImport } from './routes/_authenticated/scout'
 import { Route as CtSlugRouteImport } from './routes/ct.$slug'
 
 const StrategyRoute = StrategyRouteImport.update({
@@ -100,6 +101,11 @@ const AuthenticatedContestRoute = AuthenticatedContestRouteImport.update({
   path: '/contest',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedScoutRoute = AuthenticatedScoutRouteImport.update({
+  id: '/scout',
+  path: '/scout',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const CtSlugRoute = CtSlugRouteImport.update({
   id: '/ct/$slug',
   path: '/ct/$slug',
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/portfolio': typeof AuthenticatedPortfolioRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/scout': typeof AuthenticatedScoutRoute
   '/p/$slug': typeof PSlugRoute
 }
 export interface FileRoutesByTo {
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/portfolio': typeof AuthenticatedPortfolioRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/scout': typeof AuthenticatedScoutRoute
   '/p/$slug': typeof PSlugRoute
 }
 export interface FileRoutesById {
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   '/_authenticated/portfolio': typeof AuthenticatedPortfolioRoute
   '/_authenticated/saved': typeof AuthenticatedSavedRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/scout': typeof AuthenticatedScoutRoute
   '/p/$slug': typeof PSlugRoute
 }
 export interface FileRouteTypes {
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
     | '/portfolio'
     | '/saved'
     | '/settings'
+    | '/scout'
     | '/p/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/portfolio'
     | '/saved'
     | '/settings'
+    | '/scout'
     | '/p/$slug'
   id:
     | '__root__'
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portfolio'
     | '/_authenticated/saved'
     | '/_authenticated/settings'
+    | '/_authenticated/scout'
     | '/p/$slug'
   fileRoutesById: FileRoutesById
 }
@@ -330,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedContestRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/scout': {
+      id: '/_authenticated/scout'
+      path: '/scout'
+      fullPath: '/scout'
+      preLoaderRoute: typeof AuthenticatedScoutRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/ct/$slug': {
       id: '/ct/$slug'
       path: '/ct/$slug'
@@ -351,6 +370,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPortfolioRoute: typeof AuthenticatedPortfolioRoute
   AuthenticatedSavedRoute: typeof AuthenticatedSavedRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedScoutRoute: typeof AuthenticatedScoutRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -364,6 +384,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPortfolioRoute: AuthenticatedPortfolioRoute,
   AuthenticatedSavedRoute: AuthenticatedSavedRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedScoutRoute: AuthenticatedScoutRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
