@@ -56,6 +56,15 @@ function Dashboard() {
   const generatedRows = generated.data ?? [];
   const recent = proposalRows.slice(0, 5);
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const todayCount = proposalRows.filter((p) => p.created_at?.slice(0, 10) === todayStr).length;
+  const yesterdayCount = proposalRows.filter((p) => p.created_at?.slice(0, 10) === yesterdayStr).length;
+  const weekCount = proposalRows.filter((p) => {
+    const d = p.created_at?.slice(0, 10);
+    return d && d >= new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  }).length;
+
   const monthly = buildMonthlySeries(proposalRows);
   const lengthCounts = countBy(proposalRows, (p) => p.length);
   const avgLengthLabel = mostCommon(proposalRows.map((p) => p.length)) ?? "—";
@@ -85,6 +94,42 @@ function Dashboard() {
           </Button>
         }
       />
+
+      {/* ── Daily proposal tracker ── */}
+      <div className="mb-6 grid grid-cols-3 gap-3">
+        <CropCard className={cn(
+          "p-4 border-teal/30 bg-teal/5 flex flex-col gap-1",
+        )}>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-teal">Today</span>
+            {todayCount > 0 && todayCount > yesterdayCount && (
+              <span className="text-[9px] text-teal bg-teal/15 rounded-full px-1.5 py-0.5">↑ up</span>
+            )}
+            {todayCount > 0 && todayCount < yesterdayCount && (
+              <span className="text-[9px] text-gold bg-gold/15 rounded-full px-1.5 py-0.5">↓ vs yesterday</span>
+            )}
+          </div>
+          <p className="text-4xl font-bold text-white">{todayCount}</p>
+          <p className="text-xs text-muted-foreground">proposal{todayCount !== 1 ? "s" : ""} generated</p>
+          {todayCount === 0 && (
+            <Link to="/new" className="mt-1 text-[10px] text-teal hover:underline">Start one →</Link>
+          )}
+        </CropCard>
+
+        <CropCard className="p-4 flex flex-col gap-1">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Yesterday</span>
+          <p className="text-4xl font-bold text-white">{yesterdayCount}</p>
+          <p className="text-xs text-muted-foreground">proposal{yesterdayCount !== 1 ? "s" : ""} generated</p>
+        </CropCard>
+
+        <CropCard className="p-4 flex flex-col gap-1">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Last 7 days</span>
+          <p className="text-4xl font-bold text-white">{weekCount}</p>
+          <p className="text-xs text-muted-foreground">
+            avg {weekCount === 0 ? "0" : (weekCount / 7).toFixed(1)}/day
+          </p>
+        </CropCard>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         {stats.map((s) => (
