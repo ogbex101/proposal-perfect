@@ -55,7 +55,7 @@ export function DashboardShell({
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const { activeSub } = useActiveProfile();
+  const { activeSub, avatarSignedUrl } = useActiveProfile();
   const items = NAV.filter((n) => !n.adminOnly || isAdmin);
   const display = name?.trim() || email?.split("@")[0] || "You";
   const initial = display.charAt(0).toUpperCase();
@@ -120,9 +120,17 @@ export function DashboardShell({
               </span>
             )}
             <div className="flex items-center gap-2.5">
-              <span className="grid h-8 w-8 place-items-center rounded-full border border-gold/40 bg-gold/10 text-sm font-semibold text-gold">
-                {initial}
-              </span>
+              {avatarSignedUrl ? (
+                <img
+                  src={avatarSignedUrl}
+                  alt={display}
+                  className="h-8 w-8 rounded-full object-cover border border-gold/40"
+                />
+              ) : (
+                <span className="grid h-8 w-8 place-items-center rounded-full border border-gold/40 bg-gold/10 text-sm font-semibold text-gold">
+                  {initial}
+                </span>
+              )}
               <div className="hidden text-right leading-tight sm:block">
                 <p className="text-sm font-medium text-white">{display}</p>
                 {isAdmin && <p className="annotation !text-gold">Admin</p>}

@@ -5,7 +5,7 @@ export function StrategyDocumentView({ doc }: { doc: StrategyDocument }) {
   const phaseColors = ["#0E7C86", "#B98A2E", "#6c3fc5", "#1a7a4a", "#c53f3f", "#c57a3f"];
 
   return (
-    <div className="strategy-doc rounded-2xl overflow-hidden border border-white/10 bg-[#060d12] shadow-2xl print:bg-white">
+    <div className="strategy-doc rounded-2xl overflow-hidden border border-white/10 bg-[#0a0f14] shadow-2xl print:bg-white">
 
       {/* ── Header ── */}
       <div className="break-inside-avoid rounded-xl border border-[#B98A2E]/30 bg-[#B98A2E]/5 p-6 mb-0">
@@ -217,6 +217,7 @@ export function StrategyDocumentView({ doc }: { doc: StrategyDocument }) {
           <div className="break-inside-avoid">
             <section>
               <SectionHeader num="04" title="Feature Priority Matrix" />
+              <div className="pl-4 border-l-2 border-gold/30">
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {doc.featureBreakdown.map((f, i) => {
                   const isMust = f.priority === "Must Have";
@@ -250,6 +251,7 @@ export function StrategyDocumentView({ doc }: { doc: StrategyDocument }) {
                   );
                 })}
               </div>
+              </div>
             </section>
           </div>
         )}
@@ -259,21 +261,23 @@ export function StrategyDocumentView({ doc }: { doc: StrategyDocument }) {
           <div className="break-inside-avoid">
             <section>
               <SectionHeader num="05" title="Critical Path" />
-              <div className="rounded-xl border border-white/10 bg-[#0a1820] p-5">
-                <div className="relative">
-                  <div className="absolute left-4 top-5 bottom-5 w-px bg-gradient-to-b from-[#0E7C86] via-[#0E7C8660] to-transparent" />
-                  <ol className="space-y-4 relative">
-                    {doc.criticalPath.map((item, i) => (
-                      <li key={i} className="flex items-start gap-4 pl-0">
-                        <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#0E7C86]/60 bg-[#0d1a21] font-mono text-xs font-bold text-[#0E7C86] shadow-lg">
-                          {i + 1}
-                        </span>
-                        <div className="flex-1 min-w-0 pt-1">
-                          <p className="text-sm text-white/70 leading-relaxed">{item}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
+              <div className="pl-4 border-l-2 border-gold/30">
+                <div className="rounded-xl border border-white/10 bg-[#0a1820] p-5">
+                  <div className="relative">
+                    <div className="absolute left-4 top-5 bottom-5 w-px bg-gradient-to-b from-[#0E7C86] via-[#0E7C8660] to-transparent" />
+                    <ol className="space-y-4 relative">
+                      {doc.criticalPath.map((item, i) => (
+                        <li key={i} className="flex items-start gap-4 pl-0">
+                          <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#0E7C86]/60 bg-[#0d1a21] font-mono text-xs font-bold text-[#0E7C86] shadow-lg">
+                            {i + 1}
+                          </span>
+                          <div className="flex-1 min-w-0 pt-1">
+                            <p className="text-sm text-white/70 leading-relaxed">{item}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
                 </div>
               </div>
             </section>
@@ -285,17 +289,19 @@ export function StrategyDocumentView({ doc }: { doc: StrategyDocument }) {
           <div className="break-inside-avoid">
             <section>
               <SectionHeader num="06" title="Success Metrics" />
-              <div className="grid sm:grid-cols-2 gap-2">
-                {doc.successMetrics.map((m, i) => (
-                  <div key={i} className="flex items-start gap-3 rounded-xl border border-white/10 bg-[#0a1820] px-4 py-3">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0E7C86]/20 border border-[#0E7C86]/40">
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d="M2 5l2.5 2.5L8 3" stroke="#0E7C86" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
-                    <p className="text-sm text-white/60 leading-snug">{m}</p>
-                  </div>
-                ))}
+              <div className="pl-4 border-l-2 border-gold/30">
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {doc.successMetrics.map((m, i) => (
+                    <div key={i} className="flex items-start gap-3 rounded-xl border border-white/10 bg-[#0a1820] px-4 py-3">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0E7C86]/20 border border-[#0E7C86]/40">
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                          <path d="M2 5l2.5 2.5L8 3" stroke="#0E7C86" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                      <p className="text-sm text-white/60 leading-snug">{m}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
           </div>
@@ -306,6 +312,7 @@ export function StrategyDocumentView({ doc }: { doc: StrategyDocument }) {
           <div className="break-inside-avoid">
             <section>
               <SectionHeader num="07" title="Strategic Recommendation" />
+              <div className="pl-4 border-l-2 border-gold/30">
               <div className="relative rounded-xl border border-[#B98A2E]/20 bg-gradient-to-br from-[#B98A2E0a] to-[#B98A2E05] overflow-hidden">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#B98A2E] via-[#B98A2E99] to-[#B98A2E33]" />
                 <div className="px-7 py-6">
@@ -314,6 +321,7 @@ export function StrategyDocumentView({ doc }: { doc: StrategyDocument }) {
                   </svg>
                   <p className="text-base text-white/80 leading-relaxed italic font-light">{doc.recommendation}</p>
                 </div>
+              </div>
               </div>
             </section>
           </div>
@@ -327,10 +335,11 @@ export function StrategyDocumentView({ doc }: { doc: StrategyDocument }) {
 function SectionHeader({ num, title }: { num: string; title: string }) {
   return (
     <div className="flex items-center gap-3 mb-4">
-      <span className="font-mono text-[10px] font-bold text-[#B98A2E] opacity-70">{num}</span>
-      <div className="h-px w-6 bg-[#0E7C86]/50" />
-      <h3 className="font-display text-sm font-semibold text-white/80 uppercase tracking-[0.14em]">{title}</h3>
-      <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+      <div className="flex h-6 w-6 items-center justify-center rounded bg-gold/15 text-xs font-mono font-bold text-gold">
+        {num}
+      </div>
+      <h2 className="text-sm font-bold uppercase tracking-widest text-white/80">{title}</h2>
+      <div className="flex-1 h-px bg-white/5" />
     </div>
   );
 }

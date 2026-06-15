@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Sparkles, Trophy, Copy, Check, Loader2, Link2, Wand2,
-  Palette, Type, Layout, Star, Package, MessageSquare, Eye, ChevronDown, ChevronUp,
+  Palette, Type, Layout, Star, Package, MessageSquare, Eye, ChevronDown, ChevronUp, Download, ImageIcon,
 } from "lucide-react";
 import { PageHeader, CropCard, Eyebrow } from "@/components/blueprint";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { MicButton } from "@/components/MicButton";
 import { VoiceEditPrompt } from "@/components/VoiceEditPrompt";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { generateContestBrief, applyProposalEdit } from "@/lib/ai.functions";
+import { generateContestBrief, applyProposalEdit, generateProposalImage } from "@/lib/ai.functions";
 import { saveContestBrief } from "@/lib/contest.functions";
 import type { ContestBrief } from "@/lib/ai.functions";
 
@@ -180,9 +180,105 @@ function ContestPage() {
             onApply={(instruction) => editMutation.mutate(instruction)}
             isPending={editMutation.isPending}
           />
+
+          {/* AI Image Generation */}
+          <ContestImageGenerator brief={brief} />
         </>
       )}
     </div>
+  );
+}
+
+// ─── Contest Image Generator Component ────────────────────────────────────────
+
+function ContestImageGenerator({ brief }: { brief: ContestBrief }) {
+  const [images, setImages] = useState<(string | null)[]>([null, null]);
+  const [loading, setLoading] = useState<boolean[]>([false, false]);
+
+  const prompts = [
+    `${brief.title} design concept. ${brief.moodKeywords.join(", ")} aesthetic. Color palette: ${brief.colorPalette.map(c => c.name).join(", ")}. Professional ${brief.layoutApproach.slice(0, 100)}`,
+    `Logo and brand identity for ${brief.title}. ${brief.typography.primary} typography. ${brief.moodKeywords.slice(0, 3).join(" ")} mood. Clean minimalist presentation.`,
+  ];
+
+  async function generate() {
+    setLoading([true, true]);
+    setImages([null, null]);
+
+    const results: (string | null)[] = [null, null];
+    for (let i = 0; i < 2; i++) {
+      try {
+        const res = await generateProposalImage({ data: { prompt: prompts[i] } });
+        results[i] = res.dataUrl;
+        setImages([...results]);
+      } catch {
+        results[i] = null;
+        setImages([...results]);
+      } finally {
+        setLoading(prev => {
+          const next = [...prev];
+          next[i] = false;
+          return next;
+        });
+      }
+    }
+  }
+
+  function downloadImage(dataUrl: string, index: number) {
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `design-concept-${index + 1}.png`;
+    a.click();
+  }
+
+  const isGenerating = loading.some(Boolean);
+
+  return (
+    <CropCard className="p-5 mt-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <ImageIcon className="h-4 w-4 text-purple-400" />
+          <h3 className="text-sm font-semibold text-white">Generate Design Concepts</h3>
+        </div>
+        <Button
+          variant="outline"
+          className="border-purple-400/30 text-purple-400 hover:bg-purple-400/10"
+          onClick={generate}
+          disabled={isGenerating}
+        >
+          {isGenerating
+            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating…</>
+            : <><Sparkles className="mr-2 h-4 w-4" /> Generate visual concepts</>}
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {[0, 1].map((i) => (
+          <div key={i} className="relative rounded-xl border border-white/10 bg-[#0a1820] overflow-hidden aspect-square flex items-center justify-center">
+            {loading[i] ? (
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+                <p className="text-xs">Generating concept {i + 1}…</p>
+              </div>
+            ) : images[i] ? (
+              <>
+                <img src={images[i]!} alt={`Design concept ${i + 1}`} className="w-full h-full object-cover" />
+                <button
+                  onClick={() => downloadImage(images[i]!, i)}
+                  className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-xs text-white hover:bg-black/80"
+                >
+                  <Download className="h-3 w-3" /> Download
+                </button>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <ImageIcon className="h-8 w-8 opacity-30" />
+                <p className="text-xs">Concept {i + 1}</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </CropCard>
   );
 }
 

@@ -734,6 +734,11 @@ CRITICAL RULES (the client must NEVER suspect AI):
 - Reference specifics from the job/proposal/prior messages — never be generic
 - Each alternative must be genuinely different in approach, not just rephrased
 - If a prior context dump is provided, use the writing style and patterns from it to sound more human
+- Vary sentence length — mix short punchy sentences with longer ones. Never write paragraphs of uniform length.
+- Use natural connectors: "yeah", "honestly", "look", "thing is", "to be real" where appropriate
+- Occasional informal punctuation is fine: "That said—" or "Here's the thing:" or ending with "?" to invite response
+- NEVER write more than 4 sentences in the best reply unless the client's message was long and complex
+- If the client asked a question, answer it directly first before anything else
 
 ${stageBlock}
 
