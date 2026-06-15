@@ -277,6 +277,34 @@ function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string
 
 const MIGRATIONS: { label: string; description: string; sql: string }[] = [
   {
+    label: "⚠️ Strategy links table — fixes 'Could not generate link'",
+    description: "REQUIRED for the strategy document sharing feature. Run this first if strategy links are broken.",
+    sql: `-- Strategy docs with shareable slugs
+CREATE TABLE IF NOT EXISTS public.strategies (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  slug text UNIQUE NOT NULL,
+  doc jsonb NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS strategies_slug_idx ON public.strategies (slug);
+CREATE INDEX IF NOT EXISTS strategies_user_idx ON public.strategies (user_id);
+GRANT SELECT, INSERT, DELETE ON public.strategies TO authenticated;
+GRANT ALL ON public.strategies TO service_role;
+ALTER TABLE public.strategies ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='strategies' AND policyname='Users manage own strategies') THEN
+    CREATE POLICY "Users manage own strategies" ON public.strategies FOR ALL
+      USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='strategies' AND policyname='Public read strategies') THEN
+    CREATE POLICY "Public read strategies" ON public.strategies FOR SELECT USING (true);
+  END IF;
+END $$;`,
+  },
+  {
     label: "Conversion threads & messages",
     description: "Required for the Conversion Messages feature. Creates conversion_threads and conversion_thread_messages tables.",
     sql: `-- Conversion chat threads
@@ -321,14 +349,14 @@ END $$;`,
   },
   {
     label: "Conversation stages, deep learning & Drive link",
-    description: "Adds stage, context_dump, extracted, and drive_link columns to conversion_threads. Also creates custom_strategies table.",
+    description: "Adds stage, context_dump, extracted, and drive_link columns. Run after migration 2.",
     sql: `-- Conversation stages + deep learning columns
 ALTER TABLE public.conversion_threads
   ADD COLUMN IF NOT EXISTS stage integer NOT NULL DEFAULT 1,
   ADD COLUMN IF NOT EXISTS context_dump text DEFAULT '',
   ADD COLUMN IF NOT EXISTS extracted jsonb DEFAULT '{}';
 
--- Drive link on sub_profiles / profiles (if those tables exist)
+-- Drive link on profiles
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS drive_link text;
 ALTER TABLE public.sub_profiles ADD COLUMN IF NOT EXISTS drive_link text;
 
@@ -351,7 +379,7 @@ END $$;`,
   },
   {
     label: "SQL runner function + follow-up reminders",
-    description: "Creates the run_admin_sql() function for this SQL runner, and adds reminder_at to conversion_threads.",
+    description: "Creates the run_admin_sql() function (needed for this SQL runner to work), and adds reminder_at to threads.",
     sql: `-- Admin SQL runner (service_role only)
 CREATE OR REPLACE FUNCTION public.run_admin_sql(sql text)
 RETURNS jsonb
