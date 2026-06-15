@@ -1723,44 +1723,72 @@ function ProposalPreview({ content }: { content: string }) {
   const lines = content.split(/\n/);
   const nodes: React.ReactNode[] = [];
   let key = 0;
+  let inParagraph = false;
+  let paraLines: string[] = [];
+
+  function flushParagraph() {
+    if (!paraLines.length) return;
+    const text = paraLines.join(" ").trim();
+    if (text) {
+      nodes.push(
+        <p key={key++} className="text-sm leading-[1.8] text-foreground/90 indent-4">
+          {renderInline(text)}
+        </p>,
+      );
+    }
+    paraLines = [];
+    inParagraph = false;
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (!line.trim()) {
-      nodes.push(<div key={key++} className="h-3" />);
+    const trimmed = line.trim();
+
+    // Skip horizontal rules entirely
+    if (/^([_\-*]){3,}$/.test(trimmed)) continue;
+
+    if (!trimmed) {
+      flushParagraph();
+      nodes.push(<div key={key++} className="h-2" />);
     } else if (/^##\s+/.test(line)) {
+      flushParagraph();
       nodes.push(
-        <div key={key++} className="mt-5 mb-2 first:mt-0">
+        <div key={key++} className="mt-6 mb-2 first:mt-0">
           <p className="text-xs font-bold uppercase tracking-widest text-gold/80">{line.replace(/^##\s+/, "")}</p>
           <div className="mt-1 h-px bg-gold/20" />
         </div>,
       );
     } else if (/^#\s+/.test(line)) {
+      flushParagraph();
       nodes.push(
         <p key={key++} className="mt-6 mb-1 text-base font-bold text-white first:mt-0">{line.replace(/^#\s+/, "")}</p>,
       );
     } else if (/^[-•*]\s+/.test(line)) {
+      flushParagraph();
       nodes.push(
-        <div key={key++} className="flex gap-2 my-0.5">
-          <span className="mt-[3px] shrink-0 text-gold/60 text-sm">·</span>
-          <span className="text-sm leading-relaxed text-foreground/90">{renderInline(line.replace(/^[-•*]\s+/, ""))}</span>
+        <div key={key++} className="flex gap-2 pl-2 my-1">
+          <span className="mt-[3px] shrink-0 text-teal/70 text-sm">·</span>
+          <span className="text-sm leading-relaxed text-foreground/90">{renderInline(trimmed.replace(/^[-•*]\s+/, ""))}</span>
         </div>,
       );
     } else if (/^\d+\.\s+/.test(line)) {
+      flushParagraph();
       const num = line.match(/^(\d+)\./)?.[1];
       nodes.push(
-        <div key={key++} className="flex gap-2 my-0.5">
-          <span className="mt-[3px] shrink-0 font-mono text-[11px] text-gold/60 w-4 text-right">{num}.</span>
-          <span className="text-sm leading-relaxed text-foreground/90">{renderInline(line.replace(/^\d+\.\s+/, ""))}</span>
+        <div key={key++} className="flex gap-2 pl-2 my-1">
+          <span className="mt-[3px] shrink-0 font-mono text-[11px] text-gold/70 w-4 text-right">{num}.</span>
+          <span className="text-sm leading-relaxed text-foreground/90">{renderInline(trimmed.replace(/^\d+\.\s+/, ""))}</span>
         </div>,
       );
     } else {
-      nodes.push(
-        <p key={key++} className="text-sm leading-relaxed text-foreground/90">{renderInline(line)}</p>,
-      );
+      // Regular prose — accumulate into paragraph
+      paraLines.push(trimmed);
+      inParagraph = true;
     }
   }
-  return <div className="space-y-0.5">{nodes}</div>;
+  flushParagraph();
+
+  return <div className="space-y-1.5 text-[15px]">{nodes}</div>;
 }
 
 function Explain({ label, children }: { label: string; children: React.ReactNode }) {

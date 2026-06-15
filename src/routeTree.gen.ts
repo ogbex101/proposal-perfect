@@ -23,6 +23,8 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedConversionRouteImport } from './routes/_authenticated/conversion'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedResearchRouteImport } from './routes/_authenticated/research'
+import { Route as AuthenticatedContestRouteImport } from './routes/_authenticated/contest'
+import { Route as CtSlugRouteImport } from './routes/ct.$slug'
 
 const StrategyRoute = StrategyRouteImport.update({
   id: '/strategy',
@@ -93,12 +95,24 @@ const AuthenticatedResearchRoute = AuthenticatedResearchRouteImport.update({
   path: '/research',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedContestRoute = AuthenticatedContestRouteImport.update({
+  id: '/contest',
+  path: '/contest',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const CtSlugRoute = CtSlugRouteImport.update({
+  id: '/ct/$slug',
+  path: '/ct/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/strategy': typeof StrategyRoute
+  '/ct/$slug': typeof CtSlugRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/contest': typeof AuthenticatedContestRoute
   '/research': typeof AuthenticatedResearchRoute
   '/conversion': typeof AuthenticatedConversionRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -113,7 +127,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/strategy': typeof StrategyRoute
+  '/ct/$slug': typeof CtSlugRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/contest': typeof AuthenticatedContestRoute
   '/research': typeof AuthenticatedResearchRoute
   '/conversion': typeof AuthenticatedConversionRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -130,7 +146,9 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/auth': typeof AuthRoute
   '/strategy': typeof StrategyRoute
+  '/ct/$slug': typeof CtSlugRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/contest': typeof AuthenticatedContestRoute
   '/_authenticated/research': typeof AuthenticatedResearchRoute
   '/_authenticated/conversion': typeof AuthenticatedConversionRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -147,7 +165,9 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/strategy'
+    | '/ct/$slug'
     | '/admin'
+    | '/contest'
     | '/research'
     | '/conversion'
     | '/dashboard'
@@ -162,7 +182,9 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/strategy'
+    | '/ct/$slug'
     | '/admin'
+    | '/contest'
     | '/research'
     | '/conversion'
     | '/dashboard'
@@ -178,7 +200,9 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/strategy'
+    | '/ct/$slug'
     | '/_authenticated/admin'
+    | '/_authenticated/contest'
     | '/_authenticated/research'
     | '/_authenticated/conversion'
     | '/_authenticated/dashboard'
@@ -196,6 +220,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   StrategyRoute: typeof StrategyRoute
   PSlugRoute: typeof PSlugRoute
+  CtSlugRoute: typeof CtSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -298,11 +323,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedResearchRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/contest': {
+      id: '/_authenticated/contest'
+      path: '/contest'
+      fullPath: '/contest'
+      preLoaderRoute: typeof AuthenticatedContestRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/ct/$slug': {
+      id: '/ct/$slug'
+      path: '/ct/$slug'
+      fullPath: '/ct/$slug'
+      preLoaderRoute: typeof CtSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedContestRoute: typeof AuthenticatedContestRoute
   AuthenticatedResearchRoute: typeof AuthenticatedResearchRoute
   AuthenticatedConversionRoute: typeof AuthenticatedConversionRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
@@ -315,6 +355,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedContestRoute: AuthenticatedContestRoute,
   AuthenticatedResearchRoute: AuthenticatedResearchRoute,
   AuthenticatedConversionRoute: AuthenticatedConversionRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
@@ -335,6 +376,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   StrategyRoute: StrategyRoute,
   PSlugRoute: PSlugRoute,
+  CtSlugRoute: CtSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -449,9 +449,10 @@ Return a JSON object with this exact shape:
           finalResult = { ...result, content: text };
         }
       }
-      // Strip any bullet/hyphen list lines the AI still outputs
+      // Strip bullet lists, horizontal rules, and excessive blank lines
       const cleanContent = finalResult.content
         .split("\n")
+        .filter((line) => !/^[\s]*([_\-*]{3,})[\s]*$/.test(line)) // remove --- ___ *** HR lines
         .map((line) => line.replace(/^[\s]*[-•*]\s+/, "").replace(/^[\s]*\d+\.\s+/, ""))
         .join("\n")
         .replace(/\n{3,}/g, "\n\n")
@@ -849,6 +850,80 @@ Return JSON:
         contextBlock,
       );
       return result;
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
+// ---------- Contest Brief Generator ----------
+const ContestBriefSchema = z.object({
+  title: z.string(),
+  overview: z.string(),
+  designConcept: z.string(),
+  colorPalette: z.array(z.object({
+    name: z.string(),
+    hex: z.string(),
+    role: z.string(),
+  })),
+  typography: z.object({
+    primary: z.string(),
+    secondary: z.string(),
+    rationale: z.string(),
+  }),
+  keyElements: z.array(z.string()),
+  layoutApproach: z.string(),
+  moodKeywords: z.array(z.string()),
+  differentiator: z.string(),
+  deliverables: z.array(z.string()),
+  submissionNote: z.string(),
+});
+export type ContestBrief = z.infer<typeof ContestBriefSchema>;
+
+export const generateContestBrief = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { contestDescription: string; additionalContext?: string }) =>
+    z.object({
+      contestDescription: z.string().min(20).max(10000),
+      additionalContext: z.string().max(2000).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const contextBlock = [
+        `CONTEST DESCRIPTION:\n${data.contestDescription}`,
+        data.additionalContext ? `ADDITIONAL CONTEXT:\n${data.additionalContext}` : null,
+      ].filter(Boolean).join("\n\n---\n\n");
+
+      return await structured(
+        ContestBriefSchema,
+        `You are a senior creative director and contest submission strategist. Analyze this design contest and produce a comprehensive creative brief that a designer can use as their submission document or pitch.
+
+Your goal is to help win the contest by showing original thinking, deep understanding of the brand/context, and a clear execution strategy.
+
+Return JSON with this exact shape:
+{
+  "title": "<short, punchy project title e.g. 'Bold Identity Rebrand' or 'Minimalist Logo Concept'>",
+  "overview": "<2-3 sentence overview of the design approach and why it wins>",
+  "designConcept": "<detailed paragraph describing the core creative concept — what it represents, the visual direction, the emotion it evokes>",
+  "colorPalette": [
+    { "name": "<color name>", "hex": "<#hex code>", "role": "<primary/accent/neutral/background>" },
+    { "name": "<color name>", "hex": "<#hex code>", "role": "<role>" },
+    { "name": "<color name>", "hex": "<#hex code>", "role": "<role>" }
+  ],
+  "typography": {
+    "primary": "<font name or style — e.g. 'Montserrat Bold', 'Modern geometric sans-serif'>",
+    "secondary": "<supporting font or style>",
+    "rationale": "<one sentence on why these fonts match the brand>"
+  },
+  "keyElements": ["<design element 1>", "<element 2>", "<element 3>", "<element 4>"],
+  "layoutApproach": "<paragraph describing the visual layout, composition principles, whitespace use, visual hierarchy>",
+  "moodKeywords": ["<keyword 1>", "<keyword 2>", "<keyword 3>", "<keyword 4>", "<keyword 5>"],
+  "differentiator": "<what makes THIS submission stand out from generic contest entries — the unique angle>",
+  "deliverables": ["<deliverable 1>", "<deliverable 2>", "<deliverable 3>"],
+  "submissionNote": "<1-2 sentences the designer can include as their contest submission message>"
+}`,
+        contextBlock,
+      );
     } catch (err) {
       handleAiError(err);
     }
