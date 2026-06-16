@@ -860,6 +860,102 @@ Return JSON:
     }
   });
 
+// ---------- Strategy Advisor ----------
+const StrategyAdviceSchema = z.object({
+  recommendedHook: z.object({
+    id: z.string(),
+    name: z.string(),
+    reason: z.string(),
+    openingLine: z.string(),
+  }),
+  recommendedStrategy: z.object({
+    id: z.string(),
+    name: z.string(),
+    reason: z.string(),
+    howToApply: z.string(),
+  }),
+  hookRanking: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    score: z.number().min(0).max(10),
+    reason: z.string(),
+  })),
+  strategyRanking: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    score: z.number().min(0).max(10),
+    reason: z.string(),
+  })),
+  lengthRecommendation: z.object({
+    length: z.enum(["brief", "robust", "explanatory"]),
+    reason: z.string(),
+  }),
+  winningInsight: z.string(),
+  avoidMistakes: z.array(z.string()),
+});
+
+export type StrategyAdvice = z.infer<typeof StrategyAdviceSchema>;
+
+const HOOKS_FOR_PROMPT = [
+  { id: "pattern_interrupt", name: "Pattern Interrupt", description: "Open with something unexpected to break autopilot." },
+  { id: "curiosity_gap", name: "Curiosity Gap", description: "Tease a specific insight they'll want to know." },
+  { id: "direct_question", name: "Direct Question", description: "Ask a sharp question mirroring the real problem." },
+  { id: "warning", name: "Warning", description: "Name a costly mistake their current path will produce." },
+  { id: "shared_frustration", name: "Shared Frustration", description: "Acknowledge the annoying thing they've lived through with other freelancers." },
+  { id: "unexpected_compliment", name: "Unexpected Compliment", description: "Notice something specific and real about their business." },
+  { id: "i_noticed", name: "I Noticed Something", description: "Point out one concrete detail that proves you read it carefully." },
+  { id: "contradiction", name: "Contradiction", description: "Gently challenge their framing in a way that earns attention." },
+  { id: "future_pacing", name: "Future Pacing", description: "Paint the post-project picture in one vivid line." },
+  { id: "humble_observation", name: "Humble Observation", description: "A low-ego note about what's probably going on under the hood." },
+  { id: "consequence", name: "Consequence", description: "Name the downstream cost of leaving the problem unsolved." },
+  { id: "problem_solution", name: "Problem Solution", description: "State the problem and exact solution in two crisp sentences." },
+];
+
+const STRATEGIES_FOR_PROMPT = [
+  { id: "curious_partner", name: "Curious Partner", description: "Thoughtful collaborator who asks the right questions." },
+  { id: "advice_first", name: "Advice First", description: "Lead with one piece of expert advice before pitching." },
+  { id: "direct_question", name: "Direct Question", description: "Drive the entire proposal around one piercing question." },
+  { id: "pattern_interrupt", name: "Pattern Interrupt", description: "Short, sharp, unconventional structure." },
+  { id: "narrow_down_first", name: "Narrow Down First", description: "Tighten scope publicly to show senior-level thinking." },
+  { id: "future_pacing", name: "Future Pacing", description: "Walk them through the outcome before talking about the work." },
+  { id: "humble_observation", name: "Humble Observation", description: "Low-key technical insight that signals seniority." },
+  { id: "stack_realist", name: "Stack Realist", description: "Specific about technical realities the client hasn't considered." },
+];
+
+export const adviseProposalStrategy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { jobText: string }) =>
+    z.object({ jobText: z.string().min(10).max(8000) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const result = await structured(
+        StrategyAdviceSchema,
+        `You are a world-class freelance proposal strategist. Analyze this job post deeply and choose the BEST hook and strategy combination for winning it. Think like a psychologist who understands what the client is actually feeling, not just what they wrote.
+
+Available hooks:
+${HOOKS_FOR_PROMPT.map((h) => `- ${h.id}: "${h.name}" — ${h.description}`).join("\n")}
+
+Available strategies:
+${STRATEGIES_FOR_PROMPT.map((s) => `- ${s.id}: "${s.name}" — ${s.description}`).join("\n")}
+
+Instructions:
+1. Pick the single BEST hook and write a powerful opening line using it (specific to THIS job, not generic)
+2. Pick the single BEST strategy and explain exactly how to apply it to this job
+3. Rank ALL hooks and strategies by score (0-10) with a one-sentence reason for each
+4. Recommend proposal length: "brief" (Freelancer.com / crowded market), "robust" (standard Upwork), "explanatory" (complex technical / high-budget)
+5. Give one "winning insight" — the non-obvious thing about this client or job that most freelancers will miss
+6. List 2-3 specific mistakes to avoid for this particular job
+
+Be specific to THIS job. Do not give generic advice. Reference actual details from the job post.`,
+        `JOB POST:\n${data.jobText}`,
+      );
+      return result;
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
 // ---------- Contest Brief Generator ----------
 const ContestBriefSchema = z.object({
   title: z.string(),
