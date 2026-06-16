@@ -861,7 +861,37 @@ Return JSON:
     }
   });
 
+// ---------- Proposal Polisher ----------
+export const polishProposal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { proposal: string }) =>
+    z.object({ proposal: z.string().min(10).max(20000) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const result = await structured(
+        z.object({ content: z.string() }),
+        `You are a professional editor. Fix ONLY mechanical issues in this freelance proposal — do not change the meaning, phrasing, tone, or structure. Your task:
+
+1. Fix punctuation: add missing periods at sentence ends, fix missing commas before conjunctions, fix double spaces, fix spacing after punctuation
+2. Fix capitalization: capitalize first word of each sentence, fix obvious mid-sentence caps errors
+3. Remove stray symbols: delete any lone dashes at line starts, remove "---" or "***" or "___ " horizontal rules, remove double asterisks used as bullets
+4. Clean paragraph breaks: each paragraph separated by exactly one blank line, no trailing spaces
+5. Fix run-together sentences: if two complete sentences are joined without punctuation, split them
+
+Do NOT rephrase, reorder, shorten, or change any words. Return the proposal with mechanical fixes only.
+
+Return JSON: { "content": "<the cleaned proposal text>" }`,
+        `PROPOSAL TO POLISH:\n${data.proposal}`,
+      );
+      return result;
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
 // ---------- Portfolio Injector ----------
+
 export const injectPortfolioLinks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { proposal: string; portfolioItems: Array<{ title: string; url: string; description: string }> }) =>

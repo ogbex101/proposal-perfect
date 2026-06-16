@@ -35,7 +35,8 @@ import { cn } from "@/lib/utils";
 
 import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
-import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, injectPortfolioLinks, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
+import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
+import { VoiceEditPrompt } from "@/components/VoiceEditPrompt";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
@@ -128,7 +129,7 @@ function NewProposal() {
   const analyzeMutation = useMutation({
     mutationFn: () => analyzeJob({ data: { jobDescription: effectiveJob } }),
     onSuccess: (result) => {
-      setAnalysis(result);
+      setAnalysis({ ...result, hookSuggestions: result.hookSuggestions ?? [], detectedNiche: result.detectedNiche ?? "", suggestedLength: result.suggestedLength ?? "robust" } as JobAnalysis);
       const h = HOOKS.find((x) => x.id === result.suggestedHookId);
       const s = STRATEGIES.find((x) => x.id === result.suggestedStrategyId);
       if (h) setHookId(h.id);
@@ -184,8 +185,10 @@ function NewProposal() {
       setExplanation(result.explanation);
       setShowExplain(true);
       toast.success("Proposal generated");
-      // auto-trigger strategy after a short delay so it doesn't race
-      setTimeout(() => strategyMutation.mutate(), 300);
+      // auto-polish with fresh content passed directly (avoid stale closure)
+      setTimeout(() => polishMutation.mutate(result.content), 150);
+      // auto-trigger strategy
+      setTimeout(() => strategyMutation.mutate(), 400);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Generation failed"),
   });
@@ -226,6 +229,29 @@ function NewProposal() {
       }
     },
     onError: () => toast.error("Could not update portfolio in proposal"),
+  });
+
+  const voiceEditMutation = useMutation({
+    mutationFn: (instruction: string) =>
+      applyProposalEdit({ data: { proposalText: content, instruction } }),
+    onSuccess: (res) => {
+      if (res?.text) {
+        setContent(res.text);
+        toast.success("Voice edit applied");
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Voice edit failed"),
+  });
+
+  const polishMutation = useMutation({
+    mutationFn: (proposalText?: string) => polishProposal({ data: { proposal: proposalText ?? content } }),
+    onSuccess: (res) => {
+      if (res?.content) {
+        setContent(res.content);
+        toast.success("Proposal polished — punctuation and formatting fixed");
+      }
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not polish proposal"),
   });
 
   const prevSelectedRef = useRef<string[]>([]);
@@ -635,6 +661,8 @@ function NewProposal() {
               chosenProfile={chosenProfile}
               onGoHistory={() => navigate({ to: "/history" })}
               injecting={injectMutation.isPending}
+              onPolish={() => polishMutation.mutate(undefined)}
+              polishing={polishMutation.isPending}
             />
           )}
 
@@ -667,6 +695,12 @@ function NewProposal() {
 
         </div>
       </div>
+      {content && (
+        <VoiceEditPrompt
+          onApply={(instruction) => voiceEditMutation.mutate(instruction)}
+          isPending={voiceEditMutation.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -767,7 +801,7 @@ function SuggestionCard({ label, name, reason }: { label: string; name: string; 
 /* ---------- Output panel ---------- */
 function OutputPanel({
   content, setContent, explanation, showExplain, setShowExplain,
-  title, onSave, saving, onSaveTemplate, savingTemplate, chosenProfile, onGoHistory, injecting,
+  title, onSave, saving, onSaveTemplate, savingTemplate, chosenProfile, onGoHistory, injecting, onPolish, polishing,
 }: {
   content: string; setContent: (v: string) => void;
   explanation: { hook: string; strategy: string; question: string } | null;
@@ -775,7 +809,7 @@ function OutputPanel({
   title: string; onSave: () => void; saving: boolean;
   onSaveTemplate: () => void; savingTemplate: boolean;
   chosenProfile?: { label: string } | null; onGoHistory: () => void;
-  injecting?: boolean;
+  injecting?: boolean; onPolish?: () => void; polishing?: boolean;
 }) {
   const [editMode, setEditMode] = useState(false);
 
@@ -843,6 +877,12 @@ function OutputPanel({
         <Button size="sm" variant="ghost" onClick={onSaveTemplate} disabled={savingTemplate} className="text-muted-foreground">
           Save template
         </Button>
+        {onPolish && (
+          <Button size="sm" variant="ghost" onClick={onPolish} disabled={polishing} className="text-teal/80 hover:text-teal ml-auto">
+            {polishing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+            Polish
+          </Button>
+        )}
       </div>
 
       {explanation && (
