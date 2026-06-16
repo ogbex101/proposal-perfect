@@ -1,15 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Users, Activity, Shield, Terminal, Play, X, Loader2, Database, ChevronDown, ChevronUp,
   Copy, Check, TrendingUp, Eye, UserCheck, Globe, ArrowUp, ArrowDown, Minus,
+  Search, KeyRound, Trash2, AlertTriangle,
 } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader, CropCard, Eyebrow } from "@/components/blueprint";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/use-auth";
-import { listAdminUsers, getPageViewStats, runAdminSql } from "@/lib/admin.functions";
+import { listAdminUsers, getPageViewStats, runAdminSql, sendPasswordReset, deleteAdminUser } from "@/lib/admin.functions";
 import type { AdminUser } from "@/lib/admin.functions";
 import { cn } from "@/lib/utils";
 
@@ -41,11 +44,31 @@ function AdminPanel() {
   const [sql, setSql] = useState("");
   const [sqlResult, setSqlResult] = useState<Record<string, unknown>[] | null>(null);
   const [sqlError, setSqlError] = useState<string | null>(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
 
   const sqlMutation = useMutation({
     mutationFn: () => runAdminSql({ data: { sql } }),
     onSuccess: (rows) => { setSqlResult(JSON.parse(rows as string) as Record<string, unknown>[]); setSqlError(null); },
     onError: (e: Error) => { setSqlError(e.message); setSqlResult(null); },
+  });
+
+  const qc = useQueryClient();
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: (userId: string) => sendPasswordReset({ data: { userId } }),
+    onSuccess: (res) => toast.success(`Password reset email sent to ${res?.email}`),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (userId: string) => deleteAdminUser({ data: { userId } }),
+    onSuccess: () => {
+      toast.success("User deleted");
+      qc?.invalidateQueries({ queryKey: ["admin-users"] });
+      setConfirmDelete(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const usersQuery = useQuery({
@@ -232,73 +255,82 @@ function AdminPanel() {
 
       {/* ── Users Tab ── */}
       {activeTab === "Users" && (
-        <CropCard className="p-6">
-          <div className="flex items-center justify-between mb-5">
-            <Eyebrow>All Accounts</Eyebrow>
-            <div className="flex items-center gap-2 rounded-full border border-border/60 bg-sidebar/60 px-3 py-1">
-              <UserCheck className="h-3 w-3 text-teal" />
-              <span className="text-xs text-muted-foreground">{users.length} total</span>
+        <div className="space-y-4">
+          <CropCard className="p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
+              <div className="flex-1">
+                <Eyebrow>All Accounts</Eyebrow>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search by email…"
+                    className="pl-8 h-8 text-xs w-52 bg-background/60"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-sidebar/60 px-3 py-1">
+                  <UserCheck className="h-3 w-3 text-teal" />
+                  <span className="text-xs text-muted-foreground">{users.length} total</span>
+                </div>
+              </div>
             </div>
-          </div>
-          {usersQuery.isPending ? (
-            <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Loading users…</span>
-            </div>
-          ) : usersQuery.isError ? (
-            <p className="text-sm text-red-400 py-4">{String((usersQuery.error as Error).message)}</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/40">
-                    <th className="pb-3 pr-4 text-left text-[10px] uppercase tracking-wider text-muted-foreground">User</th>
-                    <th className="pb-3 pr-4 text-left text-[10px] uppercase tracking-wider text-muted-foreground">Joined</th>
-                    <th className="pb-3 pr-4 text-left text-[10px] uppercase tracking-wider text-muted-foreground">Last Active</th>
-                    <th className="pb-3 pr-4 text-right text-[10px] uppercase tracking-wider text-muted-foreground">Proposals</th>
-                    <th className="pb-3 text-right text-[10px] uppercase tracking-wider text-muted-foreground">Portfolio</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/20">
-                  {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-gold/20 to-teal/20 flex items-center justify-center text-xs font-bold text-gold">
-                            {(u.email?.[0] ?? "?").toUpperCase()}
-                          </div>
-                          <span className="truncate max-w-[180px] text-white font-medium">{u.email ?? "—"}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4 text-muted-foreground text-xs">{fmt(u.created_at)}</td>
-                      <td className="py-3 pr-4">
-                        <span className={cn(
-                          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                          u.last_sign_in_at
-                            ? "bg-teal/10 text-teal border border-teal/20"
-                            : "bg-muted/30 text-muted-foreground border border-border/40",
-                        )}>
-                          {u.last_sign_in_at && <span className="h-1.5 w-1.5 rounded-full bg-teal" />}
-                          {timeSince(u.last_sign_in_at)}
-                        </span>
-                      </td>
-                      <td className="py-3 pr-4 text-right">
-                        <span className="rounded-md bg-gold/10 border border-gold/20 px-2 py-0.5 text-xs font-bold text-gold">
-                          {u.proposal_count}
-                        </span>
-                      </td>
-                      <td className="py-3 text-right">
-                        <span className="rounded-md bg-teal/10 border border-teal/20 px-2 py-0.5 text-xs font-bold text-teal">
-                          {u.portfolio_count}
-                        </span>
-                      </td>
-                    </tr>
+            {usersQuery.isPending ? (
+              <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading users…</span>
+              </div>
+            ) : usersQuery.isError ? (
+              <p className="text-sm text-red-400 py-4">{String((usersQuery.error as Error).message)}</p>
+            ) : (
+              <div className="space-y-2">
+                {users
+                  .filter((u) => !userSearch || (u.email ?? "").toLowerCase().includes(userSearch.toLowerCase()))
+                  .map((u) => (
+                    <UserRow
+                      key={u.id}
+                      user={u}
+                      isMe={u.id === auth.userId}
+                      onResetPassword={() => resetPasswordMutation.mutate(u.id)}
+                      onDelete={() => setConfirmDelete(u)}
+                      resetting={resetPasswordMutation.isPending && resetPasswordMutation.variables === u.id}
+                    />
                   ))}
-                </tbody>
-              </table>
+              </div>
+            )}
+          </CropCard>
+
+          {/* Confirm delete dialog */}
+          {confirmDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+              <div className="w-full max-w-sm rounded-xl border border-destructive/30 bg-sidebar p-6 shadow-2xl">
+                <div className="flex items-center gap-3 mb-3">
+                  <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+                  <p className="font-semibold text-white">Delete user?</p>
+                </div>
+                <p className="text-sm text-muted-foreground mb-5">
+                  This will permanently delete <strong className="text-white">{confirmDelete.email}</strong> and all their data. This action cannot be undone.
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" size="sm" onClick={() => setConfirmDelete(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
+                    disabled={deleteUserMutation.isPending}
+                    onClick={() => deleteUserMutation.mutate(confirmDelete.id)}
+                  >
+                    {deleteUserMutation.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
+                    Delete permanently
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
-        </CropCard>
+        </div>
       )}
 
       {/* ── Database Tab ── */}
@@ -402,6 +434,96 @@ function AdminPanel() {
       <p className="mt-6 text-[11px] text-muted-foreground">
         Analytics are collected server-side and viewable only by administrators.
       </p>
+    </div>
+  );
+}
+
+// ─── User Row ─────────────────────────────────────────────────────────────────
+
+function UserRow({
+  user, isMe, onResetPassword, onDelete, resetting,
+}: {
+  user: AdminUser;
+  isMe: boolean;
+  onResetPassword: () => void;
+  onDelete: () => void;
+  resetting: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const initial = (user.email?.[0] ?? "?").toUpperCase();
+  const colors = [
+    "from-gold/20 to-teal/20 text-gold",
+    "from-teal/20 to-purple-500/20 text-teal",
+    "from-purple-500/20 to-gold/20 text-purple-400",
+  ];
+  const colorClass = colors[initial.charCodeAt(0) % 3];
+
+  return (
+    <div className={cn("rounded-lg border border-border/40 transition-colors", expanded ? "bg-sidebar/80" : "bg-background/30 hover:bg-background/60")}>
+      <button
+        type="button"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className={cn("h-9 w-9 shrink-0 rounded-full bg-gradient-to-br flex items-center justify-center text-sm font-bold", colorClass)}>
+          {initial}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-white flex items-center gap-2">
+            <span className="truncate">{user.email ?? "—"}</span>
+            {isMe && <span className="shrink-0 rounded-full bg-gold/20 border border-gold/30 px-1.5 py-0.5 text-[9px] font-medium text-gold">YOU</span>}
+          </p>
+          <p className="text-[11px] text-muted-foreground">Joined {fmt(user.created_at)} · {timeSince(user.last_sign_in_at)} active</p>
+        </div>
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="text-right hidden sm:block">
+            <p className="text-xs font-bold text-gold">{user.proposal_count}</p>
+            <p className="text-[9px] text-muted-foreground">proposals</p>
+          </div>
+          <div className="text-right hidden sm:block">
+            <p className="text-xs font-bold text-teal">{user.portfolio_count}</p>
+            <p className="text-[9px] text-muted-foreground">portfolios</p>
+          </div>
+          <span className={cn(
+            "h-2 w-2 rounded-full",
+            user.last_sign_in_at ? "bg-teal" : "bg-muted-foreground/30",
+          )} />
+          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border/30 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2 mb-3 text-xs text-muted-foreground">
+            <span>ID: <code className="text-foreground/70 text-[10px]">{user.id}</code></span>
+            <span>·</span>
+            <span>Last active: {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : "Never"}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-3 text-xs border-border/60"
+              disabled={resetting}
+              onClick={onResetPassword}
+            >
+              {resetting ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <KeyRound className="mr-1.5 h-3 w-3" />}
+              Send password reset
+            </Button>
+            {!isMe && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-3 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
+                onClick={onDelete}
+              >
+                <Trash2 className="mr-1.5 h-3 w-3" />
+                Delete user
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

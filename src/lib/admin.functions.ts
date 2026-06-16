@@ -92,6 +92,35 @@ export const recordPageView = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const sendPasswordReset = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { userId: string }) =>
+    z.object({ userId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: user, error: fetchErr } = await supabaseAdmin.auth.admin.getUserById(data.userId);
+    if (fetchErr || !user.user?.email) throw new Error("User not found");
+    const { error } = await supabaseAdmin.auth.resetPasswordForEmail(user.user.email);
+    if (error) throw new Error(error.message);
+    return { ok: true, email: user.user.email };
+  });
+
+export const deleteAdminUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { userId: string }) =>
+    z.object({ userId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context.supabase, context.userId);
+    if (data.userId === context.userId) throw new Error("Cannot delete your own account.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const runAdminSql = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { sql: string }) =>
