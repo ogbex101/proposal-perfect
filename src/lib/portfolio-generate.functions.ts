@@ -94,9 +94,9 @@ async function freeProjectImage(keywords: string, seed: number, projectTitle?: s
     return fetchImageAsDataUrl(stockImageUrl(keywords, seed));
   }
 
-  const titleCtx = projectTitle ? `for a project titled "${projectTitle}"` : "";
+  const titleCtx = projectTitle ? `titled "${projectTitle}"` : "";
   const nicheCtx = niche ? `in the ${niche} field` : "";
-  const prompt = `Stunning professional portfolio photograph ${titleCtx} ${nicheCtx}. Keywords: ${keywords}. Choose the most fitting visual: a photorealistic MacBook or widescreen monitor displaying a polished dashboard or app UI, OR a professional studio workspace with industry-specific equipment and tools, OR a high-end product or deliverable mockup. Dark modern aesthetic, cinematic depth of field, sharp focus, dramatic lighting. No people, no faces, no watermarks, no overlaid text, no generic stock clichés. Award-winning editorial quality.`;
+  const prompt = `Stunning professional portfolio photograph for a freelance project ${titleCtx} ${nicheCtx}. Visual keywords: ${keywords}. The image must visually represent the specific subject matter of these keywords — not a generic office. Choose between: a photorealistic screen showing a polished UI or dashboard directly relevant to the keywords, OR a professional workspace with niche-specific tools or equipment, OR a high-quality product/deliverable mockup matching the keywords. Dark modern aesthetic, cinematic lighting, sharp focus, no people, no faces, no text overlays, no watermarks, no generic stock clichés. The visual MUST feel specific to "${keywords}". Award-winning editorial quality.`;
 
   try {
     return await fetchImageAsDataUrl(pollinationsUrl(prompt, seed, 900, 600));
@@ -229,26 +229,38 @@ export const generatePortfolio = createServerFn({ method: "POST" })
       }
     }
 
-    // 4. Project images. Default to a FREE source (Pollinations AI or stock) so
-    //    portfolios don't burn Lovable AI credits. Each image is fetched and
-    //    stored in the bucket so the portfolio is self-contained. External URL
-    //    kept as the ultimate fallback if both fetch and upload fail.
+    // 4. Project images — always generated fresh for this specific job.
+    //    imageKeywords are derived from the project title, niche, and job description.
+    //    We never reuse template imageUrls so each portfolio looks unique to the job.
+    const jobKeywords = data.jobDescription
+      .split(/\s+/)
+      .filter((w) => w.length > 4)
+      .slice(0, 8)
+      .join(" ");
+
     const source = imageSource();
     const projects = await Promise.all(
        copy.projects.map(async (proj, i) => {
          const fallback = reference.projects[i];
-         const keywords = fallback?.imageKeywords || proj.imageKeywords || proj.tags.join(" ");
+         // Build job-specific keywords combining project title + niche + job context
+         const jobSpecificKeywords = [
+           proj.title,
+           copy.niche,
+           proj.imageKeywords || proj.tags.join(" "),
+           jobKeywords,
+         ].join(" ").slice(0, 150);
+
+         const keywords = jobSpecificKeywords || fallback?.imageKeywords || proj.tags.join(" ");
         let imageUrl = stockImageUrl(keywords, i + 1); // external fallback
         try {
           let dataUrl: string;
-           if (fallback?.imageUrl) {
-             dataUrl = await fetchImageAsDataUrl(fallback.imageUrl);
-           } else if (source === "lovable") {
+           if (source === "lovable") {
             const { generateImagePrompted } = await import("./avatar-ai.server");
             dataUrl = await generateImagePrompted(
-              `Photorealistic portfolio image for a freelance project titled "${proj.title}". ${keywords}. Niche: ${copy.niche}. Modern, clean, professional UI or workspace. No text, no logos.`,
+              `Photorealistic portfolio image for a freelance project titled "${proj.title}". Context: ${copy.niche}. Keywords: ${keywords}. Modern, clean, professional UI or workspace. No text, no logos.`,
             );
           } else {
+            // Always generate AI image specific to this job — no template images
             dataUrl = await freeProjectImage(keywords, i + 1, proj.title, copy.niche);
           }
           imageUrl = await uploadImage(context.supabase, `${folder}/project-${i + 1}.png`, dataUrl);
