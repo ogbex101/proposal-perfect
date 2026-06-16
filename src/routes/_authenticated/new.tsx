@@ -14,7 +14,6 @@ import {
   Plus,
   Trash2,
   RotateCcw,
-  Map,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,7 +35,7 @@ import { cn } from "@/lib/utils";
 
 import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
-import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
+import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, injectPortfolioLinks, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
@@ -185,6 +184,8 @@ function NewProposal() {
       setExplanation(result.explanation);
       setShowExplain(true);
       toast.success("Proposal generated");
+      // auto-trigger strategy after a short delay so it doesn't race
+      setTimeout(() => strategyMutation.mutate(), 300);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Generation failed"),
   });
@@ -207,6 +208,38 @@ function NewProposal() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not generate strategy"),
   });
+
+  const injectMutation = useMutation({
+    mutationFn: () => {
+      const items = portfolio
+        .filter((p) => selectedPortfolio.includes(p.id))
+        .map((p) => ({ title: p.title, url: p.url, description: p.description ?? "" }));
+      if (portfolioLink) {
+        items.unshift({ title: "Portfolio", url: portfolioLink, description: "Tailored portfolio for this job." });
+      }
+      return injectPortfolioLinks({ data: { proposal: content, portfolioItems: items } });
+    },
+    onSuccess: (res) => {
+      if (res?.content) {
+        setContent(res.content);
+        toast.success("Portfolio links updated in proposal");
+      }
+    },
+    onError: () => toast.error("Could not update portfolio in proposal"),
+  });
+
+  const prevSelectedRef = useRef<string[]>([]);
+  useEffect(() => {
+    const prev = prevSelectedRef.current;
+    prevSelectedRef.current = selectedPortfolio;
+    if (!content || selectedPortfolio === prev) return;
+    // Only inject if selection actually changed
+    const added = selectedPortfolio.filter((id) => !prev.includes(id));
+    const removed = prev.filter((id) => !selectedPortfolio.includes(id));
+    if (added.length === 0 && removed.length === 0) return;
+    injectMutation.mutate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPortfolio, portfolioLink]);
 
   const saveMutation = useMutation({
     mutationFn: (profile?: FreelancerProfile) => {
@@ -387,27 +420,66 @@ function NewProposal() {
               </div>
             )}
             <div className="mt-4 space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Hook">
-                  <Select value={hookId} onValueChange={setHookId}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {allHooks.map((h) => (
-                        <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Strategy">
-                  <Select value={strategyId} onValueChange={setStrategyId}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {allStrategies.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
+              {/* Hook selector */}
+              <div>
+                <Label className="annotation mb-2 block !text-muted-foreground">Hook style</Label>
+                <div className="grid gap-1.5">
+                  {allHooks.map((h) => {
+                    const stat = analytics?.hookStats?.find((s) => s.id === h.id);
+                    const isActive = hookId === h.id;
+                    const isBest = analytics?.bestHook === h.id;
+                    return (
+                      <button
+                        key={h.id}
+                        type="button"
+                        onClick={() => setHookId(h.id)}
+                        className={cn(
+                          "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                          isActive ? "border-gold/50 bg-gold/8" : "border-border/40 bg-background/30 hover:border-border/70"
+                        )}
+                      >
+                        <div className={cn("mt-0.5 h-3 w-3 shrink-0 rounded-full border-2 transition-colors",
+                          isActive ? "border-gold bg-gold" : "border-muted-foreground")} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={cn("text-sm font-medium", isActive ? "text-white" : "text-foreground/80")}>{h.name}</span>
+                            {isBest && <span className="rounded-full bg-gold/20 border border-gold/30 px-1.5 py-0.5 text-[9px] font-medium text-gold">★ Best</span>}
+                            {stat && <span className="rounded-full bg-teal/10 border border-teal/20 px-1.5 py-0.5 text-[9px] text-teal">{stat.responseRate}% response</span>}
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{h.description}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Strategy selector */}
+              <div>
+                <Label className="annotation mb-2 block !text-muted-foreground">Strategy</Label>
+                <div className="grid gap-1.5">
+                  {allStrategies.map((s) => {
+                    const isActive = strategyId === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setStrategyId(s.id)}
+                        className={cn(
+                          "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                          isActive ? "border-teal/50 bg-teal/8" : "border-border/40 bg-background/30 hover:border-border/70"
+                        )}
+                      >
+                        <div className={cn("mt-0.5 h-3 w-3 shrink-0 rounded-full border-2 transition-colors",
+                          isActive ? "border-teal bg-teal" : "border-muted-foreground")} />
+                        <div className="min-w-0">
+                          <span className={cn("text-sm font-medium", isActive ? "text-white" : "text-foreground/80")}>{s.name}</span>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{s.description}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>
@@ -562,24 +634,8 @@ function NewProposal() {
               savingTemplate={saveTemplateMutation.isPending}
               chosenProfile={chosenProfile}
               onGoHistory={() => navigate({ to: "/history" })}
+              injecting={injectMutation.isPending}
             />
-          )}
-
-          {content && canGenerate && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={strategyMutation.isPending}
-              onClick={() => strategyMutation.mutate()}
-              className="border-teal/40 text-teal hover:bg-teal/10"
-            >
-              {strategyMutation.isPending ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Map className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              Generate strategy doc
-            </Button>
           )}
 
           {/* Strategy Document */}
@@ -710,55 +766,69 @@ function SuggestionCard({ label, name, reason }: { label: string; name: string; 
 
 /* ---------- Output panel ---------- */
 function OutputPanel({
-  content,
-  setContent,
-  explanation,
-  showExplain,
-  setShowExplain,
-  title,
-  onSave,
-  saving,
-  onSaveTemplate,
-  savingTemplate,
-  chosenProfile,
-  onGoHistory,
+  content, setContent, explanation, showExplain, setShowExplain,
+  title, onSave, saving, onSaveTemplate, savingTemplate, chosenProfile, onGoHistory, injecting,
 }: {
-  content: string;
-  setContent: (v: string) => void;
+  content: string; setContent: (v: string) => void;
   explanation: { hook: string; strategy: string; question: string } | null;
-  showExplain: boolean;
-  setShowExplain: (v: boolean) => void;
-  title: string;
-  onSave: () => void;
-  saving: boolean;
-  onSaveTemplate: () => void;
-  savingTemplate: boolean;
-  chosenProfile?: { label: string } | null;
-  onGoHistory: () => void;
+  showExplain: boolean; setShowExplain: (v: boolean) => void;
+  title: string; onSave: () => void; saving: boolean;
+  onSaveTemplate: () => void; savingTemplate: boolean;
+  chosenProfile?: { label: string } | null; onGoHistory: () => void;
+  injecting?: boolean;
 }) {
+  const [editMode, setEditMode] = useState(false);
+
+  // Parse proposal into paragraphs, strip horizontal rules
+  const paragraphs = content
+    .split(/\n{2,}/)
+    .map((p) => p.replace(/\n/g, " ").trim())
+    .filter((p) => p.length > 0 && !/^[\s\-_*=]{3,}$/.test(p));
+
   return (
     <CropCard glow="gold" className="p-5 bp-rise">
-      <div className="flex items-center justify-between">
-        <Eyebrow>Generated proposal</Eyebrow>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Eyebrow>Proposal</Eyebrow>
+          {injecting && <span className="flex items-center gap-1 text-[10px] text-teal"><Loader2 className="h-2.5 w-2.5 animate-spin" /> updating portfolio…</span>}
+        </div>
         <div className="flex items-center gap-2">
           {chosenProfile && (
-            <span className="rounded-full bg-teal/15 px-2 py-0.5 text-[10px] font-medium text-teal">
-              {chosenProfile.label}
-            </span>
+            <span className="rounded-full bg-teal/15 px-2 py-0.5 text-[10px] font-medium text-teal">{chosenProfile.label}</span>
           )}
           <span className="font-mono text-[10px] text-muted-foreground">{content.length} chars</span>
+          <button
+            onClick={() => setEditMode((v) => !v)}
+            className={cn("rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors",
+              editMode ? "border-gold/40 bg-gold/10 text-gold" : "border-border text-muted-foreground hover:text-white")}
+          >
+            {editMode ? "Preview" : "Edit"}
+          </button>
         </div>
       </div>
 
-      <Textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        rows={14}
-        className="mt-3 resize-y bg-background/60 text-sm leading-relaxed"
-      />
+      {editMode ? (
+        <Textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={16}
+          className="resize-y bg-background/60 text-sm leading-relaxed font-mono"
+        />
+      ) : (
+        <div className="rounded-xl border border-border/40 bg-background/50 px-6 py-5">
+          {paragraphs.map((para, i) => (
+            <p key={i} className={cn(
+              "leading-[1.85] mb-4 last:mb-0",
+              i === 0 ? "text-[15px] text-white font-medium" : "text-[14px] text-foreground/88"
+            )}>
+              {para}
+            </p>
+          ))}
+        </div>
+      )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onClick={() => copyText(content).then(() => toast.success("Copied"))}>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onClick={() => copyText(content).then(() => toast.success("Copied to clipboard"))}>
           <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
         </Button>
         <Button size="sm" variant="secondary" onClick={() => downloadTxt(title, content)}>
@@ -768,15 +838,15 @@ function OutputPanel({
           <FileDown className="mr-1.5 h-3.5 w-3.5" /> PDF
         </Button>
         <Button size="sm" onClick={onSave} disabled={saving} className="bg-gold text-primary-foreground hover:bg-gold-bright">
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="mr-1.5 h-3.5 w-3.5" /> Save to history</>}
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="mr-1.5 h-3.5 w-3.5" /> Save</>}
         </Button>
         <Button size="sm" variant="ghost" onClick={onSaveTemplate} disabled={savingTemplate} className="text-muted-foreground">
-          Save as template
+          Save template
         </Button>
       </div>
 
       {explanation && (
-        <div className="mt-5 border-t border-border/70 pt-4">
+        <div className="mt-4 border-t border-border/70 pt-4">
           <button onClick={() => setShowExplain(!showExplain)} className="annotation hover:text-teal">
             {showExplain ? "Hide" : "Show"} the strategy behind it
           </button>

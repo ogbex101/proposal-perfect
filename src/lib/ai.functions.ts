@@ -410,10 +410,11 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 - Use the assigned STRATEGY: ${strategyLabel}
 - LENGTH ENFORCEMENT (this is a hard rule):
   * brief: MAXIMUM 1500 characters total. This is for Freelancer.com where character limits are strict. Structure (in this order): Hook paragraph (3-4 sentences, each a distinct insight about THEIR specific problem — no filler, no transitions), one razor-sharp question that pivots from problem to solution, one confident CTA that gives a specific next step (e.g. timeline, a quick call, a scope doc — never "let me know"). Zero portfolio links. Zero milestones. Zero execution plan. These 1500 characters must hit harder than a 4000-character generic proposal.
-  * robust: 2000–3000 characters. Hook → portfolio (2-3 links) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
+  * robust: 2000–3000 characters. Hook paragraph → portfolio paragraph (PARAGRAPH 2 — immediately after hook) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
   * explanatory: 3000–5000 characters. All sections fully developed. Detailed execution plan. Full milestones if provided.
   You are writing a "${length.name}" proposal so the rules for "${length.id}" apply.
-- Structure: Hook paragraph. ${data.portfolioItems.length > 0 ? "Portfolio paragraph — include EVERY portfolio link from the PORTFOLIO ITEMS section above, each with a one-line relevance note. This is required even for brief proposals. " : ""}Deliverables (2-4 sentences about outcomes, not steps). One non-obvious advice/warning sentence. ${data.includePlan ? "2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a simple list. " : ""}One open-ended question. Specific call to action.
+- PARAGRAPH ORDER (mandatory): 1) Hook paragraph — your most compelling opening insight. ${data.portfolioItems.length > 0 ? "2) Portfolio paragraph — IMMEDIATELY after the hook, before anything else. Include EVERY portfolio link from the PORTFOLIO ITEMS section above, each with a one-line sentence explaining how it's relevant to THIS specific job. Do not bury portfolio links later in the proposal. 3) " : "2) "}Deliverables paragraph (2-4 sentences about outcomes, not steps). ${data.portfolioItems.length > 0 ? "4" : "3"}) One non-obvious advice/warning sentence. ${data.includePlan ? (data.portfolioItems.length > 0 ? "5" : "4") + ") 2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a natural paragraph. " : ""}Final paragraph: One open-ended question followed by a specific call to action.
+- FORMATTING RULES: Write in clean flowing prose. Separate paragraphs with ONE blank line. No dashes, asterisks, or any markdown. No horizontal rules. No numbered lists. No bullet symbols of any kind.
 
 Return a JSON object with this exact shape:
 {
@@ -853,6 +854,43 @@ Return JSON:
   "quickFacts": ["<fact 1>", "<fact 2>", "<fact 3>", "<fact 4>", "<fact 5>"]
 }`,
         contextBlock,
+      );
+      return result;
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
+// ---------- Portfolio Injector ----------
+export const injectPortfolioLinks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { proposal: string; portfolioItems: Array<{ title: string; url: string; description: string }> }) =>
+    z.object({
+      proposal: z.string().min(10).max(20000),
+      portfolioItems: z.array(z.object({ title: z.string(), url: z.string(), description: z.string() })).max(5),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      if (data.portfolioItems.length === 0) {
+        // Remove portfolio paragraph — return proposal with it stripped
+        const lines = data.proposal.split("\n");
+        const filtered = lines.filter((line) => {
+          const l = line.toLowerCase();
+          return !(l.includes("http") && (l.includes("portfolio") || l.includes("work i've done") || l.includes("relevant work")));
+        });
+        return { content: filtered.join("\n").replace(/\n{3,}/g, "\n\n").trim() };
+      }
+      const portfolioBlock = data.portfolioItems.map((p) => `- ${p.title}: ${p.url} — ${p.description}`).join("\n");
+      const result = await structured(
+        z.object({ content: z.string() }),
+        `You are editing a freelance proposal. Your ONLY task: update the portfolio paragraph (paragraph 2, right after the hook) to include EXACTLY these portfolio links, each with a one-line relevance note. Keep every other sentence and paragraph 100% identical — word for word. Do not add, remove, or change anything else. If there's no portfolio paragraph yet, insert one as paragraph 2.
+
+Portfolio links to include:
+${portfolioBlock}
+
+Return JSON: { "content": "<the full updated proposal text>" }`,
+        `CURRENT PROPOSAL:\n${data.proposal}`,
       );
       return result;
     } catch (err) {
