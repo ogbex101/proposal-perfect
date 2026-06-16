@@ -115,6 +115,6 @@ export function useActiveProfile() {
     subs,
     setActiveSubId,
     isLoading: headQuery.isLoading || subQuery.isLoading,
-    avatarSignedUrl: headQuery.data?.avatarSignedUrl ?? null,
+    avatarSignedUrl: activeSub?.avatar_signed_url ?? headQuery.data?.avatarSignedUrl ?? null,
   };
 }

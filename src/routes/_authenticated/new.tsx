@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ScanLine,
@@ -256,6 +256,20 @@ function NewProposal() {
 
   const canAnalyze = effectiveJob.length >= 20;
   const canGenerate = effectiveJob.length >= 10;
+
+  // Auto-analyze when job text is long enough and no analysis yet
+  const autoAnalyzeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!canAnalyze || analysis || analyzeMutation.isPending) return;
+    if (autoAnalyzeRef.current) clearTimeout(autoAnalyzeRef.current);
+    autoAnalyzeRef.current = setTimeout(() => {
+      analyzeMutation.mutate();
+    }, 1800);
+    return () => {
+      if (autoAnalyzeRef.current) clearTimeout(autoAnalyzeRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveJob, analysis]);
 
   function reset() {
     setAnalysis(null);

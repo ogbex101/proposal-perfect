@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, Loader2, Sparkles, FolderOpen, Eye, Check, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import {
   listGeneratedPortfolios,
   saveGeneratedPortfolio,
 } from "@/lib/portfolio-generate.functions";
+import { listPortfolio } from "@/lib/portfolio.functions";
 import type { PortfolioData } from "@/lib/portfolio-types";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +45,8 @@ function portfolioUrl(slug: string): string {
 export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onLinkChange }: PortfolioPickerProps) {
   const [mode, setMode] = useState<Mode>("link");
   const [linkValue, setLinkValue] = useState(currentLink ?? "");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const linkInputRef = useRef<HTMLInputElement>(null);
   const [generated, setGenerated] = useState<{
     data: PortfolioData;
     displayData: PortfolioData;
@@ -59,6 +62,15 @@ export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onL
     queryFn: () => listGeneratedPortfolios(),
   });
   const saved = savedQuery.data ?? [];
+
+  const portfolioItemsQuery = useQuery({ queryKey: ["portfolio"], queryFn: () => listPortfolio() });
+  const portfolioItems = portfolioItemsQuery.data ?? [];
+  const filteredSuggestions = portfolioItems.filter(
+    (p) =>
+      !linkValue ||
+      p.title.toLowerCase().includes(linkValue.toLowerCase()) ||
+      p.url.toLowerCase().includes(linkValue.toLowerCase()),
+  );
 
   const generateMutation = useMutation({
     mutationFn: () => generatePortfolio({ data: { jobDescription, subProfileId: subProfileId ?? undefined } }),
@@ -143,16 +155,42 @@ export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onL
         })}
       </div>
 
-      {/* Option 1 — paste link */}
+      {/* Option 1 — paste link with portfolio autocomplete */}
       {mode === "link" && (
-        <Input
-          value={linkValue}
-          onChange={(e) => {
-            setLinkValue(e.target.value);
-            onLinkChange(e.target.value.trim() || null);
-          }}
-          placeholder="https://your-portfolio.com"
-        />
+        <div className="relative">
+          <Input
+            ref={linkInputRef}
+            value={linkValue}
+            onChange={(e) => {
+              setLinkValue(e.target.value);
+              onLinkChange(e.target.value.trim() || null);
+              setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            placeholder="Paste URL or type to search your portfolios…"
+          />
+          {showSuggestions && filteredSuggestions.length > 0 && (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto rounded-md border border-border bg-sidebar shadow-lg">
+              {filteredSuggestions.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setLinkValue(p.url);
+                    onLinkChange(p.url);
+                    setShowSuggestions(false);
+                  }}
+                  className="flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-sidebar-accent"
+                >
+                  <span className="font-medium text-white">{p.title}</span>
+                  <span className="truncate text-xs text-muted-foreground">{p.url}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Option 2 — saved portfolios */}

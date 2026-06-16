@@ -362,7 +362,7 @@ export const generateProposal = createServerFn({ method: "POST" })
       const length = LENGTHS.find((l) => l.id === data.length) ?? LENGTHS[1];
 
       const portfolioBlock = data.portfolioItems.length
-        ? `Portfolio to weave in:\n${data.portfolioItems.map((p) => `- ${p.title} (${p.url}): ${p.description}`).join("\n")}`
+        ? `PORTFOLIO ITEMS (MANDATORY — you MUST include ALL of these links in the proposal body, mentioning each by name with a one-line reason why it's relevant to this job):\n${data.portfolioItems.map((p) => `- ${p.title}: ${p.url} — ${p.description}`).join("\n")}`
         : "No portfolio items provided.";
       const milestoneBlock = data.milestones?.length
         ? `Milestones:\n${data.milestones.map((m) => `- ${m.title}${m.amount ? ` (${m.amount})` : ""}: ${m.description}`).join("\n")}`
@@ -413,7 +413,7 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
   * robust: 2000–3000 characters. Hook → portfolio (2-3 links) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
   * explanatory: 3000–5000 characters. All sections fully developed. Detailed execution plan. Full milestones if provided.
   You are writing a "${length.name}" proposal so the rules for "${length.id}" apply.
-- Structure: Hook paragraph. ${data.portfolioItems.length > 0 && data.length !== "brief" ? "Portfolio paragraph with 2-3 links and one-line relevance for each. " : ""}Deliverables (2-4 sentences about outcomes, not steps). One non-obvious advice/warning sentence. ${data.includePlan ? "2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a simple list. " : ""}One open-ended question. Specific call to action.
+- Structure: Hook paragraph. ${data.portfolioItems.length > 0 ? "Portfolio paragraph — include EVERY portfolio link from the PORTFOLIO ITEMS section above, each with a one-line relevance note. This is required even for brief proposals. " : ""}Deliverables (2-4 sentences about outcomes, not steps). One non-obvious advice/warning sentence. ${data.includePlan ? "2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a simple list. " : ""}One open-ended question. Specific call to action.
 
 Return a JSON object with this exact shape:
 {
