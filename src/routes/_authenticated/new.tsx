@@ -357,6 +357,48 @@ function NewProposal() {
     setChosenProfile(null);
     setStrategyDoc(null);
     setShowStrategy(false);
+    setAvatar(null);
+    setToneAssertiveness(3);
+    setToneFormalness(3);
+    clearDraft({}).catch(() => {});
+  }
+
+  // ── Auto-save draft (debounced) ──────────────────────────────────────
+  const draftRestoredRef = useRef(false);
+  useEffect(() => {
+    if (draftRestoredRef.current) return;
+    getDraft({}).then((d) => {
+      draftRestoredRef.current = true;
+      if (!d?.payload) return;
+      const p = d.payload as Record<string, unknown>;
+      if (typeof p.jobText === "string") setJobText(p.jobText);
+      if (typeof p.content === "string") setContent(p.content);
+      if (typeof p.budget === "string") setBudget(p.budget);
+      if (typeof p.toneAssertiveness === "number") setToneAssertiveness(p.toneAssertiveness);
+      if (typeof p.toneFormalness === "number") setToneFormalness(p.toneFormalness);
+      if (p.avatar && typeof p.avatar === "object") setAvatar(p.avatar as { path: string; url: string });
+      if (p.content || p.jobText) toast.info("Draft restored");
+    }).catch(() => { draftRestoredRef.current = true; });
+  }, []);
+
+  useEffect(() => {
+    if (!draftRestoredRef.current) return;
+    const hasContent = jobText.length > 20 || content.length > 0;
+    if (!hasContent) return;
+    const t = setTimeout(() => {
+      saveDraft({
+        data: { payload: { jobText, content, budget, toneAssertiveness, toneFormalness, avatar } },
+      }).catch(() => {});
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [jobText, content, budget, toneAssertiveness, toneFormalness, avatar]);
+
+  function insertSnippet(text: string) {
+    setContent((prev) => prev ? `${prev}\n\n${text}` : text);
+  }
+
+  function applyRewrite(selected: string, replacement: string) {
+    setContent((prev) => prev.includes(selected) ? prev.replace(selected, replacement) : prev);
   }
 
   function requestSave() {
