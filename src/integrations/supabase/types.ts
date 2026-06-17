@@ -38,6 +38,80 @@ export type Database = {
         }
         Relationships: []
       }
+      conversion_thread_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          role: string
+          thread_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          role: string
+          thread_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          role?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversion_thread_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "conversion_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversion_threads: {
+        Row: {
+          context_dump: string | null
+          created_at: string | null
+          extracted: Json | null
+          id: string
+          job_description: string
+          reminder_at: string | null
+          sent_proposal: string
+          stage: number
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          context_dump?: string | null
+          created_at?: string | null
+          extracted?: Json | null
+          id?: string
+          job_description?: string
+          reminder_at?: string | null
+          sent_proposal?: string
+          stage?: number
+          title?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          context_dump?: string | null
+          created_at?: string | null
+          extracted?: Json | null
+          id?: string
+          job_description?: string
+          reminder_at?: string | null
+          sent_proposal?: string
+          stage?: number
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       custom_hooks: {
         Row: {
           content: string
@@ -206,6 +280,7 @@ export type Database = {
           credentials: Json
           default_length: string
           default_plan: boolean
+          drive_link: string | null
           email: string | null
           id: string
           my_story: string | null
@@ -224,6 +299,7 @@ export type Database = {
           credentials?: Json
           default_length?: string
           default_plan?: boolean
+          drive_link?: string | null
           email?: string | null
           id: string
           my_story?: string | null
@@ -242,6 +318,7 @@ export type Database = {
           credentials?: Json
           default_length?: string
           default_plan?: boolean
+          drive_link?: string | null
           email?: string | null
           id?: string
           my_story?: string | null
@@ -365,6 +442,30 @@ export type Database = {
         }
         Relationships: []
       }
+      strategies: {
+        Row: {
+          created_at: string | null
+          doc: Json
+          id: string
+          slug: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          doc: Json
+          id?: string
+          slug: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          doc?: Json
+          id?: string
+          slug?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       sub_profiles: {
         Row: {
           avatar_url: string | null
@@ -372,6 +473,7 @@ export type Database = {
           brands_worked: string[] | null
           created_at: string | null
           credentials: Json | null
+          drive_link: string | null
           email: string | null
           id: string
           label: string
@@ -390,6 +492,7 @@ export type Database = {
           brands_worked?: string[] | null
           created_at?: string | null
           credentials?: Json | null
+          drive_link?: string | null
           email?: string | null
           id?: string
           label?: string
@@ -408,6 +511,7 @@ export type Database = {
           brands_worked?: string[] | null
           created_at?: string | null
           credentials?: Json | null
+          drive_link?: string | null
           email?: string | null
           id?: string
           label?: string
@@ -448,7 +552,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      run_admin_sql: { Args: { sql: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "user"
