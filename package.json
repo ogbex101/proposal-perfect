@@ -12,6 +12,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.85",
     "@ai-sdk/google": "^3.0.82",
     "@ai-sdk/groq": "^3.0.41",
     "@ai-sdk/mistral": "^3.0.39",

@@ -3,11 +3,12 @@
 // At least ONE key must be present, but the system works with any subset.
 //
 // Provider priority (fastest/cheapest first):
-//   1. Google Gemini Flash   — GOOGLE_GENERATIVE_AI_API_KEY  (free 1M tokens/day at aistudio.google.com)
-//   2. Groq Llama            — GROQ_API_KEY                  (free at console.groq.com)
-//   3. Mistral               — MISTRAL_API_KEY               (free tier at console.mistral.ai)
-//   4. OpenRouter            — OPENROUTER_API_KEY            (free models at openrouter.ai)
-//   5. OpenAI                — OPENAI_API_KEY                (pay-per-use, fallback of last resort)
+//   1. Anthropic Claude      — ANTHROPIC_API_KEY             (get at console.anthropic.com)
+//   2. Google Gemini Flash   — GOOGLE_GENERATIVE_AI_API_KEY  (free 1M tokens/day at aistudio.google.com)
+//   3. Groq Llama            — GROQ_API_KEY                  (free at console.groq.com)
+//   4. Mistral               — MISTRAL_API_KEY               (free tier at console.mistral.ai)
+//   5. OpenRouter            — OPENROUTER_API_KEY            (free models at openrouter.ai)
+//   6. OpenAI                — OPENAI_API_KEY                (pay-per-use, fallback of last resort)
 
 import { generateText, generateObject, type LanguageModel } from "ai";
 import { z } from "zod";
@@ -16,6 +17,16 @@ type ModelEntry = { name: string; load: () => Promise<LanguageModel> };
 
 function buildProviders(): ModelEntry[] {
   const providers: ModelEntry[] = [];
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    providers.push({
+      name: "Anthropic Claude",
+      load: async () => {
+        const { createAnthropic } = await import("@ai-sdk/anthropic");
+        return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })("claude-haiku-4-5");
+      },
+    });
+  }
 
   if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     providers.push({
