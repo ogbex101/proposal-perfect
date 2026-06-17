@@ -1237,3 +1237,34 @@ Return JSON:
       handleAiError(err);
     }
   });
+
+// ---------- Inline text rewrite (selection on the proposal page) ----------
+const RewriteActions = z.enum(["rewrite", "expand", "shorten", "formalize", "soften"]);
+
+export const rewriteText = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { text: string; action: "rewrite" | "expand" | "shorten" | "formalize" | "soften"; context?: string }) =>
+    z.object({
+      text: z.string().min(1).max(4000),
+      action: RewriteActions,
+      context: z.string().max(8000).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const guidance: Record<string, string> = {
+        rewrite: "Rewrite this passage so it's sharper, more specific, and more confident. Keep the same meaning and roughly the same length.",
+        expand: "Expand this passage with one or two more concrete details or examples. Add depth without padding. Keep the same voice.",
+        shorten: "Tighten this passage to about 60% of its current length. Keep the punchiest words; drop filler. Same meaning.",
+        formalize: "Rewrite this passage in a more professional, business-formal register without sounding stiff.",
+        soften: "Rewrite this passage in a warmer, more conversational, plain-spoken register.",
+      };
+      const text = await generateWithFallback({
+        system: `You rewrite freelance-proposal passages. Output ONLY the rewritten passage — no preamble, no quotes, no markdown. Preserve the user's intent and voice. Never invent claims the original didn't make.`,
+        prompt: `${guidance[data.action]}\n\nPassage:\n"""\n${data.text}\n"""\n\n${data.context ? `Surrounding proposal context (for tone awareness only — do not repeat):\n"""\n${data.context.slice(0, 4000)}\n"""\n` : ""}Return only the rewritten passage.`,
+      });
+      return { text: text.trim().replace(/^["'`]+|["'`]+$/g, "") };
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
