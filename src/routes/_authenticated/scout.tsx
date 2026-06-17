@@ -1,19 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Wand2, Loader2, Copy, Check, Mail, Code2, Zap, Bot, Globe,
-  ChevronDown, ChevronUp, Sparkles, Shield, AlertTriangle, Layers,
-  ArrowRight, FileCode, Brain, Target,
+  ChevronDown, ChevronUp, Sparkles, Shield, Layers,
+  ArrowRight, FileCode, Brain, Target, Link2, MessageSquarePlus,
+  Image, Download, Pencil, RefreshCw,
 } from "lucide-react";
 import { PageHeader, CropCard, Eyebrow } from "@/components/blueprint";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MicButton } from "@/components/MicButton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { generateScoutOutreach } from "@/lib/ai.functions";
+import { generateScoutOutreach, enhanceProposal, generateProposalImage } from "@/lib/ai.functions";
 import type { ScoutOutreach } from "@/lib/ai.functions";
 import { copyText } from "@/lib/export";
 
@@ -86,21 +88,84 @@ function Section({ open: defaultOpen = true, icon, title, badge, children }: {
   );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+type PageMode = "scout" | "enhance";
+
 function ScoutPage() {
+  const [mode, setMode] = useState<PageMode>("scout");
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Scouting"
+        title="Scout & Enhance"
+        description="Scout cold email outreach for any job, or paste an existing proposal and enhance it to convert."
+      />
+
+      {/* Mode tabs */}
+      <div className="mb-6 flex gap-1 rounded-xl border border-border/60 bg-sidebar/60 p-1 w-fit">
+        {(["scout", "enhance"] as PageMode[]).map((m) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={cn(
+              "px-5 py-1.5 rounded-lg text-sm font-medium transition-all",
+              mode === m
+                ? "bg-gold text-background shadow-sm"
+                : "text-muted-foreground hover:text-white",
+            )}
+          >
+            {m === "scout" ? "Scout Outreach" : "Enhance Proposal"}
+          </button>
+        ))}
+      </div>
+
+      {mode === "scout" ? <ScoutMode /> : <EnhanceMode />}
+    </div>
+  );
+}
+
+// ─── Scout Mode ───────────────────────────────────────────────────────────────
+
+function ScoutMode() {
   const [jobText, setJobText] = useState("");
   const [context, setContext] = useState("");
+  const [customChanges, setCustomChanges] = useState("");
+  const [mockupLink, setMockupLink] = useState("");
   const [result, setResult] = useState<ScoutOutreach | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [generatingImage, setGeneratingImage] = useState(false);
 
   const scoutMutation = useMutation({
     mutationFn: () => generateScoutOutreach({
-      data: { jobDescription: jobText, freelancerContext: context || undefined },
+      data: {
+        jobDescription: jobText,
+        freelancerContext: context || undefined,
+        customChanges: customChanges || undefined,
+        mockupLink: mockupLink || undefined,
+      },
     }),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setResult(data as ScoutOutreach);
+      setPreviewImage(null);
       toast.success("Scout outreach generated!");
       setTimeout(() => {
         document.getElementById("scout-results")?.scrollIntoView({ behavior: "smooth" });
       }, 100);
+
+      // Auto-generate preview image
+      setGeneratingImage(true);
+      try {
+        const proj = (data as ScoutOutreach).devPrompt;
+        const imgPrompt = `Professional project preview card for "${proj.projectTitle}", ${proj.jobTypeName}, ${proj.estimatedComplexity} complexity. Modern dark UI dashboard mockup, clean design, dark background, tech startup style, high quality digital art`;
+        const res = await generateProposalImage({ data: { prompt: imgPrompt } });
+        if (res?.dataUrl) setPreviewImage(res.dataUrl);
+      } catch {
+        // image generation failing is non-fatal
+      } finally {
+        setGeneratingImage(false);
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -109,27 +174,55 @@ function ScoutPage() {
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Scouting"
-        title="Scout Outreach"
-        description="Find a job on Upwork or Freelancer, paste it here — get a magnetic cold email + full dev prompt. Better than a proposal."
-      />
-
       {/* Input panel */}
       <div className="grid gap-5 lg:grid-cols-[1fr_360px] mb-8">
-        <CropCard className="p-5">
-          <div className="flex items-center justify-between mb-3">
-            <Label className="text-sm font-semibold text-white">Job Description</Label>
-            <MicButton onTranscript={(t) => setJobText(p => (p + " " + t).trim())} />
-          </div>
-          <Textarea
-            value={jobText}
-            onChange={(e) => setJobText(e.target.value)}
-            placeholder="Paste the full job post from Upwork, Freelancer, LinkedIn, or anywhere else…&#10;&#10;Include the client's description, requirements, budget, timeline — everything."
-            rows={14}
-            className="resize-none bg-background/60 text-sm font-mono leading-relaxed"
-          />
-        </CropCard>
+        <div className="space-y-4">
+          <CropCard className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <Label className="text-sm font-semibold text-white">Job Description</Label>
+              <MicButton onTranscript={(t) => setJobText(p => (p + " " + t).trim())} />
+            </div>
+            <Textarea
+              value={jobText}
+              onChange={(e) => setJobText(e.target.value)}
+              placeholder="Paste the full job post from Upwork, Freelancer, LinkedIn, or anywhere else…&#10;&#10;Include the client's description, requirements, budget, timeline — everything."
+              rows={10}
+              className="resize-none bg-background/60 text-sm font-mono leading-relaxed"
+            />
+          </CropCard>
+
+          {/* Custom changes */}
+          <CropCard className="p-5 border-gold/20 bg-gold/5">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquarePlus className="h-4 w-4 text-gold" />
+              <Label className="text-sm font-semibold text-white">Custom instructions <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+            </div>
+            <Textarea
+              value={customChanges}
+              onChange={(e) => setCustomChanges(e.target.value)}
+              placeholder="Specific things to add or change in the email…&#10;e.g. mention I've done something similar for a fintech startup, emphasise quick turnaround, ask about their existing codebase"
+              rows={3}
+              className="resize-none bg-background/60 text-sm"
+            />
+          </CropCard>
+
+          {/* Mockup link */}
+          <CropCard className="p-5 border-teal/20 bg-teal/5">
+            <div className="flex items-center gap-2 mb-3">
+              <Link2 className="h-4 w-4 text-teal" />
+              <Label className="text-sm font-semibold text-white">Mockup link <span className="text-muted-foreground font-normal text-xs">(optional — adds mockup mention to email)</span></Label>
+            </div>
+            <Input
+              value={mockupLink}
+              onChange={(e) => setMockupLink(e.target.value)}
+              placeholder="https://... (Figma, portfolio, live demo, generated portfolio link)"
+              className="bg-background/60 text-sm"
+            />
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              If set, the email will naturally mention the mockup and link it. If empty, it'll mention you can quickly produce one.
+            </p>
+          </CropCard>
+        </div>
 
         <div className="flex flex-col gap-5">
           <CropCard className="p-5 flex-1">
@@ -140,38 +233,31 @@ function ScoutPage() {
             <Textarea
               value={context}
               onChange={(e) => setContext(e.target.value)}
-              placeholder="What's your background? Tech stack you prefer? Any relevant experience for this specific job? (The more specific, the better the email)"
-              rows={7}
+              placeholder="Your background, tech stack, relevant experience for this specific job?"
+              rows={6}
               className="resize-none bg-background/60 text-sm"
             />
           </CropCard>
 
           <CropCard className="p-5 border-teal/20 bg-teal/5">
-            <div className="space-y-3">
-              <div className="flex items-start gap-2">
-                <Mail className="h-4 w-4 text-teal mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold text-white">Cold email</p>
-                  <p className="text-[10px] text-muted-foreground">Magnetic subject + spam-safe body</p>
+            <div className="space-y-3 mb-4">
+              {[
+                { icon: <Mail className="h-4 w-4 text-teal" />, title: "Cold email", sub: "Magnetic subject + spam-safe body" },
+                { icon: <Brain className="h-4 w-4 text-gold" />, title: "Job analysis", sub: "Hook + strategy + spam tips" },
+                { icon: <FileCode className="h-4 w-4 text-purple-400" />, title: "Full dev prompt", sub: "Paste-ready for Cursor / Lovable / Bolt / v0" },
+                { icon: <Image className="h-4 w-4 text-blue-400" />, title: "Preview image", sub: "Send with the email to impress" },
+              ].map((item) => (
+                <div key={item.title} className="flex items-start gap-2">
+                  <div className="mt-0.5 shrink-0">{item.icon}</div>
+                  <div>
+                    <p className="text-xs font-semibold text-white">{item.title}</p>
+                    <p className="text-[10px] text-muted-foreground">{item.sub}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Brain className="h-4 w-4 text-gold mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold text-white">Job analysis</p>
-                  <p className="text-[10px] text-muted-foreground">Hook + strategy + spam tips</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <FileCode className="h-4 w-4 text-purple-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold text-white">Full dev prompt</p>
-                  <p className="text-[10px] text-muted-foreground">Paste-ready for Cursor / Lovable / Bolt / v0</p>
-                </div>
-              </div>
+              ))}
             </div>
             <Button
-              className="mt-4 w-full bg-gradient-to-r from-teal to-teal/70 text-white font-semibold shadow-lg shadow-teal/20 hover:shadow-teal/40"
+              className="w-full bg-gradient-to-r from-teal to-teal/70 text-white font-semibold shadow-lg shadow-teal/20 hover:shadow-teal/40"
               disabled={jobText.trim().length < 30 || scoutMutation.isPending}
               onClick={() => scoutMutation.mutate()}
               size="lg"
@@ -189,7 +275,7 @@ function ScoutPage() {
         <div id="scout-results" className="space-y-4">
           {/* Job type badge */}
           {jobTypeMeta && (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold", jobTypeMeta.color)}>
                 {jobTypeMeta.icon}
                 {result.devPrompt.jobTypeName}
@@ -200,11 +286,63 @@ function ScoutPage() {
             </div>
           )}
 
+          {/* ── PREVIEW IMAGE ── */}
+          {(generatingImage || previewImage) && (
+            <Section icon={<Image className="h-4 w-4 text-blue-400" />} title="Preview Image" badge={
+              <span className="rounded-full border border-blue-400/30 bg-blue-400/10 px-2.5 py-0.5 text-[10px] font-mono text-blue-400">send with email</span>
+            }>
+              {generatingImage ? (
+                <div className="flex items-center gap-3 py-6 justify-center text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">Generating preview image…</span>
+                </div>
+              ) : previewImage ? (
+                <div className="space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    Attach this image to your email or use it as a visual teaser alongside the mockup link. It shows you've already thought through the project.
+                  </p>
+                  <div className="overflow-hidden rounded-xl border border-white/10">
+                    <img src={previewImage} alt="Project preview" className="w-full object-cover" />
+                  </div>
+                  <div className="flex gap-2">
+                    <a
+                      href={previewImage}
+                      download={`preview-${result.devPrompt.projectTitle.replace(/\s+/g, "-")}.png`}
+                      className="flex items-center gap-1.5 rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 py-1.5 text-xs text-blue-400 hover:bg-blue-400/20 transition-colors"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Download image
+                    </a>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-border/60 text-xs"
+                      onClick={async () => {
+                        setGeneratingImage(true);
+                        setPreviewImage(null);
+                        try {
+                          const proj = result.devPrompt;
+                          const imgPrompt = `Professional project preview card for "${proj.projectTitle}", ${proj.jobTypeName}, modern dark UI dashboard mockup, clean design, dark background, tech startup style, high quality digital art, different angle`;
+                          const res = await generateProposalImage({ data: { prompt: imgPrompt } });
+                          if (res?.dataUrl) setPreviewImage(res.dataUrl);
+                        } catch {
+                          toast.error("Could not regenerate image");
+                        } finally {
+                          setGeneratingImage(false);
+                        }
+                      }}
+                    >
+                      <RefreshCw className="mr-1.5 h-3 w-3" /> Regenerate
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </Section>
+          )}
+
           {/* ── EMAIL SECTION ── */}
           <Section icon={<Mail className="h-4 w-4 text-teal" />} title="Cold Email" badge={
             <span className="rounded-full border border-teal/30 bg-teal/10 px-2.5 py-0.5 text-[10px] font-mono text-teal">spam-safe</span>
           }>
-            {/* Subject line */}
             <div className="mb-5">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Subject Line</p>
@@ -216,7 +354,6 @@ function ScoutPage() {
               </div>
             </div>
 
-            {/* Email body */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Email Body</p>
@@ -225,7 +362,7 @@ function ScoutPage() {
               <div className="rounded-xl border border-white/10 bg-background/60 p-5">
                 <pre className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90 font-sans">{result.emailBody}</pre>
               </div>
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button
                   className="bg-teal text-white hover:bg-teal/80"
                   size="sm"
@@ -275,13 +412,11 @@ function ScoutPage() {
             </span>
           }>
             <div className="space-y-5">
-              {/* Overview */}
               <div>
                 <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">{result.devPrompt.projectTitle}</p>
                 <p className="text-sm leading-relaxed text-white/90">{result.devPrompt.overview}</p>
               </div>
 
-              {/* Tech stack + integrations */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Tech Stack</p>
@@ -301,7 +436,6 @@ function ScoutPage() {
                 </div>
               </div>
 
-              {/* Core features */}
               <div>
                 <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Core Features</p>
                 <div className="space-y-2">
@@ -319,7 +453,6 @@ function ScoutPage() {
                 </div>
               </div>
 
-              {/* Enhancements */}
               <div>
                 <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Enhancements & Ideas</p>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -333,7 +466,6 @@ function ScoutPage() {
                 </div>
               </div>
 
-              {/* Architecture */}
               <div className="rounded-xl border border-white/10 bg-background/40 p-4">
                 <div className="flex items-center gap-1.5 mb-2">
                   <Layers className="h-3.5 w-3.5 text-blue-400" />
@@ -342,7 +474,6 @@ function ScoutPage() {
                 <p className="text-sm leading-relaxed text-white/80">{result.devPrompt.architecture}</p>
               </div>
 
-              {/* Scalability */}
               <div className="rounded-xl border border-white/10 bg-background/40 p-4">
                 <div className="flex items-center gap-1.5 mb-2">
                   <ArrowRight className="h-3.5 w-3.5 text-green-400" />
@@ -351,7 +482,6 @@ function ScoutPage() {
                 <p className="text-sm leading-relaxed text-white/80">{result.devPrompt.scalabilityNotes}</p>
               </div>
 
-              {/* The actual paste-ready prompt */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -379,6 +509,241 @@ function ScoutPage() {
               </div>
             </div>
           </Section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Enhance Mode ─────────────────────────────────────────────────────────────
+
+function EnhanceMode() {
+  const [existingProposal, setExistingProposal] = useState("");
+  const [jobDescription, setJobDescription] = useState("");
+  const [customChanges, setCustomChanges] = useState("");
+  const [mockupLink, setMockupLink] = useState("");
+  const [enhanced, setEnhanced] = useState("");
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [generatingImage, setGeneratingImage] = useState(false);
+
+  const enhanceMutation = useMutation({
+    mutationFn: () => enhanceProposal({
+      data: {
+        proposal: existingProposal,
+        jobDescription,
+        customChanges: customChanges || undefined,
+        mockupLink: mockupLink || undefined,
+      },
+    }),
+    onSuccess: async (res) => {
+      if (res?.content) {
+        setEnhanced(res.content);
+        toast.success("Proposal enhanced!");
+        setTimeout(() => {
+          document.getElementById("enhance-result")?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+
+        // Auto-generate preview image
+        setGeneratingImage(true);
+        setPreviewImage(null);
+        try {
+          const excerpt = jobDescription.slice(0, 80);
+          const imgPrompt = `Professional freelance proposal preview card, ${excerpt}, modern dark UI, clean design, dark background, tech professional, high quality digital art`;
+          const imgRes = await generateProposalImage({ data: { prompt: imgPrompt } });
+          if (imgRes?.dataUrl) setPreviewImage(imgRes.dataUrl);
+        } catch { /* non-fatal */ }
+        finally { setGeneratingImage(false); }
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const [editMode, setEditMode] = useState(false);
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+      {/* Left — inputs */}
+      <div className="space-y-4">
+        <CropCard className="p-5">
+          <div className="flex items-center justify-between mb-3">
+            <Label className="text-sm font-semibold text-white">Existing Proposal to Enhance</Label>
+            <MicButton onTranscript={(t) => setExistingProposal(p => (p + " " + t).trim())} />
+          </div>
+          <Textarea
+            value={existingProposal}
+            onChange={(e) => setExistingProposal(e.target.value)}
+            placeholder="Paste your existing proposal here — from ChatGPT, Gemini, another tool, or something you wrote yourself.&#10;&#10;The AI will strip the generic parts, sharpen the hook, add mockup language, and make it sound like you."
+            rows={12}
+            className="resize-none bg-background/60 text-sm leading-relaxed"
+          />
+        </CropCard>
+
+        <CropCard className="p-5">
+          <div className="flex items-center justify-between mb-3">
+            <Label className="text-sm font-semibold text-white">Job Description <span className="text-muted-foreground font-normal text-xs">(for context)</span></Label>
+            <MicButton onTranscript={(t) => setJobDescription(p => (p + " " + t).trim())} />
+          </div>
+          <Textarea
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+            placeholder="Paste the job description so the AI can tailor the enhanced proposal to it…"
+            rows={5}
+            className="resize-none bg-background/60 text-sm"
+          />
+        </CropCard>
+
+        {/* Custom changes */}
+        <CropCard className="p-5 border-gold/20 bg-gold/5">
+          <div className="flex items-center gap-2 mb-3">
+            <MessageSquarePlus className="h-4 w-4 text-gold" />
+            <Label className="text-sm font-semibold text-white">Custom changes to add <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+          </div>
+          <Textarea
+            value={customChanges}
+            onChange={(e) => setCustomChanges(e.target.value)}
+            placeholder="What do you want changed or added?&#10;e.g. mention I built a similar app for a healthcare startup, keep the opening line but change the second paragraph, add a stronger CTA"
+            rows={3}
+            className="resize-none bg-background/60 text-sm"
+          />
+        </CropCard>
+
+        {/* Mockup link */}
+        <CropCard className="p-5 border-teal/20 bg-teal/5">
+          <div className="flex items-center gap-2 mb-3">
+            <Link2 className="h-4 w-4 text-teal" />
+            <Label className="text-sm font-semibold text-white">Mockup link <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+          </div>
+          <Input
+            value={mockupLink}
+            onChange={(e) => setMockupLink(e.target.value)}
+            placeholder="https://... — will be woven naturally into the proposal"
+            className="bg-background/60 text-sm"
+          />
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            The AI will insert language like: <em className="text-white/50">"I've put together a quick mockup to show you the direction — [link] — this is just a starting concept and I can tune every detail to your exact specifications."</em>
+          </p>
+        </CropCard>
+      </div>
+
+      {/* Right — action + results */}
+      <div className="flex flex-col gap-5">
+        <CropCard className="p-5 border-teal/20 bg-teal/5">
+          <div className="space-y-3 mb-4">
+            {[
+              { icon: <Wand2 className="h-4 w-4 text-teal" />, title: "Strip AI slop", sub: "Remove generic filler phrases" },
+              { icon: <Target className="h-4 w-4 text-gold" />, title: "Sharpen the hook", sub: "Job-specific opening that proves you read it" },
+              { icon: <Link2 className="h-4 w-4 text-blue-400" />, title: "Add mockup language", sub: "Always mention mockup — naturally" },
+              { icon: <Pencil className="h-4 w-4 text-purple-400" />, title: "Apply custom changes", sub: "Your exact instructions, incorporated" },
+              { icon: <Image className="h-4 w-4 text-green-400" />, title: "Generate preview image", sub: "Attach to email for visual impact" },
+            ].map((item) => (
+              <div key={item.title} className="flex items-start gap-2">
+                <div className="mt-0.5 shrink-0">{item.icon}</div>
+                <div>
+                  <p className="text-xs font-semibold text-white">{item.title}</p>
+                  <p className="text-[10px] text-muted-foreground">{item.sub}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Button
+            className="w-full bg-gradient-to-r from-teal to-teal/70 text-white font-semibold shadow-lg shadow-teal/20 hover:shadow-teal/40"
+            disabled={existingProposal.trim().length < 30 || enhanceMutation.isPending}
+            onClick={() => enhanceMutation.mutate()}
+            size="lg"
+          >
+            {enhanceMutation.isPending
+              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enhancing proposal…</>
+              : <><Sparkles className="mr-2 h-4 w-4" /> Enhance Proposal</>}
+          </Button>
+        </CropCard>
+
+        {/* Preview image */}
+        {(generatingImage || previewImage) && (
+          <CropCard className="p-5 border-blue-400/20 bg-blue-400/5">
+            <div className="flex items-center gap-2 mb-3">
+              <Image className="h-4 w-4 text-blue-400" />
+              <Eyebrow className="text-blue-400">Preview Image</Eyebrow>
+              {generatingImage && <Loader2 className="h-3 w-3 animate-spin text-blue-400" />}
+            </div>
+            {previewImage ? (
+              <>
+                <p className="text-[11px] text-muted-foreground mb-3">Send this with your proposal email to visually stand out.</p>
+                <div className="overflow-hidden rounded-xl border border-white/10 mb-3">
+                  <img src={previewImage} alt="Proposal preview" className="w-full object-cover" />
+                </div>
+                <a
+                  href={previewImage}
+                  download="proposal-preview.png"
+                  className="flex items-center gap-1.5 rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 py-1.5 text-xs text-blue-400 hover:bg-blue-400/20 transition-colors w-fit"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download image
+                </a>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">Generating preview image…</p>
+            )}
+          </CropCard>
+        )}
+      </div>
+
+      {/* Enhanced proposal result — full width */}
+      {enhanced && (
+        <div id="enhance-result" className="lg:col-span-2">
+          <CropCard className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Eyebrow>Enhanced Proposal</Eyebrow>
+                <span className="rounded-full border border-teal/30 bg-teal/10 px-2 py-0.5 text-[10px] font-mono text-teal">
+                  {enhanced.split(/\s+/).length} words
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditMode(v => !v)}
+                  className="flex items-center gap-1.5 rounded-lg border border-line/40 bg-background/60 px-3 py-1.5 text-xs text-muted-foreground hover:text-white hover:border-teal/40 transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  {editMode ? "View" : "Edit"}
+                </button>
+                <CopyButton text={enhanced} label="Copy proposal" />
+              </div>
+            </div>
+
+            {editMode ? (
+              <Textarea
+                value={enhanced}
+                onChange={(e) => setEnhanced(e.target.value)}
+                rows={16}
+                className="resize-y bg-background/60 text-sm leading-relaxed"
+              />
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-background/60 p-5">
+                <pre className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90 font-sans">{enhanced}</pre>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                className="bg-teal text-white hover:bg-teal/80"
+                onClick={async () => {
+                  await copyText(enhanced);
+                  toast.success("Enhanced proposal copied!");
+                }}
+              >
+                <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy full proposal
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-border/60"
+                onClick={() => enhanceMutation.mutate()}
+                disabled={enhanceMutation.isPending}
+              >
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Re-enhance
+              </Button>
+            </div>
+          </CropCard>
         </div>
       )}
     </div>

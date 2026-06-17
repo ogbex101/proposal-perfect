@@ -1117,6 +1117,49 @@ export const generateProposalImage = createServerFn({ method: "POST" })
     }
   });
 
+// ─── Enhance Existing Proposal ────────────────────────────────────────────────
+
+export const enhanceProposal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { proposal: string; jobDescription: string; customChanges?: string; mockupLink?: string }) =>
+    z.object({
+      proposal: z.string().min(20).max(20000),
+      jobDescription: z.string().min(10).max(10000),
+      customChanges: z.string().max(2000).optional(),
+      mockupLink: z.string().max(500).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const mockupBlock = data.mockupLink
+        ? `MOCKUP LINK TO INCLUDE: ${data.mockupLink}
+Weave this in naturally after establishing credibility — something like: "I've already put together a quick mockup to show you the direction I'm thinking — [link]. This is just a starting concept and I can tune every single detail to your exact specifications, so nothing is set in stone until you're happy with the direction."`
+        : `MOCKUP MENTION (no link yet): Naturally mention that you can quickly produce a mockup to show the client the direction before kicking off. Something like: "I can put together a quick mockup so you can see exactly where I'm heading before we even start — gives you a chance to steer the direction upfront." Make it sound like normal practice, not a sales pitch.`;
+
+      const result = await structured(
+        z.object({ content: z.string() }),
+        `You are an expert freelance proposal editor. Your task: take an existing proposal (possibly AI-generated or rough) and transform it into a high-converting, human-sounding pitch that gets replies.
+
+RULES:
+1. Remove ALL generic AI phrases: "I am passionate about", "Dear Hiring Manager", "I would love the opportunity", "leveraging my expertise", "proven track record", "I am confident that", "look no further", "best regards", "hope this finds you well"
+2. Open with a sharp, specific hook that proves you read the brief — reference something concrete from the job description
+3. Sound like a confident, experienced peer — not a vendor pitching, not an AI writing filler
+4. Keep proposals concise — cut anything that doesn't earn its place
+5. ${mockupBlock}
+6. End with ONE specific question or clear next step — never "Let me know if you're interested"
+7. Keep the freelancer's authentic voice and any specific experience they mention
+
+${data.customChanges ? `CUSTOM CHANGES TO INCORPORATE (do these exactly):\n${data.customChanges}` : ""}
+
+Return JSON: { "content": "<the fully enhanced proposal text>" }`,
+        `JOB DESCRIPTION:\n${data.jobDescription}\n\nEXISTING PROPOSAL TO ENHANCE:\n${data.proposal}`,
+      );
+      return result;
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
 // ─── Scout Outreach Generator ─────────────────────────────────────────────────
 
 const DevPromptSchema = z.object({
@@ -1155,14 +1198,24 @@ export type ScoutOutreach = z.infer<typeof ScoutOutreachSchema>;
 
 export const generateScoutOutreach = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { jobDescription: string; freelancerContext?: string }) =>
+  .inputValidator((d: { jobDescription: string; freelancerContext?: string; customChanges?: string; mockupLink?: string }) =>
     z.object({
       jobDescription: z.string().min(20).max(15000),
       freelancerContext: z.string().max(3000).optional(),
+      customChanges: z.string().max(2000).optional(),
+      mockupLink: z.string().max(500).optional(),
     }).parse(d),
   )
   .handler(async ({ data }) => {
     try {
+      const mockupInstruction = data.mockupLink
+        ? `MOCKUP LINK: The freelancer has a live mockup ready at ${data.mockupLink}. Naturally weave this into the email — something like: "I already put together a quick concept mockup to show you the direction I'm thinking — [link]. It's just a starting point and I can tune every detail to match your exact vision." Mention it feels like real work done upfront, which lowers the client's risk.`
+        : `MOCKUP MENTION: Mention that you can quickly put together a mockup to show the direction before starting — phrase it like: "I can put together a quick concept mockup so you can see where I'm headed before we even kick off — no cost, just so you can give feedback upfront."`;
+
+      const customInstruction = data.customChanges
+        ? `\n\nCUSTOM REQUIREMENTS FROM THE FREELANCER (incorporate naturally):\n${data.customChanges}`
+        : "";
+
       return await structured(
         ScoutOutreachSchema,
         `You are an elite cold-email strategist and senior software architect working for a freelance developer who scouts jobs from Upwork, Freelancer, and similar platforms and reaches out directly via email.
@@ -1189,6 +1242,8 @@ EMAIL BODY RULES:
 - No portfolio links — instead, offer a specific, concrete piece of value in the email (a quick insight about their problem, a specific approach you'd take)
 - End with ONE simple, low-friction CTA: a specific question or "Worth a quick call?" — never "Let me know if interested"
 - 150-250 words maximum for the body
+
+${mockupInstruction}${customInstruction}
 
 PART 2 — DEVELOPMENT PROMPT
 Generate a comprehensive, production-quality development prompt the freelancer can paste directly into Cursor, Lovable, Bolt, v0, or any AI coding tool. This prompt becomes their "sample work" — it must be so detailed and thoughtful that the client would be impressed by it alone.
