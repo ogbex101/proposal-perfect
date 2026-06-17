@@ -90,6 +90,13 @@ function NewProposal() {
   const [useMilestones, setUseMilestones] = useState(false);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
 
+  // Tone controls (1-5)
+  const [toneAssertiveness, setToneAssertiveness] = useState(3);
+  const [toneFormalness, setToneFormalness] = useState(3);
+
+  // Selected profile image (separate from sub-profile picker)
+  const [avatar, setAvatar] = useState<{ path: string; url: string } | null>(null);
+
   const [content, setContent] = useState("");
   const [explanation, setExplanation] = useState<{
     hook: string;
