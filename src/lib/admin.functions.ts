@@ -59,7 +59,10 @@ export const getPageViewStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireAdmin(context.supabase, context.userId);
-    const { data, error } = await (context.supabase as any)
+    // page_views is locked down to service_role after the analytics RLS lockdown,
+    // so authenticated reads return 0 rows. Use the admin client for the dashboard.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await (supabaseAdmin as any)
       .from("page_views")
       .select("user_id, fingerprint, created_at, path")
       .order("created_at", { ascending: false })

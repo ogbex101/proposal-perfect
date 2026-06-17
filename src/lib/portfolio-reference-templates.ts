@@ -21,7 +21,12 @@ export type PortfolioReferenceTemplate = {
 const developer: PortfolioReferenceTemplate = {
   family: "developer",
   label: "Software & Full-Stack Development",
-  referenceUrls: ["https://dolapoportfolio.lovable.app/", "https://multi-persona-portfolio.lovable.app/niche/fullstack-developer", "https://bubblejoshproj.lovable.app/"],
+  referenceUrls: [
+    "https://dolapoportfolio.lovable.app/",
+    "https://multi-persona-portfolio.lovable.app/niche/fullstack-developer",
+    "https://bubblejoshproj.lovable.app/",
+    "https://pixel-pushr-panel.lovable.app/#projects",
+  ],
   keywords: ["developer", "development", "software", "website", "web app", "full stack", "frontend", "backend", "react", "next.js", "node", "python", "bubble", "no-code", "supabase", "database", "api", "programming", "saas"],
   visualDirection: "dark technical editorial, bold product imagery, code-inspired details, strong project case studies",
   services: [
@@ -41,7 +46,10 @@ const developer: PortfolioReferenceTemplate = {
 const marketing: PortfolioReferenceTemplate = {
   family: "marketing",
   label: "Email & Social Marketing",
-  referenceUrls: ["https://content-saver-pro.lovable.app/", "https://happy-campaign-hub-97.lovable.app/"],
+  referenceUrls: [
+    "https://content-saver-pro.lovable.app/",
+    "https://happy-campaign-hub-97.lovable.app/",
+  ],
   keywords: ["email", "klaviyo", "mailchimp", "campaign", "crm", "newsletter", "retention", "lifecycle", "social media", "content management", "hubspot", "segmentation"],
   visualDirection: "campaign-led editorial, tall email artwork, measurable outcomes, polished ecommerce energy",
   services: [
@@ -75,8 +83,12 @@ const operations: PortfolioReferenceTemplate = {
 const video: PortfolioReferenceTemplate = {
   family: "video",
   label: "AI Video Editing",
-  referenceUrls: ["https://caleb-ai-vision.lovable.app/"],
-  keywords: ["video", "video editing", "ai video", "runway", "sora", "kling", "capcut", "davinci", "premiere", "after effects", "motion", "youtube", "reels"],
+  // Caleb's owner-specific samples live under /faith — always prefer this for video/AI-video jobs.
+  referenceUrls: [
+    "https://caleb-ai-vision.lovable.app/faith",
+    "https://caleb-ai-vision.lovable.app/",
+  ],
+  keywords: ["video", "video editing", "ai video", "video editor", "videographer", "runway", "sora", "kling", "capcut", "davinci", "premiere", "after effects", "motion", "youtube", "reels", "shorts", "tiktok edit", "vfx", "color grading", "showreel"],
   visualDirection: "cinematic black studio, cyan highlights, full-bleed frames, editing-suite imagery, high-energy showreel",
   services: [
     { title: "AI-Assisted Editing", description: "Fast, intentional edits enhanced with modern generation, cleanup, and upscaling tools." },

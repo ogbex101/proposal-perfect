@@ -170,3 +170,13 @@ export async function downloadElementAsPdf(
   doc.save(`${safeFilename(filename)}.pdf`);
 }
 
+
+export async function copyMarkdown(title: string, text: string): Promise<void> {
+  const heading = title?.trim() ? `# ${title.trim()}\n\n` : "";
+  const md = heading + text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join("\n\n");
+  await copyText(md);
+}

@@ -15,6 +15,7 @@ import {
   Trash2,
   RotateCcw,
   User,
+  ClipboardCopy,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -43,9 +45,13 @@ import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
+import { ProfileImageGallery } from "@/components/ProfileImageGallery";
+import { SnippetsPanel } from "@/components/SnippetsPanel";
+import { InlineRewriteToolbar } from "@/components/InlineRewriteToolbar";
+import { getDraft, saveDraft, clearDraft } from "@/lib/proposal-drafts.functions";
 type FreelancerProfile = { id: string; label: string };
 import { saveItem } from "@/lib/saved.functions";
-import { copyText, downloadTxt, downloadPdf } from "@/lib/export";
+import { copyText, downloadTxt, downloadPdf, copyMarkdown } from "@/lib/export";
 
 export const Route = createFileRoute("/_authenticated/new")({
   component: NewProposal,
@@ -83,6 +89,13 @@ function NewProposal() {
   const [budget, setBudget] = useState("");
   const [useMilestones, setUseMilestones] = useState(false);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
+
+  // Tone controls (1-5)
+  const [toneAssertiveness, setToneAssertiveness] = useState(3);
+  const [toneFormalness, setToneFormalness] = useState(3);
+
+  // Selected profile image (separate from sub-profile picker)
+  const [avatar, setAvatar] = useState<{ path: string; url: string } | null>(null);
 
   const [content, setContent] = useState("");
   const [explanation, setExplanation] = useState<{
@@ -181,6 +194,8 @@ function NewProposal() {
           portfolioItems: items,
           milestones: useMilestones ? milestones : undefined,
           budget: budget || undefined,
+          toneAssertiveness,
+          toneFormalness,
         },
       });
     },
@@ -342,6 +357,48 @@ function NewProposal() {
     setChosenProfile(null);
     setStrategyDoc(null);
     setShowStrategy(false);
+    setAvatar(null);
+    setToneAssertiveness(3);
+    setToneFormalness(3);
+    clearDraft({}).catch(() => {});
+  }
+
+  // ── Auto-save draft (debounced) ──────────────────────────────────────
+  const draftRestoredRef = useRef(false);
+  useEffect(() => {
+    if (draftRestoredRef.current) return;
+    getDraft({}).then((d) => {
+      draftRestoredRef.current = true;
+      if (!d?.payload) return;
+      const p = d.payload as Record<string, unknown>;
+      if (typeof p.jobText === "string") setJobText(p.jobText);
+      if (typeof p.content === "string") setContent(p.content);
+      if (typeof p.budget === "string") setBudget(p.budget);
+      if (typeof p.toneAssertiveness === "number") setToneAssertiveness(p.toneAssertiveness);
+      if (typeof p.toneFormalness === "number") setToneFormalness(p.toneFormalness);
+      if (p.avatar && typeof p.avatar === "object") setAvatar(p.avatar as { path: string; url: string });
+      if (p.content || p.jobText) toast.info("Draft restored");
+    }).catch(() => { draftRestoredRef.current = true; });
+  }, []);
+
+  useEffect(() => {
+    if (!draftRestoredRef.current) return;
+    const hasContent = jobText.length > 20 || content.length > 0;
+    if (!hasContent) return;
+    const t = setTimeout(() => {
+      saveDraft({
+        data: { payload: { jobText, content, budget, toneAssertiveness, toneFormalness, avatar } },
+      }).catch(() => {});
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [jobText, content, budget, toneAssertiveness, toneFormalness, avatar]);
+
+  function insertSnippet(text: string) {
+    setContent((prev) => prev ? `${prev}\n\n${text}` : text);
+  }
+
+  function applyRewrite(selected: string, replacement: string) {
+    setContent((prev) => prev.includes(selected) ? prev.replace(selected, replacement) : prev);
   }
 
   function requestSave() {
@@ -440,6 +497,11 @@ function NewProposal() {
 
         {/* RIGHT: configure + output */}
         <div className="space-y-6">
+          <ProfileImageGallery
+            selectedPath={avatar?.path ?? null}
+            onSelect={(v) => setAvatar(v)}
+          />
+          <SnippetsPanel onInsert={insertSnippet} />
           <CropCard glow="gold" className="p-5">
             <Eyebrow>Configure</Eyebrow>
             {analytics && analytics.bestHook && (
@@ -450,6 +512,23 @@ function NewProposal() {
               </div>
             )}
             <div className="mt-4 space-y-5">
+              {/* Tone controls */}
+              <div className="rounded-md border border-border/60 bg-background/40 p-3 space-y-3">
+                <Label className="annotation !text-muted-foreground">Tone</Label>
+                <div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                    <span>Consultative</span><span className="text-white">Assertiveness</span><span>Assertive</span>
+                  </div>
+                  <Slider value={[toneAssertiveness]} min={1} max={5} step={1} onValueChange={(v) => setToneAssertiveness(v[0])} />
+                </div>
+                <div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                    <span>Casual</span><span className="text-white">Formalness</span><span>Formal</span>
+                  </div>
+                  <Slider value={[toneFormalness]} min={1} max={5} step={1} onValueChange={(v) => setToneFormalness(v[0])} />
+                </div>
+              </div>
+
               {/* Profile selector */}
               {subProfiles.length > 0 && (
                 <div>
@@ -763,10 +842,13 @@ function NewProposal() {
         </div>
       </div>
       {content && (
-        <VoiceEditPrompt
-          onApply={(instruction) => voiceEditMutation.mutate(instruction)}
-          isPending={voiceEditMutation.isPending}
-        />
+        <>
+          <VoiceEditPrompt
+            onApply={(instruction) => voiceEditMutation.mutate(instruction)}
+            isPending={voiceEditMutation.isPending}
+          />
+          <InlineRewriteToolbar fullText={content} onReplace={applyRewrite} enabled={!!content} />
+        </>
       )}
     </div>
   );
@@ -916,7 +998,7 @@ function OutputPanel({
           className="resize-y bg-background/60 text-sm leading-relaxed font-mono"
         />
       ) : (
-        <div className="rounded-xl border border-border/40 bg-background/50 px-6 py-5">
+        <div data-rewrite-target="proposal" className="rounded-xl border border-border/40 bg-background/50 px-6 py-5">
           {paragraphs.map((para, i) => (
             <p key={i} className={cn(
               "leading-[1.85] mb-4 last:mb-0",
@@ -931,6 +1013,9 @@ function OutputPanel({
       <div className="mt-4 flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" onClick={() => copyText(content).then(() => toast.success("Copied to clipboard"))}>
           <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => copyMarkdown(title, content).then(() => toast.success("Markdown copied"))}>
+          <ClipboardCopy className="mr-1.5 h-3.5 w-3.5" /> Markdown
         </Button>
         <Button size="sm" variant="secondary" onClick={() => downloadTxt(title, content)}>
           <FileText className="mr-1.5 h-3.5 w-3.5" /> .txt
