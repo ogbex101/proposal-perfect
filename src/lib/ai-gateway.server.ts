@@ -9,7 +9,8 @@
 //   4. OpenRouter            — OPENROUTER_API_KEY            (free models at openrouter.ai)
 //   5. OpenAI                — OPENAI_API_KEY                (pay-per-use, fallback of last resort)
 
-import { generateText, type LanguageModel } from "ai";
+import { generateText, generateObject, type LanguageModel } from "ai";
+import { z } from "zod";
 
 type ModelEntry = { name: string; load: () => Promise<LanguageModel> };
 
@@ -120,4 +121,43 @@ export async function generateWithFallback(params: {
     throw new Error("All AI providers exhausted or out of credits. Add a new API key in Lovable Cloud → Settings → Secrets.");
   }
   throw new Error(`All AI providers failed. Last error: ${lastError}`);
+}
+
+/**
+ * Uses AI SDK's generateObject — enforces JSON schema at the model level via
+ * native JSON mode or tool use. Much more reliable than text-then-parse.
+ * Falls back to each configured provider in order.
+ */
+export async function generateObjectWithFallback<T>(params: {
+  system: string;
+  prompt: string;
+  schema: z.ZodType<T>;
+}): Promise<T> {
+  const providers = buildProviders();
+
+  if (providers.length === 0) {
+    throw new Error(
+      "No AI provider configured. Add at least one API key in Lovable Cloud → Settings → Secrets."
+    );
+  }
+
+  const errors: string[] = [];
+
+  for (const provider of providers) {
+    try {
+      const model = await provider.load();
+      const { object } = await generateObject({
+        model,
+        schema: params.schema,
+        system: params.system,
+        prompt: params.prompt,
+      });
+      return object;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${provider.name}: ${msg}`);
+    }
+  }
+
+  throw new Error(`AI structured output failed. Last error: ${errors[errors.length - 1] ?? "Unknown"}`);
 }

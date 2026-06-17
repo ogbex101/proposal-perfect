@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateWithFallback } from "./ai-gateway.server";
+import { generateWithFallback, generateObjectWithFallback } from "./ai-gateway.server";
 import { z } from "zod";
 import { FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
@@ -34,6 +34,15 @@ function handleAiError(err: unknown): never {
  * This works with every gateway/model — no SDK structured-output features needed.
  */
 async function structured<T>(schema: z.ZodType<T>, system: string, prompt: string): Promise<T> {
+  // Primary: native AI SDK structured output — enforces schema at model level (JSON mode / tool use)
+  // This eliminates "malformed JSON" errors entirely for providers that support it.
+  try {
+    return await generateObjectWithFallback({ system, prompt, schema });
+  } catch {
+    // Providers that don't support generateObject fall through to text-based extraction below
+  }
+
+  // Fallback: text generation + JSON extraction
   const text = await generateWithFallback({
     system:
       system +
@@ -41,23 +50,16 @@ async function structured<T>(schema: z.ZodType<T>, system: string, prompt: strin
     prompt,
   });
 
-  // Strategy 1: strip code fences then parse
-  // Strategy 2: find the first { ... } block spanning the whole response
-  // Strategy 3: find any valid JSON object substring
   function extractJson(src: string): unknown {
     const attempts: string[] = [
-      // Strip markdown fences
       src.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim(),
-      // Take from first { to last }
       src.slice(src.indexOf("{"), src.lastIndexOf("}") + 1).trim(),
-      // Take from first [ to last ] (array root)
       src.slice(src.indexOf("["), src.lastIndexOf("]") + 1).trim(),
     ];
     for (const candidate of attempts) {
       if (!candidate) continue;
       try { return JSON.parse(candidate); } catch { /* try next */ }
     }
-    // Last resort: regex extract first JSON object
     const m = src.match(/\{[\s\S]*\}/);
     if (m) { try { return JSON.parse(m[0]); } catch { /* fall through */ } }
     throw new Error("AI returned malformed JSON. Please try again.");

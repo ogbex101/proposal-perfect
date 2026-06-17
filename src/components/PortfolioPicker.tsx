@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, Loader2, Sparkles, FolderOpen, Eye, Check, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ interface PortfolioPickerProps {
   subProfileId?: string | null;
   currentLink: string | null;
   onLinkChange: (url: string | null) => void;
+  autoGenerate?: boolean;
 }
 
 function portfolioUrl(slug: string): string {
@@ -42,7 +43,7 @@ function portfolioUrl(slug: string): string {
   return `${origin}/p/${slug}`;
 }
 
-export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onLinkChange }: PortfolioPickerProps) {
+export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onLinkChange, autoGenerate }: PortfolioPickerProps) {
   const [mode, setMode] = useState<Mode>("link");
   const [linkValue, setLinkValue] = useState(currentLink ?? "");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -81,6 +82,15 @@ export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onL
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Generation failed"),
   });
+
+  // Auto-generate portfolio when analysis is done and no link is set yet
+  useEffect(() => {
+    if (autoGenerate && !currentLink && !generated && !generateMutation.isPending && jobDescription.trim().length >= 20) {
+      setMode("generate");
+      generateMutation.mutate();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoGenerate]);
 
   const saveMutation = useMutation({
     mutationFn: () => {

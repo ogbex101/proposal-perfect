@@ -14,6 +14,7 @@ import {
   Plus,
   Trash2,
   RotateCcw,
+  User,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -35,6 +36,7 @@ import { cn } from "@/lib/utils";
 
 import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
+import { listSubProfiles } from "@/lib/sub-profile.functions";
 import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
 import { VoiceEditPrompt } from "@/components/VoiceEditPrompt";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
@@ -99,6 +101,8 @@ function NewProposal() {
   const portfolio = portfolioQuery.data ?? [];
   const analyticsQuery = useQuery({ queryKey: ["proposal-analytics"], queryFn: () => getProposalAnalytics() });
   const analytics = analyticsQuery.data;
+  const subProfilesQuery = useQuery({ queryKey: ["sub-profiles"], queryFn: () => listSubProfiles() });
+  const subProfiles = subProfilesQuery.data ?? [];
 
   const customHooksQuery = useQuery({ queryKey: ["custom-hooks"], queryFn: () => listCustomHooks() });
   const customStrategiesQuery = useQuery({ queryKey: ["custom-strategies"], queryFn: () => listCustomStrategies() });
@@ -341,7 +345,7 @@ function NewProposal() {
   }
 
   function requestSave() {
-    saveMutation.mutate(undefined);
+    saveMutation.mutate(chosenProfile ?? undefined);
   }
 
   function requestSaveTemplate() {
@@ -446,9 +450,70 @@ function NewProposal() {
               </div>
             )}
             <div className="mt-4 space-y-5">
+              {/* Profile selector */}
+              {subProfiles.length > 0 && (
+                <div>
+                  <Label className="annotation mb-2 block !text-muted-foreground">Generate as profile</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setChosenProfile(null)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                        !chosenProfile ? "border-gold/50 bg-gold/10 text-gold" : "border-border text-muted-foreground hover:text-white"
+                      )}
+                    >
+                      <User className="h-3 w-3" /> Main
+                    </button>
+                    {subProfiles.map((sp) => (
+                      <button
+                        key={sp.id}
+                        type="button"
+                        onClick={() => setChosenProfile({ id: sp.id, label: sp.label })}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                          chosenProfile?.id === sp.id ? "border-teal/50 bg-teal/10 text-teal" : "border-border text-muted-foreground hover:text-white"
+                        )}
+                      >
+                        {sp.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Hook selector */}
               <div>
                 <Label className="annotation mb-2 block !text-muted-foreground">Hook style</Label>
+
+                {/* Top 3 AI-ranked hooks for this specific job — shown after analysis */}
+                {analysis?.hookSuggestions && analysis.hookSuggestions.length > 0 && (
+                  <div className="mb-3 space-y-1.5">
+                    <p className="annotation !text-gold mb-1">AI-ranked for this job</p>
+                    {analysis.hookSuggestions.slice(0, 3).map((hs) => (
+                      <button
+                        key={hs.hookId}
+                        type="button"
+                        onClick={() => setHookId(hs.hookId)}
+                        className={cn(
+                          "w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
+                          hookId === hs.hookId ? "border-gold/60 bg-gold/10" : "border-gold/20 bg-gold/[0.03] hover:border-gold/40"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className={cn("text-[12px] font-semibold", hookId === hs.hookId ? "text-gold" : "text-white")}>{hs.hookName}</span>
+                          <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold",
+                            hs.score >= 85 ? "bg-green-500/20 text-green-400" : hs.score >= 70 ? "bg-teal/20 text-teal" : "bg-muted/40 text-muted-foreground"
+                          )}>{hs.score}/100</span>
+                        </div>
+                        <p className="text-[11px] text-teal/90 leading-snug italic mb-1">"{hs.openingLine}"</p>
+                        <p className="text-[10px] text-muted-foreground">{hs.scoreReason}</p>
+                      </button>
+                    ))}
+                    <p className="annotation !text-muted-foreground">Or choose any style:</p>
+                  </div>
+                )}
+
                 <div className="grid gap-1.5">
                   {allHooks.map((h) => {
                     const stat = analytics?.hookStats?.find((s) => s.id === h.id);
@@ -539,8 +604,10 @@ function NewProposal() {
               {/* AI / saved / pasted portfolio for this job */}
               <PortfolioPicker
                 jobDescription={effectiveJob}
+                subProfileId={chosenProfile?.id ?? null}
                 currentLink={portfolioLink}
                 onLinkChange={setPortfolioLink}
+                autoGenerate={!!analysis && !portfolioLink}
               />
 
               {/* Portfolio selection */}
