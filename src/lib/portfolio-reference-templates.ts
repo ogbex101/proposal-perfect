@@ -46,7 +46,10 @@ const developer: PortfolioReferenceTemplate = {
 const marketing: PortfolioReferenceTemplate = {
   family: "marketing",
   label: "Email & Social Marketing",
-  referenceUrls: ["https://content-saver-pro.lovable.app/", "https://happy-campaign-hub-97.lovable.app/"],
+  referenceUrls: [
+    "https://content-saver-pro.lovable.app/",
+    "https://happy-campaign-hub-97.lovable.app/",
+  ],
   keywords: ["email", "klaviyo", "mailchimp", "campaign", "crm", "newsletter", "retention", "lifecycle", "social media", "content management", "hubspot", "segmentation"],
   visualDirection: "campaign-led editorial, tall email artwork, measurable outcomes, polished ecommerce energy",
   services: [
