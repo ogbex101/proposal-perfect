@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Users, Activity, Shield, Terminal, Play, X, Loader2, Database, ChevronDown, ChevronUp,
   Copy, Check, TrendingUp, Eye, UserCheck, Globe, ArrowUp, ArrowDown, Minus,
-  Search, KeyRound, Trash2, AlertTriangle,
+  Search, KeyRound, Trash2, AlertTriangle, Key, ExternalLink, CheckCircle2, XCircle, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader, CropCard, Eyebrow } from "@/components/blueprint";
@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/use-auth";
-import { listAdminUsers, getPageViewStats, runAdminSql, sendPasswordReset, deleteAdminUser } from "@/lib/admin.functions";
-import type { AdminUser } from "@/lib/admin.functions";
+import { listAdminUsers, getPageViewStats, runAdminSql, sendPasswordReset, deleteAdminUser, getApiKeyStatus } from "@/lib/admin.functions";
+import type { AdminUser, ApiKeyStatus } from "@/lib/admin.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -35,7 +35,7 @@ function timeSince(date: string | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-const TABS = ["Overview", "Users", "Database"] as const;
+const TABS = ["Overview", "Users", "API Keys", "Database"] as const;
 type Tab = typeof TABS[number];
 
 function AdminPanel() {
@@ -81,6 +81,12 @@ function AdminPanel() {
     queryKey: ["admin-page-views"],
     queryFn: () => getPageViewStats(),
     enabled: auth.isAdmin,
+  });
+
+  const apiKeysQuery = useQuery({
+    queryKey: ["admin-api-keys"],
+    queryFn: () => getApiKeyStatus(),
+    enabled: auth.isAdmin && activeTab === "API Keys",
   });
 
   if (!auth.isAdmin) {
@@ -330,6 +336,169 @@ function AdminPanel() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── API Keys Tab ── */}
+      {activeTab === "API Keys" && (
+        <div className="space-y-6">
+          {/* Summary row */}
+          {apiKeysQuery.data && (() => {
+            const keys = apiKeysQuery.data as ApiKeyStatus[];
+            const configured = keys.filter((k) => k.configured).length;
+            return (
+              <div className="flex flex-wrap gap-3">
+                <div className={cn(
+                  "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium",
+                  configured === 0
+                    ? "border-red-500/30 bg-red-500/10 text-red-400"
+                    : configured >= 2
+                    ? "border-teal/30 bg-teal/10 text-teal"
+                    : "border-gold/30 bg-gold/10 text-gold",
+                )}>
+                  <Key className="h-4 w-4" />
+                  {configured}/{keys.length} providers configured
+                </div>
+                {configured === 0 && (
+                  <div className="flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-400">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    No AI provider — generation will fail
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Provider list */}
+          <CropCard className="divide-y divide-border/30 overflow-hidden p-0">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border/40">
+              <Eyebrow>AI Providers</Eyebrow>
+              <span className="text-xs text-muted-foreground ml-1">— tried in priority order</span>
+            </div>
+            {apiKeysQuery.isPending ? (
+              <div className="flex items-center gap-2 justify-center py-10 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Checking keys…</span>
+              </div>
+            ) : apiKeysQuery.isError ? (
+              <p className="p-5 text-sm text-red-400">{String((apiKeysQuery.error as Error).message)}</p>
+            ) : (
+              (apiKeysQuery.data as ApiKeyStatus[]).map((provider) => (
+                <div key={provider.envVar} className={cn(
+                  "flex items-start gap-4 px-5 py-4 transition-colors",
+                  provider.configured ? "bg-teal/[0.03]" : "hover:bg-white/[0.015]",
+                )}>
+                  {/* Priority badge */}
+                  <div className={cn(
+                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                    provider.configured ? "bg-teal/20 text-teal" : "bg-white/10 text-muted-foreground",
+                  )}>
+                    {provider.priority}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-white">{provider.name}</p>
+                      {provider.free && (
+                        <span className="rounded-full border border-teal/30 bg-teal/10 px-1.5 py-0.5 text-[9px] font-medium text-teal uppercase tracking-wider">
+                          Free tier
+                        </span>
+                      )}
+                      {provider.priority === 1 && (
+                        <span className="flex items-center gap-0.5 rounded-full border border-gold/30 bg-gold/10 px-1.5 py-0.5 text-[9px] font-medium text-gold uppercase tracking-wider">
+                          <Zap className="h-2.5 w-2.5" /> Recommended
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{provider.description}</p>
+                    <code className="mt-1.5 inline-block rounded bg-background/60 border border-border/40 px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
+                      {provider.envVar}
+                    </code>
+                  </div>
+
+                  {/* Status + action */}
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    {provider.configured ? (
+                      <div className="flex items-center gap-1.5 rounded-full border border-teal/30 bg-teal/10 px-2.5 py-1 text-xs font-medium text-teal">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Active
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 rounded-full border border-border/50 bg-background/40 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                        <XCircle className="h-3.5 w-3.5" /> Not set
+                      </div>
+                    )}
+                    {!provider.configured && (
+                      <a
+                        href={provider.signupUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 text-[11px] text-teal hover:underline"
+                      >
+                        Get key <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </CropCard>
+
+          {/* Setup instructions */}
+          <CropCard className="p-5 border-gold/20 bg-gold/5">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-gold/20 flex items-center justify-center">
+                <Key className="h-3.5 w-3.5 text-gold" />
+              </div>
+              <Eyebrow className="text-gold">How to add a key</Eyebrow>
+            </div>
+            <ol className="space-y-2 text-xs text-muted-foreground list-decimal list-inside">
+              <li>Sign up at the provider's website (use the "Get key" links above)</li>
+              <li>Copy your API key from their dashboard</li>
+              <li>Add it as an environment variable in your hosting platform (e.g. Vercel → Settings → Environment Variables)</li>
+              <li>Redeploy your app — the new key will be picked up automatically</li>
+            </ol>
+            <div className="mt-4 rounded-xl border border-border/40 bg-background/60 px-4 py-3">
+              <p className="text-xs text-white font-medium mb-1.5">Quick recommendation</p>
+              <p className="text-xs text-muted-foreground">
+                Start with <strong className="text-teal">Google Gemini</strong> (free, 1M tokens/day) and{" "}
+                <strong className="text-teal">Groq</strong> (free, very fast). Add{" "}
+                <strong className="text-gold">Anthropic Claude</strong> as your primary key for the most reliable experience.
+                Having 2–3 providers means generation never fails even if one is down.
+              </p>
+            </div>
+          </CropCard>
+
+          {/* Grant admin migration */}
+          <CropCard className="p-5 border-destructive/20">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-7 w-7 rounded-lg bg-destructive/15 flex items-center justify-center">
+                <Shield className="h-3.5 w-3.5 text-destructive/80" />
+              </div>
+              <Eyebrow>Grant Admin Role</Eyebrow>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              If a user should be admin but sees "Forbidden", run this SQL in the Database tab (or directly in Supabase SQL Editor), replacing the email:
+            </p>
+            <pre className="rounded-xl border border-border/40 bg-sidebar/80 p-3 text-[10px] font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap">
+{`INSERT INTO public.user_roles (user_id, role)
+SELECT id, 'admin' FROM auth.users
+WHERE email = 'YOUR_EMAIL@example.com'
+ON CONFLICT (user_id) DO UPDATE SET role = 'admin';`}
+            </pre>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2 h-7 border-border/60 text-xs"
+              onClick={() => {
+                const sql = `INSERT INTO public.user_roles (user_id, role)\nSELECT id, 'admin' FROM auth.users\nWHERE email = 'YOUR_EMAIL@example.com'\nON CONFLICT (user_id) DO UPDATE SET role = 'admin';`;
+                navigator.clipboard.writeText(sql);
+                toast.success("SQL copied — paste it in the Database tab");
+              }}
+            >
+              <Copy className="mr-1.5 h-3 w-3" /> Copy SQL
+            </Button>
+          </CropCard>
         </div>
       )}
 

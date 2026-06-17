@@ -3,8 +3,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 // Verify the calling user is an admin (has role="admin" in user_roles).
-async function requireAdmin(supabase: any, userId: string) {
-  const { data } = await supabase
+// Uses supabaseAdmin to bypass RLS — the role check is always server-side.
+async function requireAdmin(_supabase: any, userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await (supabaseAdmin as any)
     .from("user_roles")
     .select("role")
     .eq("user_id", userId)
@@ -119,6 +121,76 @@ export const deleteAdminUser = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+export type ApiKeyStatus = {
+  name: string;
+  envVar: string;
+  configured: boolean;
+  priority: number;
+  free: boolean;
+  signupUrl: string;
+  description: string;
+};
+
+export const getApiKeyStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context.supabase, context.userId);
+    const providers: Omit<ApiKeyStatus, "configured">[] = [
+      {
+        name: "Anthropic Claude",
+        envVar: "ANTHROPIC_API_KEY",
+        priority: 1,
+        free: false,
+        signupUrl: "https://console.anthropic.com",
+        description: "Most reliable. Powers Claude Haiku (fast & affordable). Recommended primary key.",
+      },
+      {
+        name: "Google Gemini Flash",
+        envVar: "GOOGLE_GENERATIVE_AI_API_KEY",
+        priority: 2,
+        free: true,
+        signupUrl: "https://aistudio.google.com/app/apikey",
+        description: "Free tier with 1M tokens/day. Gemini 2.0 Flash. Great free fallback.",
+      },
+      {
+        name: "Groq (Llama 3.3)",
+        envVar: "GROQ_API_KEY",
+        priority: 3,
+        free: true,
+        signupUrl: "https://console.groq.com",
+        description: "Free tier available. Ultra-fast inference for Llama 3.3 70B.",
+      },
+      {
+        name: "Mistral",
+        envVar: "MISTRAL_API_KEY",
+        priority: 4,
+        free: true,
+        signupUrl: "https://console.mistral.ai",
+        description: "Free tier for mistral-small. Good European alternative.",
+      },
+      {
+        name: "OpenRouter",
+        envVar: "OPENROUTER_API_KEY",
+        priority: 5,
+        free: true,
+        signupUrl: "https://openrouter.ai/keys",
+        description: "Access to many free models including Gemini Flash 1.5.",
+      },
+      {
+        name: "OpenAI",
+        envVar: "OPENAI_API_KEY",
+        priority: 6,
+        free: false,
+        signupUrl: "https://platform.openai.com/api-keys",
+        description: "Pay-per-use. Uses GPT-4o mini. Last-resort fallback.",
+      },
+    ];
+    return providers.map((p) => ({
+      ...p,
+      configured: !!process.env[p.envVar],
+    }));
   });
 
 export const runAdminSql = createServerFn({ method: "POST" })
