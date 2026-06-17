@@ -194,6 +194,8 @@ function NewProposal() {
           portfolioItems: items,
           milestones: useMilestones ? milestones : undefined,
           budget: budget || undefined,
+          toneAssertiveness,
+          toneFormalness,
         },
       });
     },
