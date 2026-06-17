@@ -3,13 +3,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 export type ProposalDraft = {
-  payload: Record<string, unknown>;
+  payload: any;
   updated_at: string;
 } | null;
 
 export const getDraft = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<ProposalDraft> => {
+  .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("proposal_drafts")
       .select("payload, updated_at")
