@@ -497,6 +497,11 @@ function NewProposal() {
 
         {/* RIGHT: configure + output */}
         <div className="space-y-6">
+          <ProfileImageGallery
+            selectedPath={avatar?.path ?? null}
+            onSelect={(v) => setAvatar(v)}
+          />
+          <SnippetsPanel onInsert={insertSnippet} />
           <CropCard glow="gold" className="p-5">
             <Eyebrow>Configure</Eyebrow>
             {analytics && analytics.bestHook && (
@@ -507,6 +512,23 @@ function NewProposal() {
               </div>
             )}
             <div className="mt-4 space-y-5">
+              {/* Tone controls */}
+              <div className="rounded-md border border-border/60 bg-background/40 p-3 space-y-3">
+                <Label className="annotation !text-muted-foreground">Tone</Label>
+                <div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                    <span>Consultative</span><span className="text-white">Assertiveness</span><span>Assertive</span>
+                  </div>
+                  <Slider value={[toneAssertiveness]} min={1} max={5} step={1} onValueChange={(v) => setToneAssertiveness(v[0])} />
+                </div>
+                <div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                    <span>Casual</span><span className="text-white">Formalness</span><span>Formal</span>
+                  </div>
+                  <Slider value={[toneFormalness]} min={1} max={5} step={1} onValueChange={(v) => setToneFormalness(v[0])} />
+                </div>
+              </div>
+
               {/* Profile selector */}
               {subProfiles.length > 0 && (
                 <div>
