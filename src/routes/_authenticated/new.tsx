@@ -52,6 +52,8 @@ import { getDraft, saveDraft, clearDraft } from "@/lib/proposal-drafts.functions
 type FreelancerProfile = { id: string; label: string };
 import { saveItem } from "@/lib/saved.functions";
 import { copyText, downloadTxt, downloadPdf, copyMarkdown } from "@/lib/export";
+import { saveStrategyDoc } from "@/lib/strategy.functions";
+import { generateAndSavePortfolioSamples, detectDigitalSkillsCategory } from "@/lib/portfolio-samples.functions";
 
 export const Route = createFileRoute("/_authenticated/new")({
   component: NewProposal,
@@ -107,6 +109,10 @@ function NewProposal() {
 
   const [strategyDoc, setStrategyDoc] = useState<StrategyDocument | null>(null);
   const [showStrategy, setShowStrategy] = useState(false);
+  const [strategySlug, setStrategySlug] = useState<string | null>(null);
+  const [strategyLinkSaving, setStrategyLinkSaving] = useState(false);
+  const [samplesSlug, setSamplesSlug] = useState<string | null>(null);
+  const [samplesGenerating, setSamplesGenerating] = useState(false);
 
   const [chosenProfile, setChosenProfile] = useState<FreelancerProfile | null>(null);
 
@@ -221,11 +227,38 @@ function NewProposal() {
           budget: budget || undefined,
         },
       }),
-    onSuccess: (result) => {
-      if (result) {
-        setStrategyDoc(result);
-        setShowStrategy(true);
-        toast.success("Strategy document generated");
+    onSuccess: async (result) => {
+      if (!result) return;
+      setStrategyDoc(result);
+      setShowStrategy(true);
+
+      // Auto-save strategy and generate shareable link
+      setStrategyLinkSaving(true);
+      try {
+        const { slug } = await saveStrategyDoc({ data: { doc: result } });
+        setStrategySlug(slug);
+        toast.success("Strategy ready — shareable link generated");
+      } catch {
+        toast.error("Strategy generated but link could not be saved — try downloading as PDF");
+      } finally {
+        setStrategyLinkSaving(false);
+      }
+
+      // Auto-generate digital skills portfolio samples if job matches
+      const category = detectDigitalSkillsCategory(effectiveJob);
+      if (category && !samplesSlug) {
+        setSamplesGenerating(true);
+        try {
+          const { slug } = await generateAndSavePortfolioSamples({
+            data: { jobDescription: effectiveJob, category },
+          });
+          setSamplesSlug(slug);
+          toast.success(`${category} portfolio samples generated`);
+        } catch {
+          // Non-fatal — samples are a bonus
+        } finally {
+          setSamplesGenerating(false);
+        }
       }
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not generate strategy"),
@@ -815,9 +848,9 @@ function NewProposal() {
           {/* Strategy Document */}
           {strategyDoc && showStrategy && (
             <div className="mt-6 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <Eyebrow>Project strategy</Eyebrow>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -835,6 +868,79 @@ function NewProposal() {
                   </Button>
                 </div>
               </div>
+
+              {/* Shareable strategy link — always shown, auto-generated */}
+              <div className="rounded-xl border border-teal/20 bg-teal/5 px-4 py-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-teal uppercase tracking-wider">Shareable Link</span>
+                  {strategyLinkSaving && <Loader2 className="h-3 w-3 animate-spin text-teal" />}
+                </div>
+                {strategySlug ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <a
+                      href={`/s/${strategySlug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 min-w-0 truncate font-mono text-xs text-teal hover:underline"
+                    >
+                      {typeof window !== "undefined" ? window.location.origin : ""}/s/{strategySlug}
+                    </a>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 h-7 border-teal/30 text-teal hover:bg-teal/10 text-xs"
+                      onClick={() => {
+                        const url = `${window.location.origin}/s/${strategySlug}`;
+                        navigator.clipboard.writeText(url);
+                        toast.success("Strategy link copied");
+                      }}
+                    >
+                      <Copy className="mr-1 h-3 w-3" /> Copy link
+                    </Button>
+                  </div>
+                ) : strategyLinkSaving ? (
+                  <p className="text-xs text-white/40">Generating shareable link…</p>
+                ) : (
+                  <p className="text-xs text-red-400">Link generation failed — use Download PDF instead</p>
+                )}
+              </div>
+
+              {/* Digital skills portfolio samples */}
+              {(samplesGenerating || samplesSlug) && (
+                <div className="rounded-xl border border-gold/20 bg-gold/5 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-gold uppercase tracking-wider">Portfolio Samples</span>
+                    {samplesGenerating && <Loader2 className="h-3 w-3 animate-spin text-gold" />}
+                  </div>
+                  {samplesSlug ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a
+                        href={`/sample/${samplesSlug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 min-w-0 truncate font-mono text-xs text-gold hover:underline"
+                      >
+                        {typeof window !== "undefined" ? window.location.origin : ""}/sample/{samplesSlug}
+                      </a>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 h-7 border-gold/30 text-gold hover:bg-gold/10 text-xs"
+                        onClick={() => {
+                          const url = `${window.location.origin}/sample/${samplesSlug}`;
+                          navigator.clipboard.writeText(url);
+                          toast.success("Samples link copied");
+                        }}
+                      >
+                        <Copy className="mr-1 h-3 w-3" /> Copy link
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/40">Generating portfolio samples…</p>
+                  )}
+                </div>
+              )}
+
               <StrategyDocumentView doc={strategyDoc} />
             </div>
           )}

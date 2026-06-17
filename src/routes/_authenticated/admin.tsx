@@ -878,7 +878,7 @@ END $$;`,
   },
   {
     label: "SQL runner function + follow-up reminders",
-    description: "Creates the run_admin_sql() function (needed for this SQL runner to work) and adds reminder_at to threads.",
+    description: "Creates the run_admin_sql() function (needed for this SQL runner to work) and adds reminder_at to threads. RUN THIS FIRST if SQL runner returns permission errors.",
     sql: `-- Admin SQL runner (service_role only)
 CREATE OR REPLACE FUNCTION public.run_admin_sql(sql text)
 RETURNS jsonb
@@ -901,6 +901,37 @@ GRANT EXECUTE ON FUNCTION public.run_admin_sql(text) TO service_role;
 
 -- Follow-up reminder column
 ALTER TABLE public.conversion_threads ADD COLUMN IF NOT EXISTS reminder_at timestamptz;`,
+  },
+  {
+    label: "Portfolio samples table",
+    description: "REQUIRED for AI-generated digital skills portfolio samples (SEO, content writing, copywriting, etc.). Run this to enable automatic sample generation and shareable /sample/{slug} links.",
+    priority: "critical",
+    sql: `-- AI-generated portfolio samples with shareable slugs
+CREATE TABLE IF NOT EXISTS public.portfolio_samples (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  slug text UNIQUE NOT NULL,
+  category text NOT NULL,
+  job_excerpt text NOT NULL DEFAULT '',
+  samples jsonb NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS portfolio_samples_slug_idx ON public.portfolio_samples (slug);
+CREATE INDEX IF NOT EXISTS portfolio_samples_user_idx ON public.portfolio_samples (user_id);
+GRANT SELECT, INSERT, DELETE ON public.portfolio_samples TO authenticated;
+GRANT ALL ON public.portfolio_samples TO service_role;
+ALTER TABLE public.portfolio_samples ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='portfolio_samples' AND policyname='Users manage own portfolio_samples') THEN
+    CREATE POLICY "Users manage own portfolio_samples" ON public.portfolio_samples FOR ALL
+      USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='portfolio_samples' AND policyname='Public read portfolio_samples') THEN
+    CREATE POLICY "Public read portfolio_samples" ON public.portfolio_samples FOR SELECT USING (true);
+  END IF;
+END $$;`,
   },
 ];
 
