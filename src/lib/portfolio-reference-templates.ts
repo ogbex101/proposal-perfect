@@ -83,8 +83,12 @@ const operations: PortfolioReferenceTemplate = {
 const video: PortfolioReferenceTemplate = {
   family: "video",
   label: "AI Video Editing",
-  referenceUrls: ["https://caleb-ai-vision.lovable.app/"],
-  keywords: ["video", "video editing", "ai video", "runway", "sora", "kling", "capcut", "davinci", "premiere", "after effects", "motion", "youtube", "reels"],
+  // Caleb's owner-specific samples live under /faith — always prefer this for video/AI-video jobs.
+  referenceUrls: [
+    "https://caleb-ai-vision.lovable.app/faith",
+    "https://caleb-ai-vision.lovable.app/",
+  ],
+  keywords: ["video", "video editing", "ai video", "video editor", "videographer", "runway", "sora", "kling", "capcut", "davinci", "premiere", "after effects", "motion", "youtube", "reels", "shorts", "tiktok edit", "vfx", "color grading", "showreel"],
   visualDirection: "cinematic black studio, cyan highlights, full-bleed frames, editing-suite imagery, high-energy showreel",
   services: [
     { title: "AI-Assisted Editing", description: "Fast, intentional edits enhanced with modern generation, cleanup, and upscaling tools." },
