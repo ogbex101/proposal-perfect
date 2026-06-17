@@ -15,6 +15,7 @@ import {
   Trash2,
   RotateCcw,
   User,
+  ClipboardCopy,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -43,9 +45,13 @@ import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
 import { listPortfolio } from "@/lib/portfolio.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
+import { ProfileImageGallery } from "@/components/ProfileImageGallery";
+import { SnippetsPanel } from "@/components/SnippetsPanel";
+import { InlineRewriteToolbar } from "@/components/InlineRewriteToolbar";
+import { getDraft, saveDraft, clearDraft } from "@/lib/proposal-drafts.functions";
 type FreelancerProfile = { id: string; label: string };
 import { saveItem } from "@/lib/saved.functions";
-import { copyText, downloadTxt, downloadPdf } from "@/lib/export";
+import { copyText, downloadTxt, downloadPdf, copyMarkdown } from "@/lib/export";
 
 export const Route = createFileRoute("/_authenticated/new")({
   component: NewProposal,
