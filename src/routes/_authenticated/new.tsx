@@ -842,10 +842,13 @@ function NewProposal() {
         </div>
       </div>
       {content && (
-        <VoiceEditPrompt
-          onApply={(instruction) => voiceEditMutation.mutate(instruction)}
-          isPending={voiceEditMutation.isPending}
-        />
+        <>
+          <VoiceEditPrompt
+            onApply={(instruction) => voiceEditMutation.mutate(instruction)}
+            isPending={voiceEditMutation.isPending}
+          />
+          <InlineRewriteToolbar fullText={content} onReplace={applyRewrite} enabled={!!content} />
+        </>
       )}
     </div>
   );
