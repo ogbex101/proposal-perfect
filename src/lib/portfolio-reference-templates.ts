@@ -21,7 +21,12 @@ export type PortfolioReferenceTemplate = {
 const developer: PortfolioReferenceTemplate = {
   family: "developer",
   label: "Software & Full-Stack Development",
-  referenceUrls: ["https://dolapoportfolio.lovable.app/", "https://multi-persona-portfolio.lovable.app/niche/fullstack-developer", "https://bubblejoshproj.lovable.app/"],
+  referenceUrls: [
+    "https://dolapoportfolio.lovable.app/",
+    "https://multi-persona-portfolio.lovable.app/niche/fullstack-developer",
+    "https://bubblejoshproj.lovable.app/",
+    "https://pixel-pushr-panel.lovable.app/#projects",
+  ],
   keywords: ["developer", "development", "software", "website", "web app", "full stack", "frontend", "backend", "react", "next.js", "node", "python", "bubble", "no-code", "supabase", "database", "api", "programming", "saas"],
   visualDirection: "dark technical editorial, bold product imagery, code-inspired details, strong project case studies",
   services: [
