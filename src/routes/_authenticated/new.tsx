@@ -998,7 +998,7 @@ function OutputPanel({
           className="resize-y bg-background/60 text-sm leading-relaxed font-mono"
         />
       ) : (
-        <div className="rounded-xl border border-border/40 bg-background/50 px-6 py-5">
+        <div data-rewrite-target="proposal" className="rounded-xl border border-border/40 bg-background/50 px-6 py-5">
           {paragraphs.map((para, i) => (
             <p key={i} className={cn(
               "leading-[1.85] mb-4 last:mb-0",
@@ -1013,6 +1013,9 @@ function OutputPanel({
       <div className="mt-4 flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" onClick={() => copyText(content).then(() => toast.success("Copied to clipboard"))}>
           <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => copyMarkdown(title, content).then(() => toast.success("Markdown copied"))}>
+          <ClipboardCopy className="mr-1.5 h-3.5 w-3.5" /> Markdown
         </Button>
         <Button size="sm" variant="secondary" onClick={() => downloadTxt(title, content)}>
           <FileText className="mr-1.5 h-3.5 w-3.5" /> .txt
