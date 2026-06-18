@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Wand2, Loader2, Copy, Check, Mail, Code2, Zap, Bot, Globe,
@@ -15,8 +15,8 @@ import { Label } from "@/components/ui/label";
 import { MicButton } from "@/components/MicButton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { generateScoutOutreach, enhanceProposal, generateProposalImage } from "@/lib/ai.functions";
-import type { ScoutOutreach } from "@/lib/ai.functions";
+import { generateScoutOutreach, enhanceProposal, generateProposalImage, analyzeClientWebsite } from "@/lib/ai.functions";
+import type { ScoutOutreach, WebsiteData } from "@/lib/ai.functions";
 import { copyText } from "@/lib/export";
 
 export const Route = createFileRoute("/_authenticated/scout")({
@@ -133,9 +133,44 @@ function ScoutMode() {
   const [context, setContext] = useState("");
   const [customChanges, setCustomChanges] = useState("");
   const [mockupLink, setMockupLink] = useState("");
+  const [enable3d, setEnable3d] = useState(false);
   const [result, setResult] = useState<ScoutOutreach | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [websiteData, setWebsiteData] = useState<WebsiteData | null>(null);
+  const [analyzingWebsite, setAnalyzingWebsite] = useState(false);
+  const [detectedUrl, setDetectedUrl] = useState<string | null>(null);
+
+  // Extract URL from job text when it changes
+  const prevJobRef = useRef("");
+  useEffect(() => {
+    if (jobText === prevJobRef.current) return;
+    prevJobRef.current = jobText;
+    const match = jobText.match(/https?:\/\/[^\s\]>)"]+/);
+    const url = match ? match[0] : null;
+    setDetectedUrl(url);
+    if (!url) {
+      setWebsiteData(null);
+    }
+  }, [jobText]);
+
+  async function runWebsiteAnalysis() {
+    if (!detectedUrl) return;
+    setAnalyzingWebsite(true);
+    try {
+      const data = await analyzeClientWebsite({ data: { url: detectedUrl } });
+      if (data) setWebsiteData(data as WebsiteData);
+      toast.success("Website analyzed");
+    } catch {
+      toast.error("Could not analyze website — continuing without it");
+    } finally {
+      setAnalyzingWebsite(false);
+    }
+  }
+
+  const websiteDataStr = websiteData
+    ? `Business: ${websiteData.businessType} in ${websiteData.industry}\nTitle: ${websiteData.title}\nDescription: ${websiteData.description}\nPrimary Goal: ${websiteData.primaryGoal}\nBrand Colors: ${websiteData.brandColors.join(", ")}\nKey Pages: ${websiteData.keyPages.join(", ")}\nExisting Tech: ${websiteData.existingTech.join(", ")}\nDesign Notes: ${websiteData.designNotes}\nImage URLs: ${websiteData.imageUrls.slice(0, 5).join(", ")}`
+    : undefined;
 
   const scoutMutation = useMutation({
     mutationFn: () => generateScoutOutreach({
@@ -144,6 +179,8 @@ function ScoutMode() {
         freelancerContext: context || undefined,
         customChanges: customChanges || undefined,
         mockupLink: mockupLink || undefined,
+        enable3d,
+        websiteData: websiteDataStr,
       },
     }),
     onSuccess: async (data) => {
@@ -210,7 +247,7 @@ function ScoutMode() {
           <CropCard className="p-5 border-teal/20 bg-teal/5">
             <div className="flex items-center gap-2 mb-3">
               <Link2 className="h-4 w-4 text-teal" />
-              <Label className="text-sm font-semibold text-white">Mockup link <span className="text-muted-foreground font-normal text-xs">(optional — adds mockup mention to email)</span></Label>
+              <Label className="text-sm font-semibold text-white">Mockup link <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
             </div>
             <Input
               value={mockupLink}
@@ -221,6 +258,64 @@ function ScoutMode() {
             <p className="mt-2 text-[11px] text-muted-foreground">
               If set, the email will naturally mention the mockup and link it. If empty, it'll mention you can quickly produce one.
             </p>
+          </CropCard>
+
+          {/* Website analysis */}
+          {detectedUrl && (
+            <CropCard className="p-5 border-blue-400/20 bg-blue-400/5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-blue-400" />
+                  <Label className="text-sm font-semibold text-white">Client website detected</Label>
+                </div>
+                {!websiteData && (
+                  <button
+                    onClick={runWebsiteAnalysis}
+                    disabled={analyzingWebsite}
+                    className="flex items-center gap-1.5 rounded-lg bg-blue-400/20 border border-blue-400/30 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-400/30 transition-colors"
+                  >
+                    {analyzingWebsite ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    {analyzingWebsite ? "Analyzing…" : "Analyze website"}
+                  </button>
+                )}
+                {websiteData && (
+                  <span className="text-[10px] text-green-400 font-medium">✓ Analyzed</span>
+                )}
+              </div>
+              <p className="font-mono text-[11px] text-blue-300/80 truncate mb-2">{detectedUrl}</p>
+              {websiteData && (
+                <div className="space-y-1.5 text-[11px] text-white/60">
+                  <p><span className="text-white/40">Business:</span> {websiteData.businessType} · {websiteData.industry}</p>
+                  <p><span className="text-white/40">Goal:</span> {websiteData.primaryGoal}</p>
+                  {websiteData.existingTech.length > 0 && (
+                    <p><span className="text-white/40">Tech:</span> {websiteData.existingTech.join(", ")}</p>
+                  )}
+                  {websiteData.imageUrls.length > 0 && (
+                    <p><span className="text-white/40">Images found:</span> {websiteData.imageUrls.length}</p>
+                  )}
+                  <p className="text-white/50 italic">{websiteData.designNotes}</p>
+                </div>
+              )}
+              {!websiteData && (
+                <p className="text-[11px] text-muted-foreground">Analyze the client's website to extract brand info, design language, and assets for a more personalized mockup prompt.</p>
+              )}
+            </CropCard>
+          )}
+
+          {/* 3D animation toggle */}
+          <CropCard className="p-5 border-purple-400/20 bg-purple-400/5">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={enable3d}
+                onChange={(e) => setEnable3d(e.target.checked)}
+                className="h-4 w-4 accent-purple-400 cursor-pointer"
+              />
+              <div>
+                <p className="text-sm font-semibold text-white">3D animation design layout</p>
+                <p className="text-[11px] text-muted-foreground">Enable Three.js / React Three Fiber, GSAP parallax, and cinematic motion in the dev prompt</p>
+              </div>
+            </label>
           </CropCard>
         </div>
 
@@ -242,8 +337,8 @@ function ScoutMode() {
           <CropCard className="p-5 border-teal/20 bg-teal/5">
             <div className="space-y-3 mb-4">
               {[
-                { icon: <Mail className="h-4 w-4 text-teal" />, title: "Cold email", sub: "Magnetic subject + spam-safe body" },
-                { icon: <Brain className="h-4 w-4 text-gold" />, title: "Job analysis", sub: "Hook + strategy + spam tips" },
+                { icon: <Mail className="h-4 w-4 text-teal" />, title: "Cold email", sub: "Subject → Hook → Insight → Solution → Proof → CTA" },
+                { icon: <Brain className="h-4 w-4 text-gold" />, title: "Email strategy", sub: "Why each section works + spam avoidance tips" },
                 { icon: <FileCode className="h-4 w-4 text-purple-400" />, title: "Full dev prompt", sub: "Paste-ready for Cursor / Lovable / Bolt / v0" },
                 { icon: <Image className="h-4 w-4 text-blue-400" />, title: "Preview image", sub: "Send with the email to impress" },
               ].map((item) => (

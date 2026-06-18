@@ -58,6 +58,9 @@ export const generateAndSavePortfolioSamples = createServerFn({ method: "POST" }
       jobDescription: z.string().min(20).max(5000),
       category: z.string().min(1).max(60),
       subProfileId: z.string().uuid().optional(),
+      profileImageUrl: z.string().url().optional(),
+      brandName: z.string().max(100).optional(),
+      brandDescription: z.string().max(500).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -73,6 +76,7 @@ export const generateAndSavePortfolioSamples = createServerFn({ method: "POST" }
 
     const active = (subProfile ?? profile) as Record<string, unknown> | null;
     const freelancerName = (active?.name as string | null) ?? "The Freelancer";
+    const profileImage = data.profileImageUrl ?? (active?.avatar_url as string | null) ?? null;
     const skills = ((active?.skills ?? []) as string[]).slice(0, 10).join(", ");
     const brands = ((active?.brands_worked ?? []) as string[]).slice(0, 6);
     const brandsText = brands.length
@@ -80,6 +84,12 @@ export const generateAndSavePortfolioSamples = createServerFn({ method: "POST" }
       : "Past clients include: JobCondi, Bloom Trader Pro, Xpers Stream Arena, Dexta, Xperience Props";
     const bio = (active?.bio as string | null) ?? "";
     const jobExcerpt = data.jobDescription.slice(0, 300);
+    const brandBlock = data.brandName
+      ? `\nBRAND INFO:\nBrand: ${data.brandName}\n${data.brandDescription ? `Description: ${data.brandDescription}` : ""}\nUse this brand in the samples where natural.`
+      : "";
+    const imageBlock = profileImage
+      ? `\nPROFILE IMAGE: ${profileImage}\nWhere appropriate, note that this freelancer's profile picture can be used on the portfolio page.`
+      : "";
 
     // Pick the right sample formats per category
     const sampleFormats = getSampleFormats(data.category as DigitalSkillsCategory);
@@ -91,7 +101,7 @@ FREELANCER CONTEXT:
 Name: ${freelancerName}
 Skills: ${skills || data.category}
 ${brandsText}
-${bio ? `Bio: ${bio}` : ""}
+${bio ? `Bio: ${bio}` : ""}${brandBlock}${imageBlock}
 
 JOB DESCRIPTION (excerpt):
 ${jobExcerpt}

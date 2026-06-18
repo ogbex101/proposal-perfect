@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateWithFallback, generateObjectWithFallback } from "./ai-gateway.server";
 import { z } from "zod";
-import { FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
+import { CTAS, FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
 
 // Load a user's custom red-flag phrases. Defaults always apply regardless;
@@ -91,6 +91,15 @@ const AnalysisSchema = z.object({
   })).default([]),
   suggestedStrategyId: z.string(),
   strategyReason: z.string(),
+  suggestedCtaId: z.string().default("soft_availability"),
+  ctaReason: z.string().default(""),
+  ctaSuggestions: z.array(z.object({
+    ctaId: z.string(),
+    ctaName: z.string(),
+    closingLine: z.string(),
+    score: z.number().int().min(1).max(100),
+    scoreReason: z.string(),
+  })).default([]),
   detectedLanguage: z.string().default("English"),
   suggestedLength: z.enum(["brief", "robust", "explanatory"]).default("robust"),
   detectedNiche: z.string().default(""),
@@ -106,14 +115,17 @@ export const analyzeJob = createServerFn({ method: "POST" })
     try {
       const hookList = HOOKS.map((h) => `- ${h.id}: ${h.name} — ${h.description}`).join("\n");
       const strategyList = STRATEGIES.map((s) => `- ${s.id}: ${s.name} — ${s.description}`).join("\n");
+      const ctaList = CTAS.map((c) => `- ${c.id}: ${c.name} — ${c.description}`).join("\n");
       return await structured(
         AnalysisSchema,
         `You analyze freelance job posts. Be specific, never generic. Interpret, don't repeat.
-Choose the best matching hook id and strategy id from these exact lists:
+Choose the best matching hook id, strategy id, AND cta id from these exact lists:
 HOOKS:
 ${hookList}
 STRATEGIES:
 ${strategyList}
+CTAS (closing call-to-action styles):
+${ctaList}
 
 Return a JSON object with these exact keys:
 {
@@ -129,7 +141,7 @@ Return a JSON object with these exact keys:
       "hookId": "<exact hook id from list>",
       "hookName": "<hook name>",
       "openingLine": "<a ready-to-use opening sentence or two the freelancer can paste directly — specific to THIS job, not generic>",
-      "score": <integer 1-100 — how well this hook fits this specific job>,
+      "score": <integer 1-100>,
       "scoreReason": "<one sentence: why this score>"
     },
     {
@@ -149,12 +161,37 @@ Return a JSON object with these exact keys:
   ],
   "suggestedStrategyId": "<exact id from list>",
   "strategyReason": "...",
-  "detectedLanguage": "<full English name of the language this job post is written in, e.g. English, French, Spanish, German, Portuguese, Arabic, etc.>",
-  "suggestedLength": "<brief|robust|explanatory — brief for simple/quick tasks under $500 or short gigs, robust for most jobs, explanatory for complex technical or high-budget projects over $2000>",
-  "detectedNiche": "<the primary freelance niche this job belongs to — e.g. Full-Stack Development, UI/UX Design, Email Marketing, Content Writing, Video Editing, Virtual Assistant, Social Media Management, Automation & Workflows, Data Analysis, Mobile Development, etc.>"
+  "suggestedCtaId": "<exact cta id from list>",
+  "ctaReason": "<one sentence: why this CTA fits this specific job and client>",
+  "ctaSuggestions": [
+    {
+      "ctaId": "<exact cta id from list>",
+      "ctaName": "<cta name>",
+      "closingLine": "<a ready-to-use closing sentence or two — specific to THIS job, not generic>",
+      "score": <integer 1-100>,
+      "scoreReason": "<one sentence: why this score>"
+    },
+    {
+      "ctaId": "<second cta id — different from first>",
+      "ctaName": "<cta name>",
+      "closingLine": "<ready-to-use closing line>",
+      "score": <integer 1-100>,
+      "scoreReason": "..."
+    },
+    {
+      "ctaId": "<third cta id — different from first two>",
+      "ctaName": "<cta name>",
+      "closingLine": "<ready-to-use closing line>",
+      "score": <integer 1-100>,
+      "scoreReason": "..."
+    }
+  ],
+  "detectedLanguage": "<full English name of the language this job post is written in>",
+  "suggestedLength": "<brief|robust|explanatory>",
+  "detectedNiche": "<the primary freelance niche>"
 }
 
-IMPORTANT for hookSuggestions: The openingLine must be a specific, concrete sentence written for THIS job — not a template or description. It should be ready to paste as the first line of the proposal. Score 85-100 = excellent fit, 70-84 = good fit, 50-69 = workable.${redFlagPromptBlock()}`,
+IMPORTANT for hookSuggestions / ctaSuggestions: The openingLine and closingLine must be specific, concrete sentences written for THIS job — not templates. Ready to paste directly. Score 85-100 = excellent fit, 70-84 = good fit, 50-69 = workable.${redFlagPromptBlock()}`,
         `Analyze this job post:\n\n${data.jobDescription}`,
       );
     } catch (err) {
@@ -314,6 +351,7 @@ export const generateProposal = createServerFn({ method: "POST" })
     analysis?: JobAnalysis | null;
     hookId: string;
     strategyId: string;
+    ctaId?: string;
     customHookText?: string;
     customStrategyText?: string;
     length: "brief" | "robust" | "explanatory";
@@ -331,6 +369,7 @@ export const generateProposal = createServerFn({ method: "POST" })
       analysis: z.any().optional().nullable(),
       hookId: z.string(),
       strategyId: z.string(),
+      ctaId: z.string().optional(),
       customHookText: z.string().optional(),
       customStrategyText: z.string().optional(),
       length: z.enum(["brief", "robust", "explanatory"]),
@@ -358,6 +397,8 @@ export const generateProposal = createServerFn({ method: "POST" })
       const strategyLabel = data.customStrategyText
         ? `AI-Generated Custom Strategy — ${data.customStrategyText}`
         : (() => { const s = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0]; return `${s.name} — ${s.description}`; })();
+      const cta = CTAS.find((c) => c.id === data.ctaId) ?? CTAS[0];
+      const ctaLabel = `${cta.name} — ${cta.description}`;
       // Keep legacy hook/strategy for non-AI paths
       const hook = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0];
       const strategy = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0];
@@ -410,6 +451,8 @@ Hard rules:
 ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 - Use the assigned HOOK: ${hookLabel}
 - Use the assigned STRATEGY: ${strategyLabel}
+- Use the assigned CTA STYLE: ${ctaLabel}
+  The CTA is the VERY LAST sentence(s) of the proposal. It must feel like a natural, confident close — not a desperate ask. Match the style described above. Make it specific to this job (reference something concrete from their post). Never end with "Let me know if interested" or "Feel free to reach out."
 - LENGTH ENFORCEMENT (this is a hard rule):
   * brief: MAXIMUM 1500 characters total. This is for Freelancer.com where character limits are strict. Structure (in this order): Hook paragraph (3-4 sentences, each a distinct insight about THEIR specific problem — no filler, no transitions), one razor-sharp question that pivots from problem to solution, one confident CTA that gives a specific next step (e.g. timeline, a quick call, a scope doc — never "let me know"). Zero portfolio links. Zero milestones. Zero execution plan. These 1500 characters must hit harder than a 4000-character generic proposal.
   * robust: 2000–3000 characters. Hook paragraph → portfolio paragraph (PARAGRAPH 2 — immediately after hook) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
@@ -1198,79 +1241,113 @@ export type ScoutOutreach = z.infer<typeof ScoutOutreachSchema>;
 
 export const generateScoutOutreach = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { jobDescription: string; freelancerContext?: string; customChanges?: string; mockupLink?: string }) =>
+  .inputValidator((d: { jobDescription: string; freelancerContext?: string; customChanges?: string; mockupLink?: string; enable3d?: boolean; websiteData?: string }) =>
     z.object({
       jobDescription: z.string().min(20).max(15000),
       freelancerContext: z.string().max(3000).optional(),
       customChanges: z.string().max(2000).optional(),
       mockupLink: z.string().max(500).optional(),
+      enable3d: z.boolean().optional(),
+      websiteData: z.string().max(5000).optional(),
     }).parse(d),
   )
   .handler(async ({ data }) => {
     try {
       const mockupInstruction = data.mockupLink
-        ? `MOCKUP LINK: The freelancer has a live mockup ready at ${data.mockupLink}. Naturally weave this into the email — something like: "I already put together a quick concept mockup to show you the direction I'm thinking — [link]. It's just a starting point and I can tune every detail to match your exact vision." Mention it feels like real work done upfront, which lowers the client's risk.`
-        : `MOCKUP MENTION: Mention that you can quickly put together a mockup to show the direction before starting — phrase it like: "I can put together a quick concept mockup so you can see where I'm headed before we even kick off — no cost, just so you can give feedback upfront."`;
+        ? `MOCKUP LINK (in the PROOF section): The freelancer has a live mockup/concept ready at ${data.mockupLink}. In the PROOF section of the email, naturally reference it: "I've already put together a quick concept mockup at [link] to show you the direction I'm thinking. It's a starting point — every detail is tunable to your exact vision." This lowers risk and proves real investment upfront.`
+        : `MOCKUP MENTION (in the PROOF section): Mention you can quickly put together a mockup before starting: "I can put together a quick concept mockup so you can see the direction before we even kick off — no cost, just so you can give feedback upfront."`;
 
       const customInstruction = data.customChanges
-        ? `\n\nCUSTOM REQUIREMENTS FROM THE FREELANCER (incorporate naturally):\n${data.customChanges}`
+        ? `\n\nCUSTOM REQUIREMENTS FROM THE FREELANCER (incorporate naturally across all sections):\n${data.customChanges}`
+        : "";
+
+      const websiteInstruction = data.websiteData
+        ? `\n\nCLIENT EXISTING WEBSITE DATA (use these details in the email — reference their brand, existing design, assets):\n${data.websiteData}`
+        : "";
+
+      const animation3dInstruction = data.enable3d
+        ? `\n\n3D ANIMATION DESIGN: The freelancer specializes in 3D web experiences. The vibeCodePrompt MUST include: Three.js or React Three Fiber for 3D scenes, GSAP for smooth animations, parallax scrolling effects, interactive 3D elements that respond to mouse/scroll, particle systems where appropriate, 3D product showcases or hero sections. The overall design language must be premium, cinematic, and motion-rich. Add these to the tech stack.`
         : "";
 
       return await structured(
         ScoutOutreachSchema,
-        `You are an elite cold-email strategist and senior software architect working for a freelance developer who scouts jobs from Upwork, Freelancer, and similar platforms and reaches out directly via email.
+        `You are an elite cold-email strategist and senior software architect. You write emails that get opened, read, and replied to. The client is busy. You have 3 seconds.
 
-Your job has two parts:
+MANDATORY EMAIL STRUCTURE — follow this exact flow:
 
-PART 1 — COLD EMAIL (must not land in spam)
-Write an email that will get opened, read, and replied to. The client is busy and gets hundreds of emails. You have 3 seconds to stop them from deleting it.
+1. SUBJECT LINE
+   - Reflect their specific problem (not "Amazing Developer Available!")
+   - Under 50 characters, no ALL CAPS, no spam words, no emoji
+   - Should feel like it came from someone who already knows their business
+   - Examples: "Your checkout drop-off issue", "The gap in your onboarding flow"
 
-SUBJECT LINE RULES (most critical):
-- Under 50 characters
-- Specific to their project — reference something unique in the job post
-- No ALL CAPS, no excessive punctuation, no emoji, no spam words (free, guaranteed, urgent, limited offer, click here, act now)
-- Curiosity or specificity over hype: "Your checkout redesign idea" beats "Amazing web developer available!"
-- Should feel like it came from a colleague or someone they know, not a salesperson
+2. HOOK (first 2 sentences)
+   - Show you understand their problem — reference something specific from the job post
+   - Creates "that's exactly my situation" recognition
+   - No "I saw your job post on..." openers — too generic
+   - Do NOT start with "I"
 
-EMAIL BODY RULES:
-- Plain conversational text — no HTML, no bullet lists, no headers, no bold
-- First 2 sentences ARE the hook — must reference something specific from their job post that proves you actually read it (not a template)
-- Hook should create instant recognition: "that is exactly what I need" feeling
-- No "I saw your job post on..." openers — too generic
-- No desperate language, no groveling, no "I'd love the opportunity to..."
-- Write like a peer reaching out, not a vendor pitching
-- No portfolio links — instead, offer a specific, concrete piece of value in the email (a quick insight about their problem, a specific approach you'd take)
-- End with ONE simple, low-friction CTA: a specific question or "Worth a quick call?" — never "Let me know if interested"
-- 150-250 words maximum for the body
+3. INSIGHT (1-2 sentences)
+   - Explain WHY this is actually a hard problem (the non-obvious reason)
+   - Go deeper than the client went — show you've seen this before
+   - This is what separates you from every other applicant
 
-${mockupInstruction}${customInstruction}
+4. SOLUTION (2-3 sentences)
+   - Show what you'd actually build — be specific about approach
+   - Reference their industry, their likely users, their business goal
+   - One concrete differentiator about how you'd do it differently
+
+5. PROOF (1-2 sentences)
+   - Mention the mockup/preview you've built or can build
+   - ${mockupInstruction}
+
+6. CTA (1 sentence)
+   - Ask for their OPINION, not their business
+   - Example: "Does this approach make sense for what you're trying to do?"
+   - Never: "Let me know if you're interested" or "I'd love the opportunity"
+   - Low friction — they should be able to reply with one word
+
+TOTAL EMAIL BODY: 150-250 words. Plain conversational text — no HTML, no bullet lists, no headers, no bold. Write like a peer, not a vendor.${customInstruction}${websiteInstruction}
 
 PART 2 — DEVELOPMENT PROMPT
-Generate a comprehensive, production-quality development prompt the freelancer can paste directly into Cursor, Lovable, Bolt, v0, or any AI coding tool. This prompt becomes their "sample work" — it must be so detailed and thoughtful that the client would be impressed by it alone.
+Generate a comprehensive, production-quality prompt the freelancer pastes into Cursor, Lovable, Bolt, v0, or any AI coding tool. This IS their sample work — so detailed the client would be impressed by it alone.
 
-Classify the job as one of: vibe-coding (no-code/low-code tools), full-stack (traditional code), automation (Zapier/Make/n8n type), ai-agent (LLM-based agents/tools), general-web
+MASTER DESIGN PHILOSOPHY (apply to every design decision in the prompt):
+- Understand the client's business first: what they sell, who their customers are, what action they want visitors to take
+- Preserve existing brand identity unless explicitly asked to replace it — modernize, don't replace
+- Design around the client's goal: every element must serve one primary conversion objective
+- Match the design language to the industry (luxury = editorial/spacious, healthcare = calm/accessible, law = structured/professional)
+- Create clear visual hierarchy: visitor instantly knows WHO, WHAT, WHY, NEXT STEP
+- Build a cohesive design system: consistent buttons, cards, inputs, colors, typography, spacing, corners
+- Use motion to enhance, not distract: subtle fades, gentle parallax, hover feedback, smooth transitions
+- Design for real content — no placeholder text assumptions
+- Think like a production website — every section earns its place
+${animation3dInstruction}
 
-The vibeCodePrompt field must be a single, long, paste-ready prompt (400-800 words) written AS IF you are speaking to an AI coding assistant. It should:
+Classify the job: vibe-coding (no-code/low-code), full-stack (traditional code), automation (Zapier/Make/n8n), ai-agent (LLM/AI tools), general-web
+
+The vibeCodePrompt must:
 - Start with "Build me a [description]..."
-- Describe EVERY screen, page, and feature
-- Include specific UI/UX details (colors, layout, components)
-- Mention integrations (auth, payments, databases, APIs)
-- Include error states, loading states, empty states
+- Describe EVERY screen, page, and component
+- Include specific UI/UX details (colors, layout, design language, spacing)
+- Specify integrations (auth, payments, databases, APIs)
+- Cover error states, loading states, empty states
 - List every enhancement and edge case
-- Specify the tech stack to use
-- Sound like it came from a product manager who knows exactly what they want
+- Specify tech stack
+- Apply the master design philosophy above — make the mockup solve the business problem
+- 400-800 words, paste-ready${data.enable3d ? "\n- INCLUDE detailed 3D animation and interactive motion specifications" : ""}
 
 Return JSON:
 {
-  "subjectLine": "<under 50 chars, specific, not spammy>",
-  "emailBody": "<full email text, 150-250 words, plain text, no formatting>",
-  "hookRationale": "<why the opening lines work>",
-  "strategyNote": "<the core persuasion strategy behind this email>",
+  "subjectLine": "<under 50 chars, reflects their problem>",
+  "emailBody": "<full email text, 150-250 words, plain text, structured as: Hook → Insight → Solution → Proof → CTA>",
+  "hookRationale": "<why the opening lines work for this specific client>",
+  "strategyNote": "<the core persuasion strategy — what makes this email different>",
   "spamAvoidanceTips": ["<tip 1>", "<tip 2>", "<tip 3>"],
   "devPrompt": {
     "projectTitle": "<short project name>",
     "jobType": "<vibe-coding|full-stack|automation|ai-agent|general-web>",
-    "jobTypeName": "<human readable: Vibe Coding / No-Code, Full-Stack Development, etc.>",
+    "jobTypeName": "<human readable>",
     "overview": "<2-3 sentence project overview>",
     "techStack": ["<tech 1>", "<tech 2>"],
     "coreFeatures": [
@@ -1280,14 +1357,111 @@ Return JSON:
       { "title": "<enhancement name>", "description": "<what to build>", "impact": "<why it matters>" }
     ],
     "architecture": "<paragraph on system architecture, data flow, component structure>",
-    "integrations": ["<integration 1>", "<integration 2>"],
+    "integrations": ["<integration 1>"],
     "scalabilityNotes": "<how to build this to scale from day 1>",
-    "vibeCodePrompt": "<the full paste-ready AI coding prompt, 400-800 words>",
+    "vibeCodePrompt": "<full paste-ready prompt, 400-800 words, applies master design philosophy>",
     "estimatedComplexity": "<Simple|Medium|Complex|Enterprise>"
   }
 }`,
-        `JOB POST:\n${data.jobDescription}${data.freelancerContext ? `\n\nFREELANCER CONTEXT:\n${data.freelancerContext}` : ""}`,
+        `JOB POST:\n${data.jobDescription}${data.freelancerContext ? `\n\nFREELANCER CONTEXT:\n${data.freelancerContext}` : ""}${data.websiteData ? `\n\nCLIENT WEBSITE DATA:\n${data.websiteData}` : ""}`,
       );
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
+// ---------- Analyze Client Website ----------
+export type WebsiteData = {
+  url: string;
+  title: string;
+  description: string;
+  businessType: string;
+  industry: string;
+  primaryGoal: string;
+  brandColors: string[];
+  imageUrls: string[];
+  videoUrls: string[];
+  keyPages: string[];
+  existingTech: string[];
+  designNotes: string;
+};
+
+export const analyzeClientWebsite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { url: string }) =>
+    z.object({ url: z.string().url().max(500) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      // Fetch the website HTML server-side (avoids CORS)
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      let html = "";
+      try {
+        const res = await fetch(data.url, {
+          signal: controller.signal,
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; ProposalBot/1.0)" },
+        });
+        html = await res.text();
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      // Extract useful snippets from HTML (keep under 8k chars for AI)
+      const stripped = html
+        .replace(/<script[\s\S]*?<\/script>/gi, "")
+        .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s{2,}/g, " ")
+        .slice(0, 6000);
+
+      // Extract image src and video src attributes from raw HTML
+      const imgMatches = [...html.matchAll(/(?:src|data-src)=["']([^"']+\.(?:jpg|jpeg|png|webp|gif|svg))["']/gi)]
+        .map((m) => m[1])
+        .filter((u) => u.startsWith("http"))
+        .slice(0, 10);
+      const videoMatches = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:mp4|webm|ogg|mov))["']/gi)]
+        .map((m) => m[1])
+        .filter((u) => u.startsWith("http"))
+        .slice(0, 5);
+
+      const WebsiteSchema = z.object({
+        title: z.string(),
+        description: z.string(),
+        businessType: z.string(),
+        industry: z.string(),
+        primaryGoal: z.string(),
+        brandColors: z.array(z.string()).default([]),
+        keyPages: z.array(z.string()).default([]),
+        existingTech: z.array(z.string()).default([]),
+        designNotes: z.string(),
+      });
+
+      const analysis = await structured(
+        WebsiteSchema,
+        `You analyze a business website and extract structured information for a freelance web developer. Be specific and factual.
+
+Return a JSON object:
+{
+  "title": "<the site's main headline or brand name>",
+  "description": "<1-2 sentences describing what this business does>",
+  "businessType": "<e.g. SaaS, E-commerce, Local Service, Agency, Personal Brand, B2B, Nonprofit>",
+  "industry": "<e.g. Healthcare, Real Estate, Fashion, Tech, Food & Beverage>",
+  "primaryGoal": "<the main conversion goal: e.g. Book a call, Buy a product, Generate leads, Sign up for free trial>",
+  "brandColors": ["<hex or descriptive color 1>", "<hex or color 2>"],
+  "keyPages": ["<page name 1>", "<page name 2>"],
+  "existingTech": ["<tech/platform detected e.g. WordPress, Shopify, React, HubSpot>"],
+  "designNotes": "<2-3 sentences: what works, what could be improved, existing design language>"
+}`,
+        `Website URL: ${data.url}\n\nWebsite content:\n${stripped}`,
+      );
+
+      return {
+        url: data.url,
+        ...analysis,
+        imageUrls: imgMatches,
+        videoUrls: videoMatches,
+      } as WebsiteData;
     } catch (err) {
       handleAiError(err);
     }

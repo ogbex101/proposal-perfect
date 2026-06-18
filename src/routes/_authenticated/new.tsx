@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-import { HOOKS, STRATEGIES, LENGTHS, type LengthId } from "@/lib/proposal-constants";
+import { HOOKS, STRATEGIES, CTAS, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
 import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
@@ -68,6 +68,21 @@ function nichematch(item: { title: string; description: string }, niche: string)
 
 type Milestone = { title: string; description: string; amount?: string };
 
+// ── Daily proposal counter (localStorage) ───────────────────────────────────
+type DayStats = { date: string; generated: number; submitted: number };
+function todayKey() { return new Date().toISOString().slice(0, 10); }
+function readDayStats(): DayStats {
+  try {
+    const raw = localStorage.getItem("pp_day_stats");
+    const parsed: DayStats = raw ? JSON.parse(raw) : { date: "", generated: 0, submitted: 0 };
+    if (parsed.date !== todayKey()) return { date: todayKey(), generated: 0, submitted: 0 };
+    return parsed;
+  } catch { return { date: todayKey(), generated: 0, submitted: 0 }; }
+}
+function writeDayStats(stats: DayStats) {
+  try { localStorage.setItem("pp_day_stats", JSON.stringify(stats)); } catch {}
+}
+
 function NewProposal() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -81,9 +96,15 @@ function NewProposal() {
   const [keyReq, setKeyReq] = useState("");
   const [painPoints, setPainPoints] = useState("");
 
+  const [dayStats, setDayStats] = useState<DayStats>(() =>
+    typeof window !== "undefined" ? readDayStats() : { date: todayKey(), generated: 0, submitted: 0 }
+  );
+  const [proposalSubmitted, setProposalSubmitted] = useState(false);
+
   const [analysis, setAnalysis] = useState<JobAnalysis | null>(null);
   const [hookId, setHookId] = useState<string>(HOOKS[0].id);
   const [strategyId, setStrategyId] = useState<string>(STRATEGIES[0].id);
+  const [ctaId, setCtaId] = useState<string>(CTAS[0].id);
   const [length, setLength] = useState<LengthId>("robust");
   const [includePlan, setIncludePlan] = useState(true);
   const [selectedPortfolio, setSelectedPortfolio] = useState<string[]>([]);
@@ -155,8 +176,10 @@ function NewProposal() {
       setAnalysis({ ...result, hookSuggestions: result.hookSuggestions ?? [], detectedNiche: result.detectedNiche ?? "", suggestedLength: result.suggestedLength ?? "robust" } as JobAnalysis);
       const h = HOOKS.find((x) => x.id === result.suggestedHookId);
       const s = STRATEGIES.find((x) => x.id === result.suggestedStrategyId);
+      const c = CTAS.find((x) => x.id === (result as any).suggestedCtaId);
       if (h) setHookId(h.id);
       if (s) setStrategyId(s.id);
+      if (c) setCtaId(c.id);
       // Auto-select primary portfolio items if none chosen yet
       if (selectedPortfolio.length === 0) {
         const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
@@ -195,6 +218,7 @@ function NewProposal() {
           analysis,
           hookId,
           strategyId,
+          ctaId,
           length,
           includePlan,
           portfolioItems: items,
@@ -209,6 +233,12 @@ function NewProposal() {
       setContent(result.content);
       setExplanation(result.explanation);
       setShowExplain(true);
+      setProposalSubmitted(false);
+      // Increment daily generated counter
+      const fresh = readDayStats();
+      const updated = { ...fresh, generated: fresh.generated + 1 };
+      writeDayStats(updated);
+      setDayStats(updated);
       toast.success("Proposal generated");
       // auto-polish with fresh content passed directly (avoid stale closure)
       setTimeout(() => polishMutation.mutate(result.content), 150);
@@ -250,7 +280,11 @@ function NewProposal() {
         setSamplesGenerating(true);
         try {
           const { slug } = await generateAndSavePortfolioSamples({
-            data: { jobDescription: effectiveJob, category },
+            data: {
+              jobDescription: effectiveJob,
+              category,
+              profileImageUrl: avatar?.url ?? undefined,
+            },
           });
           setSamplesSlug(slug);
           toast.success(`${category} portfolio samples generated`);
@@ -393,7 +427,18 @@ function NewProposal() {
     setAvatar(null);
     setToneAssertiveness(3);
     setToneFormalness(3);
+    setProposalSubmitted(false);
     clearDraft({}).catch(() => {});
+  }
+
+  function markSubmitted() {
+    if (proposalSubmitted) return;
+    setProposalSubmitted(true);
+    const fresh = readDayStats();
+    const updated = { ...fresh, submitted: fresh.submitted + 1 };
+    writeDayStats(updated);
+    setDayStats(updated);
+    toast.success("Marked as submitted! 🎯");
   }
 
   // ── Auto-save draft (debounced) ──────────────────────────────────────
@@ -456,6 +501,40 @@ function NewProposal() {
           )
         }
       />
+
+      {/* Daily tracker bar */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
+          <Sparkles className="h-3.5 w-3.5 text-gold" />
+          <span className="text-xs font-medium text-white/60">Today</span>
+          <span className="font-mono text-sm font-bold text-gold">{dayStats.generated}</span>
+          <span className="text-xs text-white/30">generated</span>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
+          <ClipboardCopy className="h-3.5 w-3.5 text-teal" />
+          <span className="text-xs font-medium text-white/60">Submitted</span>
+          <span className="font-mono text-sm font-bold text-teal">{dayStats.submitted}</span>
+          <span className="text-xs text-white/30">today</span>
+        </div>
+        {content && (
+          <button
+            onClick={markSubmitted}
+            disabled={proposalSubmitted}
+            className={cn(
+              "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-medium transition-all",
+              proposalSubmitted
+                ? "border-teal/40 bg-teal/10 text-teal cursor-default"
+                : "border-white/20 bg-white/5 text-white/60 hover:border-teal/40 hover:text-teal"
+            )}
+          >
+            {proposalSubmitted ? (
+              <><User className="h-3.5 w-3.5" /> Submitted ✓</>
+            ) : (
+              <><User className="h-3.5 w-3.5" /> Mark as submitted</>
+            )}
+          </button>
+        )}
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
         {/* LEFT: input + analysis */}
@@ -678,6 +757,65 @@ function NewProposal() {
                         <div className="min-w-0">
                           <span className={cn("text-sm font-medium", isActive ? "text-white" : "text-foreground/80")}>{s.name}</span>
                           <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{s.description}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* CTA selector */}
+              <div>
+                <Label className="annotation mb-2 block !text-muted-foreground">
+                  Call to Action (closing)
+                  {analysis && (analysis as any).ctaSuggestions?.length > 0 && (
+                    <span className="ml-1.5 text-[10px] text-gold">· AI ranked for this job</span>
+                  )}
+                </Label>
+                {/* AI-ranked CTA suggestions */}
+                {analysis && (analysis as any).ctaSuggestions?.length > 0 && (
+                  <div className="mb-3 space-y-1.5">
+                    {(analysis as any).ctaSuggestions.slice(0, 3).map((cs: { ctaId: string; ctaName: string; closingLine: string; score: number; scoreReason: string }) => (
+                      <button
+                        key={cs.ctaId}
+                        type="button"
+                        onClick={() => setCtaId(cs.ctaId)}
+                        className={cn(
+                          "w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
+                          ctaId === cs.ctaId ? "border-purple-400/60 bg-purple-400/10" : "border-purple-400/20 bg-purple-400/[0.03] hover:border-purple-400/40"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className={cn("text-[12px] font-semibold", ctaId === cs.ctaId ? "text-purple-300" : "text-white")}>{cs.ctaName}</span>
+                          <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold",
+                            cs.score >= 85 ? "bg-green-500/20 text-green-400" : cs.score >= 70 ? "bg-teal/20 text-teal" : "bg-muted/40 text-muted-foreground"
+                          )}>{cs.score}/100</span>
+                        </div>
+                        <p className="text-[11px] text-purple-300/80 leading-snug italic mb-1">"{cs.closingLine}"</p>
+                        <p className="text-[10px] text-muted-foreground">{cs.scoreReason}</p>
+                      </button>
+                    ))}
+                    <p className="annotation !text-muted-foreground">Or choose any style:</p>
+                  </div>
+                )}
+                <div className="grid gap-1.5">
+                  {CTAS.map((c) => {
+                    const isActive = ctaId === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setCtaId(c.id)}
+                        className={cn(
+                          "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                          isActive ? "border-purple-400/50 bg-purple-400/8" : "border-border/40 bg-background/30 hover:border-border/70"
+                        )}
+                      >
+                        <div className={cn("mt-0.5 h-3 w-3 shrink-0 rounded-full border-2 transition-colors",
+                          isActive ? "border-purple-400 bg-purple-400" : "border-muted-foreground")} />
+                        <div className="min-w-0">
+                          <span className={cn("text-sm font-medium", isActive ? "text-purple-300" : "text-foreground/80")}>{c.name}</span>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{c.description}</p>
                         </div>
                       </button>
                     );

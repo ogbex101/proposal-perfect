@@ -38,6 +38,31 @@ export const LENGTHS = [
 
 export type LengthId = (typeof LENGTHS)[number]["id"];
 
+export const CTAS = [
+  { id: "soft_availability",   name: "Soft Availability",    description: "Let them know you have a slot open this sprint — creates urgency without pressure." },
+  { id: "specific_call",       name: "15-Minute Call",        description: "Ask for a quick alignment call — low-friction, specific ask." },
+  { id: "opinion_ask",         name: "Biggest Concern Ask",   description: "Ask what they're most worried about — turns the CTA into a diagnostic." },
+  { id: "discovery_question",  name: "Success Question",      description: "Ask what success looks like 90 days after launch — reframes the pitch." },
+  { id: "assumption_check",    name: "Assumption Check",      description: "Verify you're solving the right problem before committing — shows seniority." },
+  { id: "timeline_ask",        name: "Timeline Reality Check","description": "Ask when they need it live and offer an honest answer — builds instant trust." },
+  { id: "proof_offer",         name: "Case Study Offer",      description: "Offer to send a similar case study — gives them a reason to reply." },
+  { id: "scope_offer",         name: "Scope Doc Offer",       description: "Offer a detailed scope document by tomorrow — makes the next step feel safe." },
+  { id: "loom_offer",          name: "Loom Walkthrough",      description: "Offer a Loom of your phase-1 approach — visual proof without a sales call." },
+  { id: "low_risk_next",       name: "No Pressure Reply",     description: "End with a low-friction 'just reply' nudge — removes the commitment barrier." },
+  { id: "constraint_reveal",   name: "Constraint Question",   description: "Ask which constraint matters most — timeline, budget, or quality — to show strategic thinking." },
+  { id: "urgency_frame",       name: "Cost of Delay",         description: "Name the ongoing cost of leaving the problem unsolved, then ask when they want to start." },
+  { id: "soft_close",          name: "Soft Close",            description: "If this resonates, just reply — no long back-and-forth needed to see if it's a fit." },
+  { id: "reverse_sell",        name: "Reverse Sell",          description: "Acknowledge they might not need you — makes it safe to respond either way." },
+  { id: "challenge_reframe",   name: "Problem First",         description: "Ask one clarifying question before discussing solutions — signals consultative thinking." },
+  { id: "shared_risk",         name: "Shared Risk Frame",     description: "Emphasize 10 minutes of scope alignment saves weeks — positions you as the careful one." },
+  { id: "social_proof_angle",  name: "Similar Outcome",       description: "Mention a client in a similar situation and offer to share what worked." },
+  { id: "sprint_offer",        name: "Focused Sprint",        description: "Offer to carve out a dedicated sprint for this project — makes delivery feel real." },
+  { id: "direct_ask",          name: "Direct Ask",            description: "Ask if they're ready to move forward or need more info — respects their time." },
+  { id: "curious_ask",         name: "Why Now Question",      description: "Ask what triggered the decision to tackle this now — builds rapport and context." },
+] as const;
+
+export type CtaId = (typeof CTAS)[number]["id"];
+
 export const FORBIDDEN_PHRASES = [
   "Here is what I will do",
   "I have done this before",
