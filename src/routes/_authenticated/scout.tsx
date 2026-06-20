@@ -205,15 +205,20 @@ function ScoutMode() {
   }, [jobText]);
 
   async function runWebsiteAnalysis(urlOverride?: string) {
-    const url = urlOverride ?? manualUrl.trim() ?? detectedUrl;
+    // Clean trailing punctuation that commonly gets included in auto-detected URLs
+    const rawUrl = urlOverride ?? (manualUrl.trim() || detectedUrl);
+    const url = rawUrl?.replace(/[.,;:!?)}\]'"]+$/, "").trim();
     if (!url) return;
+    // Basic URL sanity check
+    try { new URL(url); } catch { toast.error(`Invalid URL: "${url}"`); return; }
     setAnalyzingWebsite(true);
     try {
       const data = await analyzeClientWebsite({ data: { url } });
       if (data) setWebsiteData(data as WebsiteData);
       toast.success("Website analyzed");
-    } catch {
-      toast.error("Could not analyze website — continuing without it");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Website scan failed: ${msg}`);
     } finally {
       setAnalyzingWebsite(false);
     }

@@ -1429,15 +1429,24 @@ export const analyzeClientWebsite = createServerFn({ method: "POST" })
       const timeout = setTimeout(() => controller.abort(), 15000);
       let html = "";
       try {
-        const res = await fetch(data.url, {
-          signal: controller.signal,
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-          },
-        });
+        let res: Response;
+        try {
+          res = await fetch(data.url, {
+            signal: controller.signal,
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Language": "en-US,en;q=0.5",
+            },
+          });
+        } catch (fetchErr) {
+          const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+          if (msg.includes("abort")) throw new Error("Website took too long to respond (15s timeout). Try again or check the URL.");
+          throw new Error(`Could not reach the website: ${msg}`);
+        }
+        if (!res.ok) throw new Error(`Website returned HTTP ${res.status}. Make sure the URL is correct and publicly accessible.`);
         html = await res.text();
+        if (!html.trim()) throw new Error("Website returned an empty page. It may require JavaScript to load (try a different URL).");
       } finally {
         clearTimeout(timeout);
       }
