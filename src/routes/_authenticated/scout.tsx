@@ -230,16 +230,48 @@ function ScoutMode() {
         `WEBSITE TITLE: ${websiteData.title}`,
         `DESCRIPTION: ${websiteData.description}`,
         `PRIMARY CONVERSION GOAL: ${websiteData.primaryGoal}`,
+        websiteData.secondaryGoals?.length ? `SECONDARY GOALS: ${websiteData.secondaryGoals.join(", ")}` : null,
         `TARGET AUDIENCE: ${websiteData.targetAudience}`,
         `UNIQUE VALUE PROPOSITION: ${websiteData.uniqueValueProp}`,
+        websiteData.pricingPosition ? `PRICING POSITION: ${websiteData.pricingPosition}` : null,
+        websiteData.businessInsights ? `BUSINESS INSIGHTS: ${websiteData.businessInsights}` : null,
+        // Scores
+        websiteData.scores ? [
+          `WEBSITE SCORES (1-10):`,
+          `  Branding: ${websiteData.scores.branding}/10 | UX: ${websiteData.scores.ux}/10 | Visual Design: ${websiteData.scores.visualDesign}/10 | Content: ${websiteData.scores.content}/10`,
+          `  Performance: ${websiteData.scores.performance}/10 | Trust: ${websiteData.scores.trust}/10 | Accessibility: ${websiteData.scores.accessibility}/10 | SEO: ${websiteData.scores.seo}/10`,
+          `  Conversion: ${websiteData.scores.conversion}/10 | Motion Design: ${websiteData.scores.motionDesign}/10 | Overall: ${websiteData.scores.overall}/10`,
+          `  WEAKEST AREAS (drive all recommendations): ${websiteData.scores.weakestAreas.join(", ")}`,
+          `  Score Notes: ${websiteData.scores.scoreNotes}`,
+        ].join("\n") : null,
+        // Brand assets
         websiteData.logoUrl ? `LOGO URL: ${websiteData.logoUrl}` : null,
         websiteData.brandColors.length ? `BRAND COLORS: ${websiteData.brandColors.join(", ")}` : null,
         websiteData.fontFamilies.length ? `FONTS: ${websiteData.fontFamilies.join(", ")}` : null,
+        websiteData.buttonStyle ? `BUTTON STYLE: ${websiteData.buttonStyle}` : null,
+        websiteData.cardStyle ? `CARD STYLE: ${websiteData.cardStyle}` : null,
+        websiteData.borderRadius ? `BORDER RADIUS: ${websiteData.borderRadius}` : null,
+        websiteData.shadowStyle ? `SHADOWS: ${websiteData.shadowStyle}` : null,
+        websiteData.spacingSystem ? `SPACING: ${websiteData.spacingSystem}` : null,
+        websiteData.layoutStyle ? `LAYOUT: ${websiteData.layoutStyle}` : null,
+        websiteData.componentStyle ? `COMPONENT STYLE: ${websiteData.componentStyle}` : null,
+        websiteData.photographyStyle ? `PHOTOGRAPHY STYLE: ${websiteData.photographyStyle}` : null,
+        websiteData.motionStyle ? `EXISTING MOTION: ${websiteData.motionStyle}` : null,
+        websiteData.iconStyle ? `ICON STYLE: ${websiteData.iconStyle}` : null,
         websiteData.imageUrls.length ? `IMAGE ASSETS: ${websiteData.imageUrls.slice(0, 8).join(", ")}` : null,
+        // Navigation & CTAs
+        websiteData.navigationStructure?.length ? `NAVIGATION: ${websiteData.navigationStructure.join(" → ")}` : null,
+        websiteData.callsToAction?.length ? `EXISTING CTAs: ${websiteData.callsToAction.join(", ")}` : null,
+        websiteData.trustSignals?.length ? `TRUST SIGNALS: ${websiteData.trustSignals.join(", ")}` : null,
+        websiteData.existingAnimations ? `EXISTING ANIMATIONS: ${websiteData.existingAnimations}` : null,
+        websiteData.interactiveElements ? `INTERACTIVE ELEMENTS: ${websiteData.interactiveElements}` : null,
+        // Insights
         `DESIGN LANGUAGE: ${websiteData.designLanguage}`,
         `WHAT WORKS: ${websiteData.whatWorks}`,
         `OPPORTUNITIES: ${websiteData.opportunities}`,
         `CONVERSION BOTTLENECKS: ${websiteData.conversionBottlenecks}`,
+        websiteData.seoStructure ? `SEO STRUCTURE: ${websiteData.seoStructure}` : null,
+        websiteData.mobileExperience ? `MOBILE EXPERIENCE: ${websiteData.mobileExperience}` : null,
         websiteData.existingTech.length ? `EXISTING TECH STACK: ${websiteData.existingTech.join(", ")}` : null,
         websiteData.keyPages.length ? `KEY PAGES: ${websiteData.keyPages.join(", ")}` : null,
         websiteData.contentSections.length
@@ -443,6 +475,7 @@ function ScoutMode() {
                   <p><span className="text-white/40">Goal:</span> {websiteData.primaryGoal}</p>
                   <p><span className="text-white/40">Audience:</span> {websiteData.targetAudience}</p>
                   <p><span className="text-white/40">Value prop:</span> {websiteData.uniqueValueProp}</p>
+                  {websiteData.pricingPosition && <p><span className="text-white/40">Pricing:</span> {websiteData.pricingPosition}</p>}
                   {websiteData.fontFamilies.length > 0 && (
                     <p><span className="text-white/40">Fonts:</span> {websiteData.fontFamilies.join(", ")}</p>
                   )}
@@ -451,10 +484,58 @@ function ScoutMode() {
                   )}
                 </div>
 
+                {/* Score grid */}
+                {websiteData.scores && (
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-white/30">Website Scores</p>
+                      <span className={cn(
+                        "rounded-full border px-2 py-0.5 text-[10px] font-bold",
+                        websiteData.scores.overall >= 7 ? "border-green-400/30 bg-green-400/10 text-green-400"
+                        : websiteData.scores.overall >= 5 ? "border-gold/30 bg-gold/10 text-gold"
+                        : "border-red-400/30 bg-red-400/10 text-red-400"
+                      )}>
+                        Overall {websiteData.scores.overall}/10
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                      {([
+                        ["Branding", websiteData.scores.branding],
+                        ["UX", websiteData.scores.ux],
+                        ["Visual Design", websiteData.scores.visualDesign],
+                        ["Content", websiteData.scores.content],
+                        ["Performance", websiteData.scores.performance],
+                        ["Trust", websiteData.scores.trust],
+                        ["Accessibility", websiteData.scores.accessibility],
+                        ["SEO", websiteData.scores.seo],
+                        ["Conversion", websiteData.scores.conversion],
+                        ["Motion Design", websiteData.scores.motionDesign],
+                      ] as [string, number][]).map(([label, score]) => (
+                        <div key={label} className="flex items-center gap-1.5">
+                          <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full", score >= 7 ? "bg-green-400" : score >= 5 ? "bg-gold" : "bg-red-400")}
+                              style={{ width: `${score * 10}%` }}
+                            />
+                          </div>
+                          <span className={cn("text-[9px] font-mono w-4 text-right", score <= 4 ? "text-red-400 font-bold" : "text-white/40")}>{score}</span>
+                          <span className="text-[9px] text-white/40 truncate w-20">{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {websiteData.scores.weakestAreas.length > 0 && (
+                      <p className="mt-2 text-[10px] text-red-400/80">
+                        ↑ Driving recommendations: {websiteData.scores.weakestAreas.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Opportunities & bottlenecks */}
                 {(websiteData.opportunities || websiteData.conversionBottlenecks) && (
                   <div className="space-y-1.5 rounded-lg bg-white/[0.03] border border-white/10 p-3 text-[11px]">
                     {websiteData.whatWorks && <p><span className="text-green-400">What works:</span> <span className="text-white/50">{websiteData.whatWorks}</span></p>}
+                    {websiteData.businessInsights && <p><span className="text-blue-400">Business:</span> <span className="text-white/50">{websiteData.businessInsights}</span></p>}
                     {websiteData.opportunities && <p><span className="text-gold">Opportunities:</span> <span className="text-white/50">{websiteData.opportunities}</span></p>}
                     {websiteData.conversionBottlenecks && <p><span className="text-red-400">Bottlenecks:</span> <span className="text-white/50">{websiteData.conversionBottlenecks}</span></p>}
                   </div>
