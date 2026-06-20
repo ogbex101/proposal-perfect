@@ -196,7 +196,10 @@ function ScoutMode() {
   useEffect(() => {
     if (jobText === prevJobRef.current) return;
     prevJobRef.current = jobText;
-    const match = jobText.match(/https?:\/\/[^\s\]>)"]+/);
+    // Handle plain URLs and markdown [text](url) links
+    const mdLinkMatch = jobText.match(/\[[^\]]+\]\((https?:\/\/[^)]+)\)/);
+    const plainMatch = jobText.match(/https?:\/\/[^\s\]>)"]+/);
+    const match = mdLinkMatch ? { 0: mdLinkMatch[1] } : plainMatch;
     const url = match ? match[0] : null;
     setDetectedUrl(url);
     if (!url) {
@@ -205,11 +208,14 @@ function ScoutMode() {
   }, [jobText]);
 
   async function runWebsiteAnalysis(urlOverride?: string) {
-    // Clean trailing punctuation that commonly gets included in auto-detected URLs
     const rawUrl = urlOverride ?? (manualUrl.trim() || detectedUrl);
-    const url = rawUrl?.replace(/[.,;:!?)}\]'"]+$/, "").trim();
+    if (!rawUrl) return;
+    // Strip markdown link format: [text](url) → url
+    const mdMatch = rawUrl.match(/\[([^\]]+)\]\(([^)]+)\)/);
+    const extracted = mdMatch ? mdMatch[2] : rawUrl;
+    // Clean trailing punctuation
+    const url = extracted.replace(/[.,;:!?)}\]'"]+$/, "").trim();
     if (!url) return;
-    // Basic URL sanity check
     try { new URL(url); } catch { toast.error(`Invalid URL: "${url}"`); return; }
     setAnalyzingWebsite(true);
     try {
