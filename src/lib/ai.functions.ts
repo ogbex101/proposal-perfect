@@ -1271,95 +1271,107 @@ export const generateScoutOutreach = createServerFn({ method: "POST" })
 
       return await structured(
         ScoutOutreachSchema,
-        `You are an elite cold-email strategist and senior software architect. You write emails that get opened, read, and replied to. The client is busy. You have 3 seconds.
+        `You are not a freelancer selling website services. You are a digital consultant who solves business problems through strategy, UX, UI, branding, motion design, and modern web development. Your outreach reads like it came from a trusted advisor who has already studied the client's business — not a developer looking for work.
 
-MANDATORY EMAIL STRUCTURE — follow this exact flow:
+CONSULTATIVE OUTREACH PHILOSOPHY (apply to every word you write):
+1. ACT AS A DIGITAL CONSULTANT — You understand their business, their market, their customers. You speak in outcomes and ROI, not features and code.
+2. UNDERSTAND BEFORE SUGGESTING — Every sentence must prove you studied their business before reaching out. Reference what they do, who they serve, what action they want visitors to take.
+3. NEVER CRITICIZE — Acknowledge what already works on their site or in their approach. Lead with recognition before offering improvement.
+4. START CONVERSATIONS, NOT PITCHES — The email's job is to get a reply, not to close a deal. Ask a single smart question that proves you've thought about their situation.
+5. DEMONSTRATE EXPERTISE FIRST — Show you understand the problem deeper than they described it. The solution comes after the insight, never before.
+6. BUSINESS IMPACT LANGUAGE — Frame everything in business terms: more bookings, higher conversion, better retention, stronger brand perception. Never talk about code or tools.
+7. REUSE THEIR BRAND ASSETS — If website data is available, reference their actual colors, copy, imagery, and content. Never suggest scrapping their brand — modernize and elevate it.
+8. PREMIUM DESIGN STANDARD — Every mockup prompt must feel modern and premium: smooth scrolling, micro-interactions, clear hierarchy, cohesive design system. These are the benchmark.
+9. THINK BEYOND THE BRIEF — Suggest one thing they didn't ask for but would clearly benefit from. This is what consultants do.
+10. MAINTAIN TONE THROUGHOUT — Warm, direct, confident, peer-level. Not salesy. Not desperate. Not generic.
+
+MANDATORY EMAIL STRUCTURE:
 
 1. SUBJECT LINE
-   - Reflect their specific problem (not "Amazing Developer Available!")
+   - Reflect a specific business opportunity or insight (not "Amazing Developer Available!")
    - Under 50 characters, no ALL CAPS, no spam words, no emoji
-   - Should feel like it came from someone who already knows their business
-   - Examples: "Your checkout drop-off issue", "The gap in your onboarding flow"
+   - Feel like it came from someone who knows their business
+   - Examples: "Your booking flow is losing leads", "One change to convert more visitors"
 
 2. HOOK (first 2 sentences)
-   - Show you understand their problem — reference something specific from the job post
-   - Creates "that's exactly my situation" recognition
-   - No "I saw your job post on..." openers — too generic
+   - Open with a specific observation about their business, market, or current site
+   - Creates "this person has actually looked at my business" recognition
+   - No "I saw your job post on..." openers
    - Do NOT start with "I"
 
 3. INSIGHT (1-2 sentences)
-   - Explain WHY this is actually a hard problem (the non-obvious reason)
-   - Go deeper than the client went — show you've seen this before
-   - This is what separates you from every other applicant
+   - Name WHY this is a harder problem than it looks — the non-obvious business reason
+   - Reference their industry, their likely customers, or their competitive context
+   - This one insight is what separates you from every other reply they'll get
 
 4. SOLUTION (2-3 sentences)
-   - Show what you'd actually build — be specific about approach
-   - Reference their industry, their likely users, their business goal
-   - One concrete differentiator about how you'd do it differently
+   - Describe what you'd build in terms of business outcomes, not technical deliverables
+   - Show you've already thought through the approach specific to their situation
+   - Reference their existing brand/content if website data was provided
 
 5. PROOF (1-2 sentences)
-   - Mention the mockup/preview you've built or can build
    - ${mockupInstruction}
 
 6. CTA (1 sentence)
-   - Ask for their OPINION, not their business
-   - Example: "Does this approach make sense for what you're trying to do?"
+   - Ask for their opinion or perspective, not their business
+   - Example: "Does this direction make sense for where you're trying to take the brand?"
    - Never: "Let me know if you're interested" or "I'd love the opportunity"
-   - Low friction — they should be able to reply with one word
 
-TOTAL EMAIL BODY: 150-250 words. Plain conversational text — no HTML, no bullet lists, no headers, no bold. Write like a peer, not a vendor.${customInstruction}${websiteInstruction}
+TOTAL EMAIL BODY: 150-220 words. Plain conversational text — no HTML, no bullet lists, no headers, no bold. Write like a peer, not a vendor.${customInstruction}${websiteInstruction}
 
 PART 2 — DEVELOPMENT PROMPT
-Generate a comprehensive, production-quality prompt the freelancer pastes into Cursor, Lovable, Bolt, v0, or any AI coding tool. This IS their sample work — so detailed the client would be impressed by it alone.
+Generate a comprehensive, production-quality prompt the freelancer pastes into Cursor, Lovable, Bolt, v0, or any AI coding tool. This IS their sample work — make it so detailed the client would be impressed by it alone.
 
-MASTER DESIGN PHILOSOPHY (apply to every design decision in the prompt):
-- Understand the client's business first: what they sell, who their customers are, what action they want visitors to take
-- Preserve existing brand identity unless explicitly asked to replace it — modernize, don't replace
-- Design around the client's goal: every element must serve one primary conversion objective
-- Match the design language to the industry (luxury = editorial/spacious, healthcare = calm/accessible, law = structured/professional)
-- Create clear visual hierarchy: visitor instantly knows WHO, WHAT, WHY, NEXT STEP
-- Build a cohesive design system: consistent buttons, cards, inputs, colors, typography, spacing, corners
-- Use motion to enhance, not distract: subtle fades, gentle parallax, hover feedback, smooth transitions
-- Design for real content — no placeholder text assumptions
-- Think like a production website — every section earns its place
+MASTER DESIGN PHILOSOPHY (apply every principle to every design decision):
+- UNDERSTAND THE BUSINESS FIRST: What do they sell, who are their customers, what single action do they want visitors to take? Design everything to serve that one goal.
+- PRESERVE EXISTING BRAND IDENTITY: Modernize and elevate — never replace. If brand colors, logo, fonts, or copy are available, reuse them exactly. The client should recognize their brand in the mockup immediately.
+- BUSINESS-GOAL HIERARCHY: Every section, every element exists to move the visitor toward the primary conversion. If it doesn't serve the goal, it doesn't exist.
+- INDUSTRY-MATCHED DESIGN LANGUAGE: Luxury brands = editorial, spacious, serif elegance. Healthcare = calm, accessible, trustworthy. Law = structured, authoritative, precise. E-commerce = visual-first, fast, tactile.
+- CLEAR VISUAL HIERARCHY: Visitor knows WHO, WHAT, WHY, NEXT STEP within 3 seconds of landing.
+- COHESIVE DESIGN SYSTEM: Consistent buttons, cards, inputs, colors, typography, spacing, corner radii. Nothing looks like it came from a different source.
+- MOTION AS ENHANCEMENT: Subtle fades, smooth parallax, hover states, scroll-triggered reveals, micro-interactions on CTAs. Every animation has a purpose — never decorative noise.
+- REAL CONTENT ONLY: Use their actual copy, their actual service names, their real value proposition. No Lorem ipsum, no placeholder text.
+- SOCIAL PROOF ARCHITECTURE: Every premium site needs testimonials, trust signals, case studies, or client logos. If they have them, feature them prominently.
+- CONVERSION OPTIMIZATION: Above-the-fold CTA, sticky navigation with a persistent action, mobile-first, fast load, clear contact friction reduction.
+- BEYOND THE BRIEF: Suggest one section or feature the brief didn't mention but would clearly benefit the business (e.g. a results calculator, interactive pricing, a chatbot widget, a booking flow upgrade).
 ${animation3dInstruction}
 
 Classify the job: vibe-coding (no-code/low-code), full-stack (traditional code), automation (Zapier/Make/n8n), ai-agent (LLM/AI tools), general-web
 
 The vibeCodePrompt must:
-- Start with "Build me a [description]..."
-- Describe EVERY screen, page, and component
-- Include specific UI/UX details (colors, layout, design language, spacing)
-- Specify integrations (auth, payments, databases, APIs)
-- Cover error states, loading states, empty states
-- List every enhancement and edge case
-- Specify tech stack
-- Apply the master design philosophy above — make the mockup solve the business problem
-- 400-800 words, paste-ready${data.enable3d ? "\n- INCLUDE detailed 3D animation and interactive motion specifications" : ""}
+- Start with "Build me a [description]..." describing the business goal first, then the technical solution
+- Describe EVERY screen, page, and component with specific UX intent
+- Specify exact colors, typography, spacing, and design system tokens
+- Reference any brand assets provided (logo URL, brand colors, existing copy)
+- Specify integrations (auth, payments, databases, booking systems, CRMs)
+- Cover loading states, error states, empty states, mobile breakpoints
+- Include the "beyond the brief" enhancement as a clearly labeled bonus section
+- Apply every master design philosophy principle above
+- 500-900 words, paste-ready${data.enable3d ? "\n- MANDATORY: Include Three.js / React Three Fiber 3D scenes, GSAP timeline animations, scroll-triggered parallax, interactive 3D hero elements, particle systems where appropriate. 3D and motion are CORE to the design — not optional." : ""}
 
 Return JSON:
 {
-  "subjectLine": "<under 50 chars, reflects their problem>",
-  "emailBody": "<full email text, 150-250 words, plain text, structured as: Hook → Insight → Solution → Proof → CTA>",
-  "hookRationale": "<why the opening lines work for this specific client>",
-  "strategyNote": "<the core persuasion strategy — what makes this email different>",
-  "spamAvoidanceTips": ["<tip 1>", "<tip 2>", "<tip 3>"],
+  "subjectLine": "<under 50 chars, business-insight focused>",
+  "emailBody": "<full email text, 150-220 words, plain text, structured as: Hook → Insight → Solution → Proof → CTA, consultative tone throughout>",
+  "hookRationale": "<why the opening lines create the 'they know my business' feeling>",
+  "strategyNote": "<the core consultative strategy — what makes this email feel different from every other pitch they received>",
+  "spamAvoidanceTips": ["<practical tip 1>", "<tip 2>", "<tip 3>"],
   "devPrompt": {
-    "projectTitle": "<short project name>",
+    "projectTitle": "<short project name — business-outcome focused>",
     "jobType": "<vibe-coding|full-stack|automation|ai-agent|general-web>",
     "jobTypeName": "<human readable>",
-    "overview": "<2-3 sentence project overview>",
+    "overview": "<2-3 sentences: business problem being solved, target user, desired outcome>",
     "techStack": ["<tech 1>", "<tech 2>"],
     "coreFeatures": [
-      { "feature": "<name>", "description": "<what it does>", "priority": "Must Have" }
+      { "feature": "<name>", "description": "<business value and what it does>", "priority": "Must Have" }
     ],
     "enhancements": [
-      { "title": "<enhancement name>", "description": "<what to build>", "impact": "<why it matters>" }
+      { "title": "<enhancement name>", "description": "<what to build and why it serves the business>", "impact": "<specific business impact>" }
     ],
-    "architecture": "<paragraph on system architecture, data flow, component structure>",
+    "architecture": "<paragraph on system design, data flow, scalability — business-aware>",
     "integrations": ["<integration 1>"],
-    "scalabilityNotes": "<how to build this to scale from day 1>",
-    "vibeCodePrompt": "<full paste-ready prompt, 400-800 words, applies master design philosophy>",
+    "scalabilityNotes": "<how this grows with the business>",
+    "vibeCodePrompt": "<full paste-ready prompt, 500-900 words, applies all master design philosophy principles, references brand assets if available>",
     "estimatedComplexity": "<Simple|Medium|Complex|Enterprise>"
   }
 }`,
@@ -1371,19 +1383,39 @@ Return JSON:
   });
 
 // ---------- Analyze Client Website ----------
+export type ContentSection = {
+  section: string;      // e.g. "Hero", "About", "Services", "CTA", "Footer"
+  location: string;     // where it falls, e.g. "Above the fold", "Mid-page", "Bottom"
+  content: string;      // the actual wording/copy
+  usefulness: string;   // why this content is reusable in the mockup
+};
+
 export type WebsiteData = {
   url: string;
+  brandName: string;
   title: string;
   description: string;
   businessType: string;
   industry: string;
   primaryGoal: string;
+  targetAudience: string;
+  uniqueValueProp: string;
+  // Brand assets
+  logoUrl: string | null;
   brandColors: string[];
+  fontFamilies: string[];
+  // Visual assets
   imageUrls: string[];
   videoUrls: string[];
+  // Content
+  contentSections: ContentSection[];
   keyPages: string[];
   existingTech: string[];
-  designNotes: string;
+  // Insights
+  whatWorks: string;
+  opportunities: string;
+  conversionBottlenecks: string;
+  designLanguage: string;
 };
 
 export const analyzeClientWebsite = createServerFn({ method: "POST" })
@@ -1393,74 +1425,166 @@ export const analyzeClientWebsite = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      // Fetch the website HTML server-side (avoids CORS)
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
+      const timeout = setTimeout(() => controller.abort(), 15000);
       let html = "";
       try {
         const res = await fetch(data.url, {
           signal: controller.signal,
-          headers: { "User-Agent": "Mozilla/5.0 (compatible; ProposalBot/1.0)" },
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+          },
         });
         html = await res.text();
       } finally {
         clearTimeout(timeout);
       }
 
-      // Extract useful snippets from HTML (keep under 8k chars for AI)
+      const baseUrl = new URL(data.url).origin;
+
+      // Extract logo — look for <link rel="icon">, og:image, and common logo patterns
+      const logoMatches = [
+        // og:image
+        html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1],
+        html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1],
+        // <img> with "logo" in class/id/alt/src
+        html.match(/<img[^>]+(?:id|class|alt|src)=["'][^"']*logo[^"']*["'][^>]+src=["']([^"']+)["']/i)?.[1],
+        html.match(/<img[^>]+src=["']([^"']+)["'][^>]+(?:id|class|alt)=["'][^"']*logo[^"']*["']/i)?.[1],
+        // SVG logo inline (just note it exists)
+      ].filter(Boolean)[0] ?? null;
+
+      const resolveUrl = (u: string | null) => {
+        if (!u) return null;
+        if (u.startsWith("http")) return u;
+        if (u.startsWith("//")) return "https:" + u;
+        if (u.startsWith("/")) return baseUrl + u;
+        return data.url.replace(/\/[^/]*$/, "/") + u;
+      };
+
+      const logoUrl = resolveUrl(logoMatches ?? null);
+
+      // Extract all image URLs
+      const allImgMatches = [...html.matchAll(/(?:src|data-src|data-lazy-src)=["']([^"']+\.(?:jpg|jpeg|png|webp|gif|avif|svg))["']/gi)]
+        .map((m) => resolveUrl(m[1]))
+        .filter((u): u is string => !!u && u.startsWith("http"))
+        .filter((u, i, arr) => arr.indexOf(u) === i) // dedupe
+        .slice(0, 15);
+
+      // Also grab srcset images
+      const srcsetMatches = [...html.matchAll(/srcset=["']([^"']+)["']/gi)]
+        .flatMap((m) => m[1].split(",").map((s) => s.trim().split(/\s+/)[0]))
+        .map(resolveUrl)
+        .filter((u): u is string => !!u && u.startsWith("http"))
+        .slice(0, 5);
+
+      const imageUrls = [...new Set([...allImgMatches, ...srcsetMatches])].slice(0, 15);
+
+      // Extract video URLs
+      const videoUrls = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:mp4|webm|ogg|mov))["']/gi)]
+        .map((m) => resolveUrl(m[1]))
+        .filter((u): u is string => !!u && u.startsWith("http"))
+        .slice(0, 5);
+
+      // Extract font families from CSS font-family declarations and Google Fonts links
+      const fontFamilies: string[] = [];
+      const googleFontsMatch = html.match(/fonts\.googleapis\.com\/css[^"']+families?=([^"'&]+)/gi);
+      if (googleFontsMatch) {
+        googleFontsMatch.forEach((m) => {
+          const families = decodeURIComponent(m).match(/family=([^&|"']+)/i)?.[1];
+          if (families) {
+            families.split("|").forEach((f) => {
+              const name = f.split(":")[0].replace(/\+/g, " ").trim();
+              if (name && !fontFamilies.includes(name)) fontFamilies.push(name);
+            });
+          }
+        });
+      }
+      // Also check inline CSS for font-family
+      const inlineFonts = [...html.matchAll(/font-family:\s*['"]?([^;'"}{,]+)/gi)]
+        .map((m) => m[1].split(",")[0].replace(/['"]/g, "").trim())
+        .filter((f) => f && !f.startsWith("-") && f.length > 2)
+        .slice(0, 5);
+      inlineFonts.forEach((f) => { if (!fontFamilies.includes(f)) fontFamilies.push(f); });
+
+      // Strip scripts/styles for text analysis
       const stripped = html
         .replace(/<script[\s\S]*?<\/script>/gi, "")
         .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<!--[\s\S]*?-->/g, "")
         .replace(/<[^>]+>/g, " ")
         .replace(/\s{2,}/g, " ")
-        .slice(0, 6000);
-
-      // Extract image src and video src attributes from raw HTML
-      const imgMatches = [...html.matchAll(/(?:src|data-src)=["']([^"']+\.(?:jpg|jpeg|png|webp|gif|svg))["']/gi)]
-        .map((m) => m[1])
-        .filter((u) => u.startsWith("http"))
-        .slice(0, 10);
-      const videoMatches = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:mp4|webm|ogg|mov))["']/gi)]
-        .map((m) => m[1])
-        .filter((u) => u.startsWith("http"))
-        .slice(0, 5);
+        .trim()
+        .slice(0, 8000);
 
       const WebsiteSchema = z.object({
+        brandName: z.string(),
         title: z.string(),
         description: z.string(),
         businessType: z.string(),
         industry: z.string(),
         primaryGoal: z.string(),
+        targetAudience: z.string(),
+        uniqueValueProp: z.string(),
         brandColors: z.array(z.string()).default([]),
         keyPages: z.array(z.string()).default([]),
         existingTech: z.array(z.string()).default([]),
-        designNotes: z.string(),
+        contentSections: z.array(z.object({
+          section: z.string(),
+          location: z.string(),
+          content: z.string(),
+          usefulness: z.string(),
+        })).default([]),
+        whatWorks: z.string(),
+        opportunities: z.string(),
+        conversionBottlenecks: z.string(),
+        designLanguage: z.string(),
       });
 
       const analysis = await structured(
         WebsiteSchema,
-        `You analyze a business website and extract structured information for a freelance web developer. Be specific and factual.
+        `You are a senior digital strategist and UX consultant analyzing a client's website for a web developer who will build them a better one. Extract every piece of useful information.
 
 Return a JSON object:
 {
-  "title": "<the site's main headline or brand name>",
-  "description": "<1-2 sentences describing what this business does>",
-  "businessType": "<e.g. SaaS, E-commerce, Local Service, Agency, Personal Brand, B2B, Nonprofit>",
-  "industry": "<e.g. Healthcare, Real Estate, Fashion, Tech, Food & Beverage>",
-  "primaryGoal": "<the main conversion goal: e.g. Book a call, Buy a product, Generate leads, Sign up for free trial>",
-  "brandColors": ["<hex or descriptive color 1>", "<hex or color 2>"],
-  "keyPages": ["<page name 1>", "<page name 2>"],
-  "existingTech": ["<tech/platform detected e.g. WordPress, Shopify, React, HubSpot>"],
-  "designNotes": "<2-3 sentences: what works, what could be improved, existing design language>"
-}`,
+  "brandName": "<the business or brand name>",
+  "title": "<the site's main headline exactly as written>",
+  "description": "<2-3 sentences: what this business does, who it serves, what problem it solves>",
+  "businessType": "<SaaS / E-commerce / Local Service / Agency / Personal Brand / B2B / Nonprofit / Restaurant / etc.>",
+  "industry": "<specific industry: Healthcare, Real Estate, Fashion, Fintech, Food & Beverage, etc.>",
+  "primaryGoal": "<the ONE main conversion action: Book a call / Buy a product / Generate leads / Sign up for free trial / etc.>",
+  "targetAudience": "<who their customers are — be specific: e.g. small business owners looking for X, millennials who want Y>",
+  "uniqueValueProp": "<what makes them different — the core promise they're making to customers>",
+  "brandColors": ["<exact hex codes if visible in CSS/HTML, or descriptive: deep navy #0A1628, gold #C9A84C>"],
+  "keyPages": ["Home", "<any other page linked in nav>"],
+  "existingTech": ["<WordPress / Shopify / React / Webflow / HubSpot / etc. — detected from source code>"],
+  "contentSections": [
+    {
+      "section": "<section name: Hero / About / Services / Features / Testimonials / CTA / Footer / etc.>",
+      "location": "<where it sits: Above the fold / Upper section / Mid-page / Lower section / Bottom / Footer>",
+      "content": "<the actual wording/copy from this section — copy it verbatim, this is what the developer will reuse>",
+      "usefulness": "<why this specific content is reusable: e.g. 'Strong testimonial to feature in social proof section', 'Service descriptions that should be preserved', 'Brand tagline to keep in hero'>",
+    }
+    // Include ALL meaningful sections — hero, about, services, pricing, testimonials, CTAs, footer taglines
+  ],
+  "whatWorks": "<2-3 specific things that work well on the current site — content, messaging, structure>",
+  "opportunities": "<3-4 specific strategic improvements: conversion optimisation, UX issues, missing sections, better storytelling>",
+  "conversionBottlenecks": "<what's likely losing them customers: unclear CTA, no social proof, weak value prop, poor mobile experience, etc.>",
+  "designLanguage": "<describe the current visual style: e.g. 'Minimal and corporate with serif headers, muted tones, lots of whitespace' or 'Bright and energetic with bold colours and large CTAs'>"
+}
+
+IMPORTANT: For contentSections, extract the REAL text from the website. This is gold — it helps the developer reuse existing messaging rather than starting from scratch. Include every meaningful piece of copy.`,
         `Website URL: ${data.url}\n\nWebsite content:\n${stripped}`,
       );
 
       return {
         url: data.url,
+        logoUrl,
+        fontFamilies: [...new Set(fontFamilies)].slice(0, 8),
+        imageUrls,
+        videoUrls,
         ...analysis,
-        imageUrls: imgMatches,
-        videoUrls: videoMatches,
       } as WebsiteData;
     } catch (err) {
       handleAiError(err);

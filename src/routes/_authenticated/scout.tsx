@@ -166,6 +166,7 @@ function ScoutMode() {
   const [websiteData, setWebsiteData] = useState<WebsiteData | null>(null);
   const [analyzingWebsite, setAnalyzingWebsite] = useState(false);
   const [detectedUrl, setDetectedUrl] = useState<string | null>(null);
+  const [manualUrl, setManualUrl] = useState("");
   const [dayStats, setDayStats] = useState<ScoutDayStats>(() =>
     typeof window !== "undefined" ? readScoutDayStats() : { date: scoutTodayKey(), generated: 0, submitted: 0 }
   );
@@ -203,11 +204,12 @@ function ScoutMode() {
     }
   }, [jobText]);
 
-  async function runWebsiteAnalysis() {
-    if (!detectedUrl) return;
+  async function runWebsiteAnalysis(urlOverride?: string) {
+    const url = urlOverride ?? manualUrl.trim() ?? detectedUrl;
+    if (!url) return;
     setAnalyzingWebsite(true);
     try {
-      const data = await analyzeClientWebsite({ data: { url: detectedUrl } });
+      const data = await analyzeClientWebsite({ data: { url } });
       if (data) setWebsiteData(data as WebsiteData);
       toast.success("Website analyzed");
     } catch {
@@ -218,7 +220,27 @@ function ScoutMode() {
   }
 
   const websiteDataStr = websiteData
-    ? `Business: ${websiteData.businessType} in ${websiteData.industry}\nTitle: ${websiteData.title}\nDescription: ${websiteData.description}\nPrimary Goal: ${websiteData.primaryGoal}\nBrand Colors: ${websiteData.brandColors.join(", ")}\nKey Pages: ${websiteData.keyPages.join(", ")}\nExisting Tech: ${websiteData.existingTech.join(", ")}\nDesign Notes: ${websiteData.designNotes}\nImage URLs: ${websiteData.imageUrls.slice(0, 5).join(", ")}`
+    ? [
+        `BRAND: ${websiteData.brandName} — ${websiteData.businessType} in ${websiteData.industry}`,
+        `WEBSITE TITLE: ${websiteData.title}`,
+        `DESCRIPTION: ${websiteData.description}`,
+        `PRIMARY CONVERSION GOAL: ${websiteData.primaryGoal}`,
+        `TARGET AUDIENCE: ${websiteData.targetAudience}`,
+        `UNIQUE VALUE PROPOSITION: ${websiteData.uniqueValueProp}`,
+        websiteData.logoUrl ? `LOGO URL: ${websiteData.logoUrl}` : null,
+        websiteData.brandColors.length ? `BRAND COLORS: ${websiteData.brandColors.join(", ")}` : null,
+        websiteData.fontFamilies.length ? `FONTS: ${websiteData.fontFamilies.join(", ")}` : null,
+        websiteData.imageUrls.length ? `IMAGE ASSETS: ${websiteData.imageUrls.slice(0, 8).join(", ")}` : null,
+        `DESIGN LANGUAGE: ${websiteData.designLanguage}`,
+        `WHAT WORKS: ${websiteData.whatWorks}`,
+        `OPPORTUNITIES: ${websiteData.opportunities}`,
+        `CONVERSION BOTTLENECKS: ${websiteData.conversionBottlenecks}`,
+        websiteData.existingTech.length ? `EXISTING TECH STACK: ${websiteData.existingTech.join(", ")}` : null,
+        websiteData.keyPages.length ? `KEY PAGES: ${websiteData.keyPages.join(", ")}` : null,
+        websiteData.contentSections.length
+          ? `CONTENT SECTIONS (reuse this copy verbatim in the mockup):\n${websiteData.contentSections.map(s => `  [${s.section} — ${s.location}]\n  "${s.content}"\n  WHY REUSE: ${s.usefulness}`).join("\n")}`
+          : null,
+      ].filter(Boolean).join("\n")
     : undefined;
 
   const scoutMutation = useMutation({
@@ -357,47 +379,126 @@ function ScoutMode() {
             </p>
           </CropCard>
 
-          {/* Website analysis */}
-          {detectedUrl && (
-            <CropCard className="p-5 border-blue-400/20 bg-blue-400/5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-blue-400" />
-                  <Label className="text-sm font-semibold text-white">Client website detected</Label>
+          {/* Dedicated website URL input */}
+          <CropCard className="p-5 border-blue-400/20 bg-blue-400/5">
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="h-4 w-4 text-blue-400" />
+              <Label className="text-sm font-semibold text-white">Client Website URL <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                value={manualUrl}
+                onChange={(e) => { setManualUrl(e.target.value); setWebsiteData(null); }}
+                placeholder={detectedUrl ? `Auto-detected: ${detectedUrl}` : "https://clientsite.com"}
+                className="bg-background/60 text-sm font-mono flex-1"
+              />
+              <button
+                onClick={() => runWebsiteAnalysis(manualUrl.trim() || detectedUrl || undefined)}
+                disabled={analyzingWebsite || (!manualUrl.trim() && !detectedUrl)}
+                className="flex items-center gap-1.5 rounded-lg bg-blue-400/20 border border-blue-400/30 px-3 py-2 text-xs font-medium text-blue-300 hover:bg-blue-400/30 transition-colors disabled:opacity-40 whitespace-nowrap"
+              >
+                {analyzingWebsite ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                {analyzingWebsite ? "Analyzing…" : "Scan site"}
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Paste the client's website URL and scan it. The system will extract their brand assets, colors, fonts, copy, and design language — all fed directly into the mockup prompt.
+            </p>
+
+            {/* Rich website data display */}
+            {websiteData && (
+              <div className="mt-4 space-y-3 border-t border-blue-400/20 pt-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Website analyzed ✓</span>
+                  <button onClick={() => setWebsiteData(null)} className="text-[10px] text-white/30 hover:text-white/60">Clear</button>
                 </div>
-                {!websiteData && (
-                  <button
-                    onClick={runWebsiteAnalysis}
-                    disabled={analyzingWebsite}
-                    className="flex items-center gap-1.5 rounded-lg bg-blue-400/20 border border-blue-400/30 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-400/30 transition-colors"
-                  >
-                    {analyzingWebsite ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                    {analyzingWebsite ? "Analyzing…" : "Analyze website"}
-                  </button>
-                )}
-                {websiteData && (
-                  <span className="text-[10px] text-green-400 font-medium">✓ Analyzed</span>
-                )}
-              </div>
-              <p className="font-mono text-[11px] text-blue-300/80 truncate mb-2">{detectedUrl}</p>
-              {websiteData && (
-                <div className="space-y-1.5 text-[11px] text-white/60">
-                  <p><span className="text-white/40">Business:</span> {websiteData.businessType} · {websiteData.industry}</p>
+
+                {/* Logo + brand colors */}
+                <div className="flex items-start gap-3">
+                  {websiteData.logoUrl && (
+                    <div className="shrink-0 h-10 w-10 rounded-lg border border-white/10 bg-white/5 overflow-hidden flex items-center justify-center">
+                      <img src={websiteData.logoUrl} alt="Logo" className="max-h-8 max-w-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    </div>
+                  )}
+                  <div className="min-w-0 space-y-1 text-[11px]">
+                    <p className="font-semibold text-white">{websiteData.brandName}</p>
+                    <p className="text-white/50">{websiteData.businessType} · {websiteData.industry}</p>
+                    {websiteData.brandColors.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {websiteData.brandColors.slice(0, 6).map((c, i) => (
+                          <span key={i} className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/60">{c}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Core info */}
+                <div className="space-y-1 text-[11px] text-white/60">
                   <p><span className="text-white/40">Goal:</span> {websiteData.primaryGoal}</p>
+                  <p><span className="text-white/40">Audience:</span> {websiteData.targetAudience}</p>
+                  <p><span className="text-white/40">Value prop:</span> {websiteData.uniqueValueProp}</p>
+                  {websiteData.fontFamilies.length > 0 && (
+                    <p><span className="text-white/40">Fonts:</span> {websiteData.fontFamilies.join(", ")}</p>
+                  )}
                   {websiteData.existingTech.length > 0 && (
                     <p><span className="text-white/40">Tech:</span> {websiteData.existingTech.join(", ")}</p>
                   )}
-                  {websiteData.imageUrls.length > 0 && (
-                    <p><span className="text-white/40">Images found:</span> {websiteData.imageUrls.length}</p>
-                  )}
-                  <p className="text-white/50 italic">{websiteData.designNotes}</p>
                 </div>
-              )}
-              {!websiteData && (
-                <p className="text-[11px] text-muted-foreground">Analyze the client's website to extract brand info, design language, and assets for a more personalized mockup prompt.</p>
-              )}
-            </CropCard>
-          )}
+
+                {/* Opportunities & bottlenecks */}
+                {(websiteData.opportunities || websiteData.conversionBottlenecks) && (
+                  <div className="space-y-1.5 rounded-lg bg-white/[0.03] border border-white/10 p-3 text-[11px]">
+                    {websiteData.whatWorks && <p><span className="text-green-400">What works:</span> <span className="text-white/50">{websiteData.whatWorks}</span></p>}
+                    {websiteData.opportunities && <p><span className="text-gold">Opportunities:</span> <span className="text-white/50">{websiteData.opportunities}</span></p>}
+                    {websiteData.conversionBottlenecks && <p><span className="text-red-400">Bottlenecks:</span> <span className="text-white/50">{websiteData.conversionBottlenecks}</span></p>}
+                  </div>
+                )}
+
+                {/* Content sections */}
+                {websiteData.contentSections.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/30">Extracted Content Sections</p>
+                    {websiteData.contentSections.slice(0, 5).map((sec, i) => (
+                      <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 text-[10px]">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-white/70">{sec.section}</span>
+                          <span className="text-white/30">·</span>
+                          <span className="text-white/30">{sec.location}</span>
+                        </div>
+                        <p className="text-white/50 italic line-clamp-2">"{sec.content}"</p>
+                        <p className="text-blue-400/70 mt-1">{sec.usefulness}</p>
+                      </div>
+                    ))}
+                    {websiteData.contentSections.length > 5 && (
+                      <p className="text-[10px] text-white/30">+{websiteData.contentSections.length - 5} more sections extracted</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Image thumbnails */}
+                {websiteData.imageUrls.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-1.5">{websiteData.imageUrls.length} Image Assets</p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {websiteData.imageUrls.slice(0, 8).map((url, i) => (
+                        <div key={i} className="aspect-video rounded overflow-hidden bg-white/5 border border-white/10">
+                          <img src={url} alt="" className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Auto-detected URL notice */}
+            {!websiteData && detectedUrl && !manualUrl && (
+              <p className="mt-2 text-[11px] text-blue-300/60">
+                URL auto-detected from job post: <span className="font-mono">{detectedUrl}</span>. Click "Scan site" to analyze it.
+              </p>
+            )}
+          </CropCard>
 
           {/* 3D animation toggle */}
           <CropCard className="p-5 border-purple-400/20 bg-purple-400/5">
