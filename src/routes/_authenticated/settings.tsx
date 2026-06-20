@@ -24,6 +24,9 @@ import {
   FolderOpen,
   Check,
   RefreshCw,
+  Smartphone,
+  Download,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -191,6 +194,124 @@ function CredentialList({
   );
 }
 
+// ─── PWA Install Card ─────────────────────────────────────────────────────────
+
+function PwaInstallCard() {
+  const [deferredPrompt, setDeferredPrompt] = useState<Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
+  const [installed, setInstalled] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [platform, setPlatform] = useState<"android" | "ios" | "desktop" | "unknown">("unknown");
+
+  useEffect(() => {
+    // Already installed as PWA
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setIsStandalone(true);
+      return;
+    }
+
+    // Detect platform for instructions
+    const ua = navigator.userAgent.toLowerCase();
+    if (/iphone|ipad|ipod/.test(ua)) setPlatform("ios");
+    else if (/android/.test(ua)) setPlatform("android");
+    else setPlatform("desktop");
+
+    // Capture install prompt (Chrome / Edge / Android)
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as any);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+
+    // Detect if already installed
+    window.addEventListener("appinstalled", () => setInstalled(true));
+
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  async function triggerInstall() {
+    if (!deferredPrompt) return;
+    await deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      setInstalled(true);
+      toast.success("Xperience Props installed!");
+    }
+    setDeferredPrompt(null);
+  }
+
+  if (isStandalone) {
+    return (
+      <CropCard className="p-4 border-teal/20 bg-teal/5">
+        <div className="flex items-center gap-3">
+          <CheckCircle2 className="h-5 w-5 text-teal shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-white">App installed</p>
+            <p className="text-xs text-muted-foreground">You're running Xperience Props as a standalone app.</p>
+          </div>
+        </div>
+      </CropCard>
+    );
+  }
+
+  return (
+    <CropCard className="p-4 border-gold/20 bg-gold/5">
+      <div className="flex items-start gap-3">
+        <Smartphone className="h-5 w-5 text-gold shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white mb-0.5">Install as app</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Add Xperience Props to your home screen for faster access — works offline and feels native.
+          </p>
+
+          {/* Chrome / Android / Desktop — prompt available */}
+          {deferredPrompt && !installed && (
+            <Button
+              onClick={triggerInstall}
+              size="sm"
+              className="bg-gold text-background hover:bg-gold/90"
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Install now
+            </Button>
+          )}
+
+          {installed && (
+            <div className="flex items-center gap-2 text-teal text-xs font-medium">
+              <CheckCircle2 className="h-4 w-4" /> Installed successfully!
+            </div>
+          )}
+
+          {/* iOS — manual instructions */}
+          {platform === "ios" && !deferredPrompt && !installed && (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/70 space-y-1.5">
+              <p className="font-medium text-white text-[11px] uppercase tracking-wider mb-2">Install on iPhone / iPad</p>
+              <p>1. Tap the <strong className="text-white">Share</strong> button in Safari (box with arrow)</p>
+              <p>2. Scroll down and tap <strong className="text-white">"Add to Home Screen"</strong></p>
+              <p>3. Tap <strong className="text-white">Add</strong> — done!</p>
+            </div>
+          )}
+
+          {/* Desktop — no prompt but not iOS */}
+          {platform === "desktop" && !deferredPrompt && !installed && (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/70 space-y-1.5">
+              <p className="font-medium text-white text-[11px] uppercase tracking-wider mb-2">Install on desktop</p>
+              <p>In Chrome or Edge: look for the <strong className="text-white">install icon (⊕)</strong> in the address bar and click it.</p>
+              <p>If you don't see it, go to <strong className="text-white">Menu → Save and share → Install page as app</strong>.</p>
+            </div>
+          )}
+
+          {/* Android without prompt */}
+          {platform === "android" && !deferredPrompt && !installed && (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/70 space-y-1.5">
+              <p className="font-medium text-white text-[11px] uppercase tracking-wider mb-2">Install on Android</p>
+              <p>Tap the <strong className="text-white">three-dot menu (⋮)</strong> in Chrome and select <strong className="text-white">"Add to Home screen"</strong> or <strong className="text-white">"Install app"</strong>.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </CropCard>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 function SettingsPage() {
@@ -325,6 +446,8 @@ function SettingsPage() {
       />
 
       <div className="space-y-5">
+        {/* PWA Install card */}
+        <PwaInstallCard />
         {/* Profile switcher — switches which profile you're editing */}
         {subs.length > 0 && (
           <div className="flex items-center gap-3 rounded-lg border border-border bg-background/60 px-4 py-3">
