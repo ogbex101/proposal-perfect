@@ -9,6 +9,7 @@ const ProposalInput = z.object({
   job_analysis: z.any().nullable().optional(),
   hook: z.string().nullable().optional(),
   strategy: z.string().nullable().optional(),
+  cta: z.string().nullable().optional(),
   length: z.enum(["brief", "robust", "explanatory"]),
   include_plan: z.boolean(),
   portfolio_ids: z.array(z.string().uuid()).default([]),
@@ -16,6 +17,7 @@ const ProposalInput = z.object({
   milestones: z.any().nullable().optional(),
   content: z.string().default(""),
   explanation: z.any().nullable().optional(),
+  submitted: z.boolean().optional(),
 });
 
 export type ProposalListRow = {
@@ -26,8 +28,13 @@ export type ProposalListRow = {
   content: string;
   hook: string | null;
   strategy: string | null;
+  cta: string | null;
   client_responded: boolean | null;
   responded_at: string | null;
+  submitted: boolean;
+  read_by_client: boolean;
+  got_reply: boolean;
+  converted: boolean;
   created_at: string;
 };
 
@@ -43,6 +50,7 @@ export const saveProposal = createServerFn({ method: "POST" })
       job_analysis: data.job_analysis,
       hook: data.hook,
       strategy: data.strategy,
+      cta: data.cta ?? null,
       length: data.length,
       include_plan: data.include_plan,
       portfolio_ids: data.portfolio_ids,
@@ -50,8 +58,9 @@ export const saveProposal = createServerFn({ method: "POST" })
       milestones: data.milestones,
       content: data.content,
       explanation: data.explanation,
+      submitted: data.submitted ?? false,
     };
-    const { data: row, error } = await context.supabase
+    const { data: row, error } = await (context.supabase as any)
       .from("proposals")
       .upsert(payload)
       .select()
@@ -65,10 +74,10 @@ export const listProposals = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<ProposalListRow[]> => {
     const { data, error } = await (context.supabase as any)
       .from("proposals")
-      .select("id,title,job_description,length,content,hook,strategy,client_responded,responded_at,created_at")
+      .select("id,title,job_description,length,content,hook,strategy,cta,client_responded,responded_at,submitted,read_by_client,got_reply,converted,created_at")
       .eq("user_id", context.userId)
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(300);
     if (error) throw new Error(error.message);
     return (data ?? []) as ProposalListRow[];
   });

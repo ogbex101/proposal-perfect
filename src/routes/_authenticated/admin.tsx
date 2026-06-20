@@ -933,6 +933,72 @@ DO $$ BEGIN
   END IF;
 END $$;`,
   },
+  {
+    label: "6. Scout outreach + outreach templates tables",
+    description: "Tables for tracking scout outreach and storing analyzed outreach templates. Required for tracking page and reports.",
+    priority: "critical",
+    sql: `-- Scout outreach tracking table
+CREATE TABLE IF NOT EXISTS public.scout_outreach (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  job_description text NOT NULL DEFAULT '',
+  job_excerpt text NOT NULL DEFAULT '',
+  job_type text,
+  subject_line text,
+  email_body text,
+  hook_rationale text,
+  strategy_note text,
+  dev_prompt_title text,
+  submitted boolean NOT NULL DEFAULT false,
+  read_by_client boolean NOT NULL DEFAULT false,
+  got_reply boolean NOT NULL DEFAULT false,
+  converted boolean NOT NULL DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS scout_outreach_user_idx ON public.scout_outreach (user_id);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.scout_outreach TO authenticated;
+GRANT ALL ON public.scout_outreach TO service_role;
+ALTER TABLE public.scout_outreach ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='scout_outreach' AND policyname='Users manage own scout_outreach') THEN
+    CREATE POLICY "Users manage own scout_outreach" ON public.scout_outreach FOR ALL
+      USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+
+-- Outreach templates table
+CREATE TABLE IF NOT EXISTS public.outreach_templates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  email_content text NOT NULL,
+  category text NOT NULL DEFAULT 'general',
+  hook_style text NOT NULL DEFAULT '',
+  insight_approach text NOT NULL DEFAULT '',
+  cta_style text NOT NULL DEFAULT '',
+  structure_analysis text NOT NULL DEFAULT '',
+  created_at timestamptz DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.outreach_templates TO authenticated;
+GRANT ALL ON public.outreach_templates TO service_role;
+ALTER TABLE public.outreach_templates ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='outreach_templates' AND policyname='Users manage own outreach_templates') THEN
+    CREATE POLICY "Users manage own outreach_templates" ON public.outreach_templates FOR ALL
+      USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+
+-- Add tracking columns to proposals table (safe to run multiple times)
+ALTER TABLE public.proposals
+  ADD COLUMN IF NOT EXISTS cta text,
+  ADD COLUMN IF NOT EXISTS submitted boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS read_by_client boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS got_reply boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS converted boolean NOT NULL DEFAULT false;`,
+  },
 ];
 
 function MigrationsPanel({ onLoadSql }: { onLoadSql: (sql: string) => void }) {

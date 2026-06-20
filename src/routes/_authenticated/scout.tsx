@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Wand2, Loader2, Copy, Check, Mail, Code2, Zap, Bot, Globe,
   ChevronDown, ChevronUp, Sparkles, Shield, Layers,
   ArrowRight, FileCode, Brain, Target, Link2, MessageSquarePlus,
-  Image, Download, Pencil, RefreshCw,
+  Image, Download, Pencil, RefreshCw, Trash2, BookTemplate, Star,
 } from "lucide-react";
 import { PageHeader, CropCard, Eyebrow } from "@/components/blueprint";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,11 @@ import { cn } from "@/lib/utils";
 import { generateScoutOutreach, enhanceProposal, generateProposalImage, analyzeClientWebsite } from "@/lib/ai.functions";
 import type { ScoutOutreach, WebsiteData } from "@/lib/ai.functions";
 import { copyText } from "@/lib/export";
+import {
+  saveScoutOutreach, listOutreachTemplates, analyzeAndSaveOutreachTemplate,
+  deleteOutreachTemplate, matchTemplateToJob,
+} from "@/lib/scout.functions";
+import type { OutreachTemplate } from "@/lib/scout.functions";
 
 export const Route = createFileRoute("/_authenticated/scout")({
   component: ScoutPage,
@@ -88,9 +93,24 @@ function Section({ open: defaultOpen = true, icon, title, badge, children }: {
   );
 }
 
+// ─── Daily scout counter (localStorage) ──────────────────────────────────────
+type ScoutDayStats = { date: string; generated: number; submitted: number };
+function scoutTodayKey() { return new Date().toISOString().slice(0, 10); }
+function readScoutDayStats(): ScoutDayStats {
+  try {
+    const raw = localStorage.getItem("pp_scout_day_stats");
+    const parsed: ScoutDayStats = raw ? JSON.parse(raw) : { date: "", generated: 0, submitted: 0 };
+    if (parsed.date !== scoutTodayKey()) return { date: scoutTodayKey(), generated: 0, submitted: 0 };
+    return parsed;
+  } catch { return { date: scoutTodayKey(), generated: 0, submitted: 0 }; }
+}
+function writeScoutDayStats(stats: ScoutDayStats) {
+  try { localStorage.setItem("pp_scout_day_stats", JSON.stringify(stats)); } catch {}
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type PageMode = "scout" | "enhance";
+type PageMode = "scout" | "enhance" | "templates";
 
 function ScoutPage() {
   const [mode, setMode] = useState<PageMode>("scout");
@@ -105,23 +125,27 @@ function ScoutPage() {
 
       {/* Mode tabs */}
       <div className="mb-6 flex gap-1 rounded-xl border border-border/60 bg-sidebar/60 p-1 w-fit">
-        {(["scout", "enhance"] as PageMode[]).map((m) => (
+        {([
+          { id: "scout", label: "Scout Outreach" },
+          { id: "enhance", label: "Enhance Proposal" },
+          { id: "templates", label: "Outreach Templates" },
+        ] as { id: PageMode; label: string }[]).map((m) => (
           <button
-            key={m}
-            onClick={() => setMode(m)}
+            key={m.id}
+            onClick={() => setMode(m.id)}
             className={cn(
               "px-5 py-1.5 rounded-lg text-sm font-medium transition-all",
-              mode === m
+              mode === m.id
                 ? "bg-gold text-background shadow-sm"
                 : "text-muted-foreground hover:text-white",
             )}
           >
-            {m === "scout" ? "Scout Outreach" : "Enhance Proposal"}
+            {m.label}
           </button>
         ))}
       </div>
 
-      {mode === "scout" ? <ScoutMode /> : <EnhanceMode />}
+      {mode === "scout" ? <ScoutMode /> : mode === "enhance" ? <EnhanceMode /> : <OutreachTemplatesMode />}
     </div>
   );
 }
@@ -135,11 +159,36 @@ function ScoutMode() {
   const [mockupLink, setMockupLink] = useState("");
   const [enable3d, setEnable3d] = useState(false);
   const [result, setResult] = useState<ScoutOutreach | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [scoutSubmitted, setScoutSubmitted] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [websiteData, setWebsiteData] = useState<WebsiteData | null>(null);
   const [analyzingWebsite, setAnalyzingWebsite] = useState(false);
   const [detectedUrl, setDetectedUrl] = useState<string | null>(null);
+  const [dayStats, setDayStats] = useState<ScoutDayStats>(() =>
+    typeof window !== "undefined" ? readScoutDayStats() : { date: scoutTodayKey(), generated: 0, submitted: 0 }
+  );
+
+  function incrementGenerated() {
+    const fresh = readScoutDayStats();
+    const updated = { ...fresh, generated: fresh.generated + 1 };
+    writeScoutDayStats(updated);
+    setDayStats(updated);
+  }
+
+  function markScoutSubmitted() {
+    if (scoutSubmitted || !savedId) return;
+    setScoutSubmitted(true);
+    const fresh = readScoutDayStats();
+    const updated = { ...fresh, submitted: fresh.submitted + 1 };
+    writeScoutDayStats(updated);
+    setDayStats(updated);
+    // also update DB
+    import("@/lib/scout.functions").then(({ updateScoutStatus }) => {
+      updateScoutStatus({ data: { id: savedId, submitted: true } }).catch(() => {});
+    });
+  }
 
   // Extract URL from job text when it changes
   const prevJobRef = useRef("");
@@ -184,12 +233,30 @@ function ScoutMode() {
       },
     }),
     onSuccess: async (data) => {
-      setResult(data as ScoutOutreach);
+      const outreach = data as ScoutOutreach;
+      setResult(outreach);
+      setScoutSubmitted(false);
+      setSavedId(null);
       setPreviewImage(null);
+      incrementGenerated();
       toast.success("Scout outreach generated!");
       setTimeout(() => {
         document.getElementById("scout-results")?.scrollIntoView({ behavior: "smooth" });
       }, 100);
+
+      // Auto-save to DB (non-fatal)
+      saveScoutOutreach({
+        data: {
+          job_description: jobText,
+          job_excerpt: jobText.slice(0, 200),
+          job_type: outreach.devPrompt.jobType,
+          subject_line: outreach.subjectLine,
+          email_body: outreach.emailBody,
+          hook_rationale: outreach.hookRationale,
+          strategy_note: outreach.strategyNote,
+          dev_prompt_title: outreach.devPrompt.projectTitle,
+        },
+      }).then(({ id }) => setSavedId(id)).catch(() => {});
 
       // Auto-generate preview image
       setGeneratingImage(true);
@@ -211,6 +278,36 @@ function ScoutMode() {
 
   return (
     <div>
+      {/* Daily stats bar */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
+          <Mail className="h-3.5 w-3.5 text-teal" />
+          <span className="text-xs font-medium text-white/60">Today</span>
+          <span className="font-mono text-sm font-bold text-teal">{dayStats.generated}</span>
+          <span className="text-xs text-white/30">outreach sent</span>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
+          <Sparkles className="h-3.5 w-3.5 text-gold" />
+          <span className="text-xs font-medium text-white/60">Submitted</span>
+          <span className="font-mono text-sm font-bold text-gold">{dayStats.submitted}</span>
+          <span className="text-xs text-white/30">today</span>
+        </div>
+        {result && savedId && (
+          <button
+            onClick={markScoutSubmitted}
+            disabled={scoutSubmitted}
+            className={cn(
+              "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-medium transition-all",
+              scoutSubmitted
+                ? "border-teal/40 bg-teal/10 text-teal cursor-default"
+                : "border-white/20 bg-white/5 text-white/60 hover:border-teal/40 hover:text-teal"
+            )}
+          >
+            {scoutSubmitted ? <>✓ Submitted</> : <>Mark as submitted</>}
+          </button>
+        )}
+      </div>
+
       {/* Input panel */}
       <div className="grid gap-5 lg:grid-cols-[1fr_360px] mb-8">
         <div className="space-y-4">
@@ -841,6 +938,232 @@ function EnhanceMode() {
           </CropCard>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Outreach Templates Mode ──────────────────────────────────────────────────
+
+function OutreachTemplatesMode() {
+  const queryClient = useQueryClient();
+  const [pastedEmail, setPastedEmail] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateCategory, setTemplateCategory] = useState<"mockup" | "consultive" | "general">("general");
+  const [jobForMatch, setJobForMatch] = useState("");
+  const [matchResult, setMatchResult] = useState<{ bestId: string | null; reason: string } | null>(null);
+
+  const templatesQuery = useQuery({
+    queryKey: ["outreach-templates"],
+    queryFn: () => listOutreachTemplates(),
+  });
+  const templates = templatesQuery.data ?? [];
+
+  const saveMutation = useMutation({
+    mutationFn: () => analyzeAndSaveOutreachTemplate({
+      data: { name: templateName, email_content: pastedEmail, category: templateCategory },
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["outreach-templates"] });
+      setPastedEmail("");
+      setTemplateName("");
+      toast.success("Template analyzed and saved!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteOutreachTemplate({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["outreach-templates"] });
+      toast.success("Template deleted");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const matchMutation = useMutation({
+    mutationFn: () => matchTemplateToJob({
+      data: {
+        jobDescription: jobForMatch,
+        templates: templates.map((t) => ({
+          id: t.id, name: t.name, category: t.category,
+          hook_style: t.hook_style, cta_style: t.cta_style,
+          structure_analysis: t.structure_analysis,
+        })),
+      },
+    }),
+    onSuccess: (res) => setMatchResult(res as { bestId: string | null; reason: string }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const CATEGORY_COLORS = {
+    mockup: "text-blue-400 border-blue-400/30 bg-blue-400/10",
+    consultive: "text-purple-400 border-purple-400/30 bg-purple-400/10",
+    general: "text-gold border-gold/30 bg-gold/10",
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+      {/* Left: add new template */}
+      <div className="space-y-5">
+        <CropCard className="p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <BookTemplate className="h-5 w-5 text-gold" />
+            <h2 className="font-semibold text-white">Add Outreach Template</h2>
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            Paste a cold email outreach that worked well. The AI will analyze how it was crafted — hook style, insight approach, CTA style — and store it as a reusable template.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <Label className="annotation mb-1.5 block !text-muted-foreground">Template Name</Label>
+              <Input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="e.g. Mockup-first for web builds, Consultive for SaaS clients"
+                className="bg-background/60"
+              />
+            </div>
+
+            <div>
+              <Label className="annotation mb-1.5 block !text-muted-foreground">Category</Label>
+              <div className="flex gap-2">
+                {(["mockup", "consultive", "general"] as const).map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setTemplateCategory(cat)}
+                    className={cn(
+                      "rounded-lg border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
+                      templateCategory === cat ? CATEGORY_COLORS[cat] : "border-border/40 text-muted-foreground hover:text-white"
+                    )}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                <strong className="text-blue-400">Mockup</strong> = leads with design preview work ·{" "}
+                <strong className="text-purple-400">Consultive</strong> = leads with strategic insight
+              </p>
+            </div>
+
+            <div>
+              <Label className="annotation mb-1.5 block !text-muted-foreground">Paste Email Content</Label>
+              <Textarea
+                value={pastedEmail}
+                onChange={(e) => setPastedEmail(e.target.value)}
+                placeholder="Paste the full cold email here — subject line and body…"
+                rows={10}
+                className="resize-none bg-background/60 text-sm font-mono"
+              />
+            </div>
+
+            <Button
+              className="w-full bg-gold text-background hover:bg-gold/90"
+              disabled={!pastedEmail.trim() || !templateName.trim() || saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+            >
+              {saveMutation.isPending
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing template…</>
+                : <><Sparkles className="mr-2 h-4 w-4" /> Analyze & Save Template</>}
+            </Button>
+          </div>
+        </CropCard>
+
+        {/* Match template to job */}
+        <CropCard className="p-5 border-teal/20 bg-teal/5">
+          <div className="flex items-center gap-2 mb-3">
+            <Target className="h-4 w-4 text-teal" />
+            <h3 className="font-semibold text-white text-sm">Match Template to Job</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Paste a job description and the AI will pick which of your saved templates is the best fit.
+          </p>
+          <Textarea
+            value={jobForMatch}
+            onChange={(e) => setJobForMatch(e.target.value)}
+            placeholder="Paste the job description here…"
+            rows={5}
+            className="resize-none bg-background/60 text-sm mb-3"
+          />
+          <Button
+            variant="outline"
+            className="w-full border-teal/30 text-teal hover:bg-teal/10"
+            disabled={!jobForMatch.trim() || templates.length === 0 || matchMutation.isPending}
+            onClick={() => matchMutation.mutate()}
+          >
+            {matchMutation.isPending
+              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Matching…</>
+              : <><Brain className="mr-2 h-4 w-4" /> Find Best Template</>}
+          </Button>
+          {matchResult && (
+            <div className="mt-3 rounded-lg border border-teal/20 bg-teal/5 p-3 text-sm">
+              <p className="font-medium text-teal mb-1">
+                Best fit: {templates.find((t) => t.id === matchResult.bestId)?.name ?? "Unknown"}
+              </p>
+              <p className="text-xs text-muted-foreground">{matchResult.reason}</p>
+            </div>
+          )}
+        </CropCard>
+      </div>
+
+      {/* Right: saved templates */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-white">Saved Templates ({templates.length})</h2>
+        </div>
+
+        {templatesQuery.isPending && (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </div>
+        )}
+
+        {templates.length === 0 && !templatesQuery.isPending && (
+          <CropCard className="p-6 text-center">
+            <BookTemplate className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">No templates yet. Add your first one on the left.</p>
+          </CropCard>
+        )}
+
+        {templates.map((t) => {
+          const isBestMatch = matchResult?.bestId === t.id;
+          return (
+            <CropCard key={t.id} className={cn("p-4", isBestMatch && "border-teal/40 bg-teal/5")}>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {isBestMatch && <Star className="h-3.5 w-3.5 text-teal shrink-0" />}
+                  <span className="font-semibold text-white text-sm">{t.name}</span>
+                  <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize", CATEGORY_COLORS[t.category as keyof typeof CATEGORY_COLORS] ?? CATEGORY_COLORS.general)}>
+                    {t.category}
+                  </span>
+                </div>
+                <button
+                  onClick={() => deleteMutation.mutate(t.id)}
+                  className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="space-y-1.5 text-[11px] text-white/60 mb-3">
+                <p><span className="text-white/40">Hook style:</span> {t.hook_style}</p>
+                <p><span className="text-white/40">CTA style:</span> {t.cta_style}</p>
+                <p className="text-white/50 italic">{t.structure_analysis}</p>
+              </div>
+
+              <details className="group">
+                <summary className="cursor-pointer text-[11px] text-teal hover:text-teal/80 select-none">
+                  View email content
+                </summary>
+                <pre className="mt-2 whitespace-pre-wrap text-[11px] text-white/60 font-mono bg-white/5 rounded-lg p-3 leading-relaxed max-h-48 overflow-y-auto">
+                  {t.email_content}
+                </pre>
+              </details>
+            </CropCard>
+          );
+        })}
+      </div>
     </div>
   );
 }

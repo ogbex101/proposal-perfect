@@ -16,6 +16,8 @@ import {
   Search,
   Trophy,
   Radar,
+  MapPin,
+  BarChart2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +41,8 @@ const NAV: NavItem[] = [
   { to: "/conversion", label: "Conversion Messages", icon: MessagesSquare },
   { to: "/research", label: "Research Agent", icon: Search },
   { to: "/scout", label: "Scout Outreach", icon: Radar },
+  { to: "/tracking", label: "Tracking", icon: MapPin },
+  { to: "/reports", label: "Reports", icon: BarChart2 },
   { to: "/contest", label: "Contest Entry", icon: Trophy },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/admin", label: "Admin Panel", icon: ShieldCheck, adminOnly: true },
