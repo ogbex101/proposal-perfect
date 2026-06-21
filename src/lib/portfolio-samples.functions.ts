@@ -88,7 +88,7 @@ export const generateAndSavePortfolioSamples = createServerFn({ method: "POST" }
       ? `\nBRAND INFO:\nBrand: ${data.brandName}\n${data.brandDescription ? `Description: ${data.brandDescription}` : ""}\nUse this brand in the samples where natural.`
       : "";
     const imageBlock = profileImage
-      ? `\nPROFILE IMAGE: ${profileImage}\nWhere appropriate, note that this freelancer's profile picture can be used on the portfolio page.`
+      ? `\nFREELANCER PROFILE IMAGE URL: ${profileImage}\nMANDATORY: In the "content" field of the first sample, include a realistic portfolio page description that prominently features this exact image URL as the freelancer's profile photo. Write it as: "Profile photo: ${profileImage}" on its own line within the content. The portfolio page should feel like a real personal brand page with this photo as the hero.`
       : "";
 
     // Pick the right sample formats per category

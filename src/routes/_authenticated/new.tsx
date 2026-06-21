@@ -201,6 +201,18 @@ function NewProposal() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
+      // Step 1: Generate strategy first, save it, get slug
+      const strategyResult = await generateStrategyDocument({
+        data: {
+          jobDescription: effectiveJob,
+          analysis,
+          budget: budget || undefined,
+        },
+      });
+      const { slug } = await saveStrategyDoc({ data: { doc: strategyResult! } });
+      const strategyLink = `I've already mapped out a full strategy for this project — phases, risk factors, and success metrics — here: https://xperienceprops.com/strategy/${slug}`;
+
+      // Step 2: Generate proposal with strategy link
       const items = portfolio
         .filter((p) => selectedPortfolio.includes(p.id))
         .map((p) => ({ title: p.title, url: p.url, description: p.description }));
@@ -212,7 +224,7 @@ function NewProposal() {
           description: "A portfolio tailored to this job.",
         });
       }
-      return generateProposal({
+      const proposalResult = await generateProposal({
         data: {
           jobDescription: effectiveJob,
           analysis,
@@ -226,14 +238,22 @@ function NewProposal() {
           budget: budget || undefined,
           toneAssertiveness,
           toneFormalness,
+          strategyDocument: strategyLink,
         },
       });
+      return { proposalResult, strategyResult, slug };
     },
-    onSuccess: (result) => {
-      setContent(result.content);
-      setExplanation(result.explanation);
+    onSuccess: ({ proposalResult, strategyResult, slug }) => {
+      setContent(proposalResult!.content);
+      setExplanation(proposalResult!.explanation);
       setShowExplain(true);
       setProposalSubmitted(false);
+      // Set strategy state from the data returned
+      if (strategyResult) {
+        setStrategyDoc(strategyResult);
+        setShowStrategy(true);
+      }
+      setStrategySlug(slug);
       // Increment daily generated counter
       const fresh = readDayStats();
       const updated = { ...fresh, generated: fresh.generated + 1 };
@@ -241,9 +261,7 @@ function NewProposal() {
       setDayStats(updated);
       toast.success("Proposal generated");
       // auto-polish with fresh content passed directly (avoid stale closure)
-      setTimeout(() => polishMutation.mutate(result.content), 150);
-      // auto-trigger strategy
-      setTimeout(() => strategyMutation.mutate(), 400);
+      setTimeout(() => polishMutation.mutate(proposalResult!.content), 150);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Generation failed"),
   });
@@ -832,7 +850,12 @@ function NewProposal() {
                     <button
                       key={l.id}
                       type="button"
-                      onClick={() => setLength(l.id)}
+                      onClick={() => {
+                        setLength(l.id);
+                        if (analysis && !generateMutation.isPending) {
+                          generateMutation.mutate();
+                        }
+                      }}
                       className={cn(
                         "rounded-md border px-2 py-2 text-xs font-medium transition-colors",
                         length === l.id

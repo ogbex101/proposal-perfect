@@ -118,7 +118,20 @@ export const analyzeJob = createServerFn({ method: "POST" })
       const ctaList = CTAS.map((c) => `- ${c.id}: ${c.name} — ${c.description}`).join("\n");
       return await structured(
         AnalysisSchema,
-        `You analyze freelance job posts. Be specific, never generic. Interpret, don't repeat.
+        `You are an expert freelance proposal strategist who has won hundreds of proposals. Your analysis is what separates winning proposals from generic ones. You must read between the lines.
+
+DEEP ANALYSIS REQUIREMENTS:
+1. PAIN POINT: What is the client's REAL problem (not what they said, but what they mean)? Why is this urgent NOW? What is the downstream cost if it stays unsolved?
+2. HIDDEN NEEDS: What has the client NOT said but clearly needs? What are they afraid of? What does "success" actually look like to them beyond the deliverable?
+3. WHAT WILL WIN THIS PROPOSAL: Based on this specific job post — what ONE insight, angle, or approach would make the client think "this person understands my situation"? Not generic advice — specific to THIS job.
+4. WHAT TO AVOID: What generic responses will this client receive from everyone else? What should you NOT say to stand out?
+5. TECHNICAL DIFFICULTIES: What are the actual hard parts of this project that a junior freelancer would underestimate?
+6. HOOK SELECTION: Choose hooks that feel like genuine insights about THEIR situation — not clever openers. The openingLine must be a sentence the client would read and think "how did they know that?"
+7. STRATEGY SELECTION: The strategy should define the ENTIRE proposal arc — not just the opening.
+8. CTA SELECTION: The CTA should match the client's decision-making style evident from how they wrote the job post.
+
+Be ruthlessly specific. Every answer must reference details from THIS job post. No generic observations.
+
 Choose the best matching hook id, strategy id, AND cta id from these exact lists:
 HOOKS:
 ${hookList}
@@ -405,7 +418,13 @@ export const generateProposal = createServerFn({ method: "POST" })
       const length = LENGTHS.find((l) => l.id === data.length) ?? LENGTHS[1];
 
       const portfolioBlock = data.portfolioItems.length
-        ? `PORTFOLIO ITEMS (MANDATORY — you MUST include ALL of these links in the proposal body, mentioning each by name with a one-line reason why it's relevant to this job):\n${data.portfolioItems.map((p) => `- ${p.title}: ${p.url} — ${p.description}`).join("\n")}`
+        ? `PORTFOLIO ITEMS (MANDATORY — include ALL of these in the proposal body):
+${data.portfolioItems.map((p) => {
+  const isPortfolioPage = p.title.toLowerCase().includes("portfolio") || p.description?.toLowerCase().includes("tailored portfolio") || p.description?.toLowerCase().includes("portfolio tailored");
+  return isPortfolioPage
+    ? `- PORTFOLIO PAGE: ${p.url} — "${p.title}": Reference this as "my portfolio for this type of work" or "a portfolio I put together specifically for [their industry/need]". This is a full portfolio page with multiple samples — NOT a single piece.`
+    : `- SAMPLE WORK: ${p.url} — "${p.title}": ${p.description} — Reference this as a specific past project or work sample.`;
+}).join("\n")}`
         : "No portfolio items provided.";
       const milestoneBlock = data.milestones?.length
         ? `Milestones:\n${data.milestones.map((m) => `- ${m.title}${m.amount ? ` (${m.amount})` : ""}: ${m.description}`).join("\n")}`
