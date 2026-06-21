@@ -134,20 +134,40 @@ function ReportsPage() {
   const replyRate = read > 0 ? Math.round((replied / read) * 100) : 0;
   const convRate = replied > 0 ? Math.round((converted / replied) * 100) : 0;
 
-  // Per-hook stats (proposal only)
+  // Per-hook stats with Bayesian rate: (conversions + 1) / (uses + 2)
   const hookStats = useMemo(() => {
-    const map: Record<string, { total: number; replied: number }> = {};
+    const map: Record<string, { total: number; converted: number }> = {};
     filtered.filter((r) => r.kind === "proposal" && r.hook).forEach((r) => {
       const h = r.hook!;
-      if (!map[h]) map[h] = { total: 0, replied: 0 };
+      if (!map[h]) map[h] = { total: 0, converted: 0 };
       map[h].total++;
-      if (r.got_reply) map[h].replied++;
+      if (r.converted) map[h].converted++;
     });
     return Object.entries(map)
-      .map(([id, v]) => ({ id, ...v, rate: v.total > 0 ? Math.round((v.replied / v.total) * 100) : 0 }))
-      .sort((a, b) => b.rate - a.rate)
+      .map(([id, v]) => ({
+        id,
+        ...v,
+        bayesianRate: Math.round(((v.converted + 1) / (v.total + 2)) * 100),
+      }))
+      .sort((a, b) => b.bayesianRate - a.bayesianRate)
       .slice(0, 5);
   }, [filtered]);
+
+  // Win patterns: hook × strategy × CTA combos with ≥4 uses (Phase 2.3)
+  const winPatterns = useMemo(() => {
+    const map: Record<string, { hook: string; strategy: string; cta: string; total: number; converted: number }> = {};
+    allRows.filter((r) => r.kind === "proposal" && r.hook && r.strategy && r.cta).forEach((r) => {
+      const key = `${r.hook}|${r.strategy}|${r.cta}`;
+      if (!map[key]) map[key] = { hook: r.hook!, strategy: r.strategy!, cta: r.cta!, total: 0, converted: 0 };
+      map[key].total++;
+      if (r.converted) map[key].converted++;
+    });
+    return Object.values(map)
+      .filter((v) => v.total >= 4)
+      .map((v) => ({ ...v, bayesianRate: Math.round(((v.converted + 1) / (v.total + 2)) * 100) }))
+      .sort((a, b) => b.bayesianRate - a.bayesianRate)
+      .slice(0, 8);
+  }, [allRows]);
 
   const showProposalCols = typeFilter !== "scout";
   const showScoutCols = typeFilter !== "proposal";
@@ -240,9 +260,34 @@ function ReportsPage() {
         <StatCard label="Replied" value={replied} sub={`${replyRate}% of read`} color="border-teal/20 bg-teal/5 text-teal" />
         <StatCard label="Converted" value={converted} sub={`${convRate}% of replied`} color="border-green-400/20 bg-green-400/5 text-green-400" />
         {hookStats.slice(0, 3).map((h) => (
-          <StatCard key={h.id} label={`Hook: ${h.id.replace(/_/g, " ")}`} value={`${h.rate}%`} sub={`${h.total} used`} color="border-purple-400/20 bg-purple-400/5 text-purple-400" />
+          <StatCard key={h.id} label={`Hook: ${h.id.replace(/_/g, " ")}`} value={`${h.bayesianRate}%`} sub={`${h.total} used (Bayesian)`} color="border-purple-400/20 bg-purple-400/5 text-purple-400" />
         ))}
       </div>
+
+      {/* Win Patterns Panel (Phase 2.3) */}
+      {winPatterns.length > 0 && (
+        <CropCard className="mb-6 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="h-2 w-2 rounded-full bg-gold" />
+            <p className="text-sm font-semibold text-white">Win Patterns</p>
+            <span className="text-[10px] text-muted-foreground ml-1">(Hook × Strategy × CTA combos with ≥4 uses)</span>
+          </div>
+          <div className="space-y-2">
+            {winPatterns.map((p, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border border-border/30 bg-white/[0.02] px-3 py-2">
+                <span className="w-8 shrink-0 text-center font-bold text-gold text-sm">{p.bayesianRate}%</span>
+                <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+                  <span className="rounded-full bg-purple-400/10 border border-purple-400/20 px-2 py-0.5 text-[10px] text-purple-300">Hook: {p.hook.replace(/_/g, " ")}</span>
+                  <span className="rounded-full bg-blue-400/10 border border-blue-400/20 px-2 py-0.5 text-[10px] text-blue-300">Strategy: {p.strategy.replace(/_/g, " ")}</span>
+                  <span className="rounded-full bg-teal/10 border border-teal/20 px-2 py-0.5 text-[10px] text-teal">CTA: {p.cta.replace(/_/g, " ")}</span>
+                </div>
+                <span className="shrink-0 text-[10px] text-muted-foreground">{p.total} uses · {p.converted} won</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[10px] text-muted-foreground">Conversion rate uses Bayesian smoothing (avoids overconfidence on small samples)</p>
+        </CropCard>
+      )}
 
       {/* Table */}
       {trackingQuery.isPending ? (

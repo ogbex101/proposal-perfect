@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateWithFallback, generateObjectWithFallback } from "./ai-gateway.server";
+import { generateWithFallback, generateObjectWithFallback, verifyOutput } from "./ai-gateway.server";
 import { z } from "zod";
 import { CTAS, FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
@@ -103,6 +103,7 @@ const AnalysisSchema = z.object({
   detectedLanguage: z.string().default("English"),
   suggestedLength: z.enum(["brief", "robust", "explanatory"]).default("robust"),
   detectedNiche: z.string().default(""),
+  extractedEntities: z.array(z.string()).default([]),
 });
 export type JobAnalysis = z.infer<typeof AnalysisSchema>;
 
@@ -129,6 +130,7 @@ DEEP ANALYSIS REQUIREMENTS:
 6. HOOK SELECTION: Choose hooks that feel like genuine insights about THEIR situation — not clever openers. The openingLine must be a sentence the client would read and think "how did they know that?"
 7. STRATEGY SELECTION: The strategy should define the ENTIRE proposal arc — not just the opening.
 8. CTA SELECTION: The CTA should match the client's decision-making style evident from how they wrote the job post.
+9. ENTITY EXTRACTION: Pull out every concrete, specific anchor from the job post — named tools (e.g. "Webflow", "Stripe", "Notion"), exact numbers ("10,000 subscribers", "$5k budget", "2-week deadline"), client's exact phrasing of their problem, proper nouns (company name, product name), and explicit constraints. These become grounding requirements for the proposal. Minimum 4 entities, maximum 10.
 
 Be ruthlessly specific. Every answer must reference details from THIS job post. No generic observations.
 
@@ -201,7 +203,8 @@ Return a JSON object with these exact keys:
   ],
   "detectedLanguage": "<full English name of the language this job post is written in>",
   "suggestedLength": "<brief|robust|explanatory>",
-  "detectedNiche": "<the primary freelance niche>"
+  "detectedNiche": "<the primary freelance niche>",
+  "extractedEntities": ["<specific tool/tech name>", "<exact number or metric>", "<client's exact pain point phrase>", "<proper noun>", "<explicit constraint>"]
 }
 
 IMPORTANT for hookSuggestions / ctaSuggestions: The openingLine and closingLine must be specific, concrete sentences written for THIS job — not templates. Ready to paste directly. Score 85-100 = excellent fit, 70-84 = good fit, 50-69 = workable.${redFlagPromptBlock()}`,
@@ -376,6 +379,7 @@ export const generateProposal = createServerFn({ method: "POST" })
     strategyDocument?: string;
     toneAssertiveness?: number;
     toneFormalness?: number;
+    extractedEntities?: string[];
   }) =>
     z.object({
       jobDescription: z.string().min(10),
@@ -398,6 +402,7 @@ export const generateProposal = createServerFn({ method: "POST" })
       strategyDocument: z.string().max(5000).optional(),
       toneAssertiveness: z.number().min(1).max(5).optional(),
       toneFormalness: z.number().min(1).max(5).optional(),
+      extractedEntities: z.array(z.string()).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -482,6 +487,7 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
   You are writing a "${length.name}" proposal so the rules for "${length.id}" apply.
 - PARAGRAPH ORDER (mandatory): 1) Hook paragraph — your most compelling opening insight. ${data.portfolioItems.length > 0 ? "2) Portfolio paragraph — IMMEDIATELY after the hook, before anything else. Include EVERY portfolio link from the PORTFOLIO ITEMS section above, each with a one-line sentence explaining how it's relevant to THIS specific job. Do not bury portfolio links later in the proposal. 3) " : "2) "}Deliverables paragraph (2-4 sentences about outcomes, not steps). ${data.portfolioItems.length > 0 ? "4" : "3"}) One non-obvious advice/warning sentence. ${data.includePlan ? (data.portfolioItems.length > 0 ? "5" : "4") + ") 2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a natural paragraph. " : ""}Final paragraph: One open-ended question followed by a specific call to action.
 - FORMATTING RULES: Write in clean flowing prose. Separate paragraphs with ONE blank line. No dashes, asterisks, or any markdown. No horizontal rules. No numbered lists. No bullet symbols of any kind.
+${data.extractedEntities && data.extractedEntities.length >= 3 ? `- GROUNDING ENFORCEMENT (non-negotiable): The following specific entities were extracted from the job post. Your proposal MUST reference AT LEAST 3 of them naturally — exact names, numbers, or paraphrases. A proposal that could apply to any job will be rejected. Entities: ${data.extractedEntities.join(", ")}` : ""}
 
 Return a JSON object with this exact shape:
 {
@@ -494,11 +500,54 @@ Return a JSON object with this exact shape:
 }${redFlagPromptBlock(customFlags)}`,
         `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}${data.strategyDocument ? `\n\nStrategy reference:\n${data.strategyDocument}` : ""}\n\n${strategyBlock}${data.targetLanguage && data.targetLanguage.toLowerCase() !== "english" ? `\n\nOUTPUT LANGUAGE: ${data.targetLanguage}` : ""}`,
       );
+      // Phase 1.3 — Specificity gate (Gemini Flash verifier, max 1 retry)
+      let currentResult = result;
+      if (data.extractedEntities && data.extractedEntities.length > 0) {
+        const verification = await verifyOutput({
+          proposal: currentResult.content,
+          jobDescription: data.jobDescription,
+          extractedEntities: data.extractedEntities,
+        });
+        if (verification && (verification.specificity < 7 || verification.entityUsage < 3)) {
+          // Inject verifier complaint and regenerate once
+          const retryResult = await structured(
+            ProposalSchema,
+            `You write freelance proposals that win because the client FEELS understood — not impressed, not sold to, understood.
+
+The gold standard: the client reads this and thinks "this person has seen my exact problem before and knows exactly how it ends." That feeling comes from specificity, not claims. Never say "I understand your needs." Instead, name the specific thing they're dealing with, name the downstream cost of it, name the thing they probably haven't tried yet.
+
+Hard rules:
+- No greeting. No "Hi". Start directly with the hook.${data.targetLanguage && data.targetLanguage.toLowerCase() !== "english" ? `\n- LANGUAGE: Write the ENTIRE proposal in ${data.targetLanguage}.` : ""}
+- NO BULLET POINTS. NO HYPHENS. NO DASHES as list markers. Write in clean flowing prose only.
+- CONFIDENCE WITHOUT ARROGANCE: Write like someone who has solved this exact type of problem before and is not anxious about it.
+- DO NOT parrot or restate the job post. Echo the client's stated needs at most ~30%. The other ~70% must be YOUR original interpretation, deeper insight, and value they did NOT explicitly ask for.
+- Forbidden phrases (NEVER use any of these): ${FORBIDDEN_PHRASES.map((p) => `"${p}"`).join(", ")}
+- Use the assigned HOOK: ${data.customHookText ? `AI-Generated Custom Hook — ${data.customHookText}` : (() => { const h = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0]; return `${h.name} — ${h.description}`; })()}
+- Use the assigned STRATEGY: ${data.customStrategyText ? `AI-Generated Custom Strategy — ${data.customStrategyText}` : (() => { const s = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0]; return `${s.name} — ${s.description}`; })()}
+- GROUNDING ENFORCEMENT (non-negotiable): The following specific entities MUST appear in the proposal. Reference AT LEAST 3 naturally: ${(data.extractedEntities ?? []).join(", ")}
+- SPECIFICITY FAILURE DETECTED — previous draft scored ${verification.specificity}/10 with only ${verification.entityUsage} entity references. Verifier complaint: "${verification.complaint}". Fix this by anchoring EVERY paragraph to a specific detail from the job post.
+- FORMATTING RULES: Write in clean flowing prose. Separate paragraphs with ONE blank line. No markdown.
+
+Return a JSON object with this exact shape:
+{
+  "content": "<the full proposal text, ready to paste>",
+  "explanation": {
+    "hook": "<why this hook works for this job>",
+    "strategy": "<why this strategy works for this job>",
+    "question": "<why this closing question works>"
+  }
+}`,
+            `Job post:\n${data.jobDescription}\n\n${data.analysis ? `Job analysis:\n${JSON.stringify(data.analysis, null, 2)}` : ""}\n\n${data.portfolioItems.length ? `PORTFOLIO ITEMS:\n${data.portfolioItems.map((p) => `- ${p.url} — "${p.title}"`).join("\n")}` : ""}`,
+          ).catch(() => currentResult); // if retry fails, keep original
+          currentResult = retryResult;
+        }
+      }
+
       // Hard-enforce brief limit
-      let finalResult = result;
+      let finalResult = currentResult;
       if (data.length === "brief") {
         const MAX = 1500;
-        let text = result.content;
+        let text = currentResult.content;
         if (text.length > MAX) {
           // Find the last question mark before MAX — keep the CTA after it
           const cut = text.slice(0, MAX);
@@ -514,7 +563,7 @@ Return a JSON object with this exact shape:
             const lastPunct = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
             text = lastPunct > 800 ? cut.slice(0, lastPunct + 1).trimEnd() : cut.trimEnd();
           }
-          finalResult = { ...result, content: text };
+          finalResult = { ...currentResult, content: text };
         }
       }
       // Strip bullet lists, horizontal rules, and excessive blank lines

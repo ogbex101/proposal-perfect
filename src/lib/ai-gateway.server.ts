@@ -1,4 +1,11 @@
 // Server-only. Provides a waterfall of AI models — tries each in order until one succeeds.
+//
+// PROVIDER ROLES — each provider has a designated function; change here to rewire globally.
+export const PROVIDER_ROLES = {
+  writer: "anthropic",       // Claude — all proposal/strategy/email generation
+  verifier: "google",        // Gemini Flash — entity extraction, specificity scoring, similarity matching
+  challenger: "mistral",     // future: cross-provider candidate competition
+} as const;
 // Configure providers by setting environment variables in Lovable Cloud → Settings → Secrets.
 // At least ONE key must be present, but the system works with any subset.
 //
@@ -171,4 +178,83 @@ export async function generateObjectWithFallback<T>(params: {
   }
 
   throw new Error(`AI structured output failed. Last error: ${errors[errors.length - 1] ?? "Unknown"}`);
+}
+
+/**
+ * Generates using a specific named provider role (from PROVIDER_ROLES).
+ * Falls back to the full waterfall if the designated provider is unavailable.
+ */
+export async function generateWithProvider(role: keyof typeof PROVIDER_ROLES, params: {
+  system: string;
+  prompt: string;
+}): Promise<string> {
+  const providerName = PROVIDER_ROLES[role];
+  const allProviders = buildProviders();
+
+  // Try the designated role provider first
+  const roleProvider = allProviders.find((p) => p.name.toLowerCase().includes(providerName));
+  if (roleProvider) {
+    try {
+      const model = await roleProvider.load();
+      const { text } = await generateText({ model, system: params.system, prompt: params.prompt });
+      return text;
+    } catch {
+      // Fall through to full waterfall
+    }
+  }
+
+  return generateWithFallback(params);
+}
+
+/**
+ * Specificity gate — runs after Claude generates a proposal.
+ * Uses Gemini Flash (verifier role) to score specificity and entity usage.
+ * Returns null if verification is unavailable (never blocks generation).
+ */
+export async function verifyOutput(params: {
+  proposal: string;
+  jobDescription: string;
+  extractedEntities: string[];
+}): Promise<{ specificity: number; genericPhraseCount: number; entityUsage: number; complaint: string } | null> {
+  try {
+    const { z } = await import("zod");
+    const VerifySchema = z.object({
+      specificity: z.number().int().min(1).max(10),
+      genericPhraseCount: z.number().int().min(0),
+      entityUsage: z.number().int().min(0),
+      complaint: z.string(),
+    });
+
+    const entityList = params.extractedEntities.length > 0
+      ? `\nEntities extracted from job post: ${params.extractedEntities.join(", ")}`
+      : "";
+
+    const allProviders = buildProviders();
+    const verifier = allProviders.find((p) => p.name.toLowerCase().includes("gemini"));
+    if (!verifier) return null;
+
+    const model = await verifier.load();
+    const { object } = await generateObject({
+      model,
+      schema: VerifySchema,
+      system: `You are a proposal specificity auditor. Score how well the proposal grounds itself in the specific job post details.
+
+SPECIFICITY (1-10):
+- 1-4: Almost entirely generic — could apply to any job. Mentions no specific tools, numbers, or client details.
+- 5-6: Some specifics but relies on generic claims. Fewer than 2 job-specific anchors.
+- 7-8: Good — mentions ≥3 specific details from the job post (tool names, numbers, their actual challenge).
+- 9-10: Excellent — every paragraph references something from the job post. Zero interchangeable sentences.
+
+GENERIC PHRASE COUNT: Count phrases that could appear in ANY proposal regardless of job (e.g., "I have extensive experience", "I understand your needs", "passionate about", "dedicated professional", "I am confident", "I would love to", "looking forward to", "don't hesitate").
+
+ENTITY USAGE: Count how many of the extracted entities actually appear in the proposal (exact or paraphrase).
+
+COMPLAINT: If specificity < 7, write one concrete sentence about what's missing. Otherwise write "Pass."`,
+      prompt: `Job post:\n${params.jobDescription.slice(0, 3000)}${entityList}\n\nProposal to audit:\n${params.proposal.slice(0, 4000)}`,
+    });
+
+    return object;
+  } catch {
+    return null;
+  }
 }

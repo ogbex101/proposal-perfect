@@ -1005,6 +1005,36 @@ ALTER TABLE public.proposals
     sql: `ALTER TABLE public.portfolio_items ADD COLUMN IF NOT EXISTS niche text DEFAULT '' NOT NULL;
 ALTER TABLE public.portfolio_items ADD COLUMN IF NOT EXISTS niche_tags text[] DEFAULT '{}' NOT NULL;`,
   },
+  {
+    label: "8. AI Enhancement — entities, specificity, voice fingerprint",
+    description: "Adds extracted_entities, specificity_score, entity_usage_count, regeneration_count, prompt_version to proposals. Creates voice_edits table and voice_profile on profiles.",
+    sql: `-- Phase 1: Entity extraction + specificity tracking on proposals
+ALTER TABLE public.proposals ADD COLUMN IF NOT EXISTS extracted_entities jsonb;
+ALTER TABLE public.proposals ADD COLUMN IF NOT EXISTS specificity_score integer;
+ALTER TABLE public.proposals ADD COLUMN IF NOT EXISTS entity_usage_count integer;
+ALTER TABLE public.proposals ADD COLUMN IF NOT EXISTS regeneration_count integer DEFAULT 0;
+ALTER TABLE public.proposals ADD COLUMN IF NOT EXISTS prompt_version text;
+
+-- Index for niche + conversion win pattern queries (Phase 2.3)
+CREATE INDEX IF NOT EXISTS idx_proposals_niche_converted ON public.proposals (detected_niche, converted);
+
+-- Phase 3: Voice fingerprint
+CREATE TABLE IF NOT EXISTS public.voice_edits (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users NOT NULL,
+  proposal_id uuid REFERENCES public.proposals,
+  before_content text NOT NULL,
+  after_content text NOT NULL,
+  diff_percentage numeric,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE public.voice_edits ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "voice_edits_own" ON public.voice_edits
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Voice profile stored on the user's profile
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS voice_profile jsonb;`,
+  },
 ];
 
 function MigrationsPanel({ onLoadSql }: { onLoadSql: (sql: string) => void }) {

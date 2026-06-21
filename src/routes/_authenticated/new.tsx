@@ -262,6 +262,7 @@ function NewProposal() {
           toneAssertiveness,
           toneFormalness,
           strategyDocument: strategyLink,
+          extractedEntities: (analysis as any)?.extractedEntities ?? [],
         },
       });
       return { proposalResult, strategyResult, slug };
