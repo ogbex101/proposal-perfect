@@ -42,6 +42,7 @@ import {
   listPortfolio,
   upsertPortfolio,
   deletePortfolio,
+  seedFaithPortfolios,
 } from "@/lib/portfolio.functions";
 import { listGeneratedPortfolios } from "@/lib/portfolio-generate.functions";
 
@@ -87,6 +88,20 @@ function PortfolioPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [toDelete, setToDelete] = useState<Item | null>(null);
 
+  const seed = useMutation({
+    mutationFn: () => seedFaithPortfolios(),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["portfolio"] });
+      const r = result as { seeded: number; skipped: number };
+      if (r.seeded > 0) {
+        toast.success(`Added ${r.seeded} niche portfolio${r.seeded > 1 ? "s" : ""}${r.skipped > 0 ? ` (${r.skipped} already existed)` : ""}`);
+      } else {
+        toast.info("All niche portfolios already exist");
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not seed portfolios"),
+  });
+
   const save = useMutation({
     mutationFn: (d: Draft) => upsertPortfolio({ data: d }),
     onSuccess: () => {
@@ -125,12 +140,23 @@ function PortfolioPage() {
         title="Portfolio Manager"
         description="Curate the work you cite in proposals. Primary entries are suggested first; favorites surface for quick access."
         action={
-          <Button
-            className="bg-gold text-primary-foreground hover:bg-gold-bright"
-            onClick={() => setDraft({ ...EMPTY })}
-          >
-            <Plus className="mr-1.5 h-4 w-4" /> Add entry
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="border-teal/40 text-teal hover:bg-teal/10"
+              disabled={seed.isPending}
+              onClick={() => seed.mutate()}
+            >
+              {seed.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}
+              Seed niche portfolios
+            </Button>
+            <Button
+              className="bg-gold text-primary-foreground hover:bg-gold-bright"
+              onClick={() => setDraft({ ...EMPTY })}
+            >
+              <Plus className="mr-1.5 h-4 w-4" /> Add entry
+            </Button>
+          </div>
         }
       />
 

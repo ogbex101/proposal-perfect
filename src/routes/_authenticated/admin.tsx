@@ -999,6 +999,12 @@ ALTER TABLE public.proposals
   ADD COLUMN IF NOT EXISTS got_reply boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS converted boolean NOT NULL DEFAULT false;`,
   },
+  {
+    label: "7. Add niche tags to portfolio_items",
+    description: "Adds niche and niche_tags columns to portfolio_items for niche-based auto-selection.",
+    sql: `ALTER TABLE public.portfolio_items ADD COLUMN IF NOT EXISTS niche text DEFAULT '' NOT NULL;
+ALTER TABLE public.portfolio_items ADD COLUMN IF NOT EXISTS niche_tags text[] DEFAULT '{}' NOT NULL;`,
+  },
 ];
 
 function MigrationsPanel({ onLoadSql }: { onLoadSql: (sql: string) => void }) {

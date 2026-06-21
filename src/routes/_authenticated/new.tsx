@@ -180,12 +180,35 @@ function NewProposal() {
       if (h) setHookId(h.id);
       if (s) setStrategyId(s.id);
       if (c) setCtaId(c.id);
-      // Auto-select primary portfolio items if none chosen yet
+      // Auto-select niche-matched portfolio items
+      const niche = (result.detectedNiche ?? "").toLowerCase();
+      const isEmailMarketing = /email|newsletter|campaign|mailchimp|convertkit|drip|klaviyo|digital.?market|virtual.?assist|va |social.?media|content.?market|copywrite|copywriting/.test(niche + " " + effectiveJob.toLowerCase());
+      const isVideoEditing = /video.?edit|reel|tiktok|youtube|short.?form|footage|motion.?graphic|animation|ai.?video/.test(niche + " " + effectiveJob.toLowerCase());
+      const isWebDev = /web.?dev|full.?stack|frontend|backend|react|next\.?js|wordpress|shopify|webflow|landing.?page|website|web.?design|saas|app.?dev/.test(niche + " " + effectiveJob.toLowerCase());
+
       if (selectedPortfolio.length === 0) {
-        const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
-        if (primaries.length) setSelectedPortfolio(primaries);
+        const nicheMatched = portfolio.filter((p: any) => {
+          const tags: string[] = (p as any).niche_tags ?? [];
+          if (isEmailMarketing && ((p as any).niche === "email-marketing" || tags.some((t: string) => ["email-marketing", "digital-marketing", "virtual-assistant", "content-writing", "copywriting", "social-media"].includes(t)))) return true;
+          if (isVideoEditing && ((p as any).niche === "video-editing" || tags.some((t: string) => ["video-editing", "ai-video", "reels", "youtube", "content-creation"].includes(t)))) return true;
+          if (isWebDev && ((p as any).niche === "web-development" || tags.some((t: string) => ["web-development", "full-stack", "react", "nextjs", "web-design", "landing-page"].includes(t)))) return true;
+          return false;
+        }).slice(0, 3).map((p: any) => p.id);
+
+        if (nicheMatched.length > 0) {
+          setSelectedPortfolio(nicheMatched);
+          toast.success(`Auto-selected ${nicheMatched.length} portfolio${nicheMatched.length > 1 ? "s" : ""} for this job`);
+        } else {
+          // Fall back to primary items
+          const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
+          if (primaries.length) setSelectedPortfolio(primaries);
+        }
       }
       toast.success("Job analyzed");
+      // Auto-start strategy generation in the background when analysis completes
+      if (!strategyDoc && !strategyMutation.isPending) {
+        setTimeout(() => strategyMutation.mutate(), 500);
+      }
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Analysis failed"),
   });
@@ -210,7 +233,7 @@ function NewProposal() {
         },
       });
       const { slug } = await saveStrategyDoc({ data: { doc: strategyResult! } });
-      const strategyLink = `I've already mapped out a full strategy for this project — phases, risk factors, and success metrics — here: https://xperienceprops.com/strategy/${slug}`;
+      const strategyLink = `I've already mapped out a full project strategy — phases, risk factors, and success metrics — you can review it here: ${window.location.origin}/strategy/${slug}`;
 
       // Step 2: Generate proposal with strategy link
       const items = portfolio
