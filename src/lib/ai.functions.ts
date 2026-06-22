@@ -121,6 +121,8 @@ const AnalysisSchema = z.object({
   suggestedLength: z.enum(["brief", "robust", "explanatory"]).default("robust"),
   detectedNiche: z.string().default(""),
   extractedEntities: z.array(z.string()).default([]),
+  strategyWorthy: z.boolean().default(true),
+  strategyWorthyReason: z.string().default(""),
 });
 export type JobAnalysis = z.infer<typeof AnalysisSchema>;
 
@@ -150,6 +152,20 @@ DEEP ANALYSIS REQUIREMENTS:
 7. STRATEGY SELECTION: The strategy should define the ENTIRE proposal arc — not just the opening.
 8. CTA SELECTION: The CTA should match the client's decision-making style evident from how they wrote the job post.
 9. ENTITY EXTRACTION: Pull out every concrete, specific anchor from the job post — named tools (e.g. "Webflow", "Stripe", "Notion"), exact numbers ("10,000 subscribers", "$5k budget", "2-week deadline"), client's exact phrasing of their problem, proper nouns (company name, product name), and explicit constraints. These become grounding requirements for the proposal. Minimum 4 entities, maximum 10.
+10. HOOK SELECTION — this is critical. Do NOT default to "Sharp Observation" (i_noticed) for every job. Match the hook to the client's emotional state and job type:
+  - Use "Red Flag Warning" when the client's approach has an obvious flaw they haven't spotted
+  - Use "Cost of Inaction" when the problem is clearly costing them money or users right now
+  - Use "Curiosity Gap" when you can tease a specific insight from their industry that they'd value
+  - Use "Founder Mode" for founder-run businesses where the stakes are personal
+  - Use "Pattern Interrupt" for overposted job types (logos, basic websites, content writing) where standing out is everything
+  - Use "Future Pacing" when the outcome is vivid and easy to paint (launches, redesigns, revenue uplift)
+  - Use "Stack Realist" when the job has technical realities the client is probably underestimating
+  - Use "Sharp Observation" ONLY when there is a genuinely specific, non-obvious detail worth pointing out
+  - The hookSuggestions array MUST have 3 different hooks — never repeat the same one
+11. STRATEGY DOCUMENT WORTHINESS: Decide if this job deserves a strategy document.
+  WORTHY (strategyWorthy: true): multi-phase projects, budget implied or stated over $500, complex technical builds (web app, SaaS, custom software, full redesign), long-term or retainer work, sophisticated clients who write detailed posts.
+  NOT WORTHY (strategyWorthy: false): simple quick-turnaround tasks (logo tweak, copy edit, one-page site, small bug fix, content writing under $200, VA tasks), jobs where the client signals they want fast delivery over depth, anything that would be over-engineered by a strategy doc.
+  Be honest — a strategy doc on a $50 task wastes everyone's time and signals poor judgment.
 
 Be ruthlessly specific. Every answer must reference details from THIS job post. No generic observations.
 
@@ -223,7 +239,9 @@ Return a JSON object with these exact keys:
   "detectedLanguage": "<full English name of the language this job post is written in>",
   "suggestedLength": "<brief|robust|explanatory>",
   "detectedNiche": "<the primary freelance niche>",
-  "extractedEntities": ["<specific tool/tech name>", "<exact number or metric>", "<client's exact pain point phrase>", "<proper noun>", "<explicit constraint>"]
+  "extractedEntities": ["<specific tool/tech name>", "<exact number or metric>", "<client's exact pain point phrase>", "<proper noun>", "<explicit constraint>"],
+  "strategyWorthy": <true if this job deserves a strategy document, false if it's too simple>,
+  "strategyWorthyReason": "<one sentence explaining why a strategy doc is or isn't appropriate for this specific job>"
 }
 
 IMPORTANT for hookSuggestions / ctaSuggestions: The openingLine and closingLine must be specific, concrete sentences written for THIS job — not templates. Ready to paste directly. Score 85-100 = excellent fit, 70-84 = good fit, 50-69 = workable.${redFlagPromptBlock()}`,
@@ -369,6 +387,79 @@ Return a JSON object with this exact shape:
     }
   });
 
+// ---------- Craft Hook Paragraph (Claude — writer) ----------
+export const craftHookLine = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { jobDescription: string; analysis?: unknown; hookId: string }) =>
+    z.object({
+      jobDescription: z.string().min(10).max(15000),
+      analysis: z.any().optional(),
+      hookId: z.string(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const hook = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0];
+      const a = data.analysis as JobAnalysis | null;
+      const context = a
+        ? `Pain point: ${a.painPoint}\nHidden needs: ${a.hiddenNeeds}\nRecommended approach: ${a.recommendedApproach}\nEntities: ${(a.extractedEntities ?? []).join(", ")}`
+        : "";
+      return await structuredWith(
+        "writer",
+        z.object({ hookParagraph: z.string() }),
+        `You craft the opening paragraph of freelance proposals. Write the FIRST PARAGRAPH ONLY — 2-4 sentences, nothing else.
+
+Hook technique to deploy: "${hook.name}" — ${hook.description}
+
+Rules:
+- Do NOT start with "I" — open with an observation, question, fact, or reframe
+- Reference at least one SPECIFIC detail from the job post or client context
+- The client must read this and think "this person has done this exact work before"
+- Sound like a confident human being, not a pitch machine
+- No generic opener, no praise for the job posting, no "I came across your post"
+- 2-4 sentences maximum
+
+Return JSON: { "hookParagraph": "<the opening paragraph — ready to paste>" }`,
+        `Job post:\n${data.jobDescription}\n\n${context}`,
+      );
+    } catch (err) { handleAiError(err); }
+  });
+
+// ---------- Craft CTA Line (Mistral — challenger) ----------
+export const craftCtaLine = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { jobDescription: string; analysis?: unknown; ctaId: string }) =>
+    z.object({
+      jobDescription: z.string().min(10).max(15000),
+      analysis: z.any().optional(),
+      ctaId: z.string(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const cta = CTAS.find((c) => c.id === data.ctaId) ?? CTAS[0];
+      const a = data.analysis as JobAnalysis | null;
+      const context = a ? `Pain point: ${a.painPoint}\nHidden needs: ${a.hiddenNeeds}` : "";
+      return await structuredWith(
+        "challenger",
+        z.object({ ctaLine: z.string() }),
+        `You craft the closing CTA (1-2 sentences) for freelance proposals. Write the CLOSING LINE ONLY — nothing else.
+
+CTA style: "${cta.name}" — ${cta.description}
+
+Rules:
+- MUST be either a sharp question OR a specific concrete suggestion with a clear next step
+- Reference something SPECIFIC from the job post — their timeline, their tool, their challenge, their goal
+- NEVER use: "Let me know if interested", "Feel free to reach out", "Looking forward to hearing from you", "I'd love the opportunity"
+- Sound direct and confident — not desperate, not stiff
+- 1-2 sentences only
+
+Return JSON: { "ctaLine": "<the closing line — ready to paste>" }`,
+        `Job post:\n${data.jobDescription}\n\n${context}`,
+      );
+    } catch (err) { handleAiError(err); }
+  });
+
 // ---------- Generate Proposal ----------
 const ProposalSchema = z.object({
   content: z.string(),
@@ -399,6 +490,8 @@ export const generateProposal = createServerFn({ method: "POST" })
     toneAssertiveness?: number;
     toneFormalness?: number;
     extractedEntities?: string[];
+    craftedHookParagraph?: string;
+    craftedCtaLine?: string;
   }) =>
     z.object({
       jobDescription: z.string().min(10),
@@ -422,21 +515,26 @@ export const generateProposal = createServerFn({ method: "POST" })
       toneAssertiveness: z.number().min(1).max(5).optional(),
       toneFormalness: z.number().min(1).max(5).optional(),
       extractedEntities: z.array(z.string()).optional(),
+      craftedHookParagraph: z.string().max(1000).optional(),
+      craftedCtaLine: z.string().max(500).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
     try {
       const customFlags = await loadCustomFlags(context);
       // Use AI-generated custom text if provided, otherwise fall back to preset lists
-      const hookLabel = data.customHookText
+      const hookLabel = data.craftedHookParagraph
+        ? `PRE-CRAFTED OPENING — use this EXACTLY as your first paragraph: "${data.craftedHookParagraph}"`
+        : data.customHookText
         ? `AI-Generated Custom Hook — ${data.customHookText}`
         : (() => { const h = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0]; return `${h.name} — ${h.description}`; })();
       const strategyLabel = data.customStrategyText
         ? `AI-Generated Custom Strategy — ${data.customStrategyText}`
         : (() => { const s = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0]; return `${s.name} — ${s.description}`; })();
       const cta = CTAS.find((c) => c.id === data.ctaId) ?? CTAS[0];
-      const ctaLabel = `${cta.name} — ${cta.description}`;
-      // Keep legacy hook/strategy for non-AI paths
+      const ctaLabel = data.craftedCtaLine
+        ? `PRE-CRAFTED CLOSING — use this EXACTLY as your final sentence(s): "${data.craftedCtaLine}"`
+        : `${cta.name} — ${cta.description}`;
       const hook = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0];
       const strategy = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0];
       const length = LENGTHS.find((l) => l.id === data.length) ?? LENGTHS[1];

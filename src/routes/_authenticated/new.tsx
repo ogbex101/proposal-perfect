@@ -39,7 +39,7 @@ import { cn } from "@/lib/utils";
 import { HOOKS, STRATEGIES, CTAS, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
-import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
+import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, craftHookLine, craftCtaLine, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
 import { VoiceEditPrompt } from "@/components/VoiceEditPrompt";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
@@ -205,9 +205,11 @@ function NewProposal() {
         }
       }
       toast.success("Job analyzed");
-      // Auto-start strategy generation in the background when analysis completes
-      if (!strategyDoc && !strategyMutation.isPending) {
+      // Auto-start strategy generation only if job is worth it
+      if (!strategyDoc && !strategyMutation.isPending && result.strategyWorthy !== false) {
         setTimeout(() => strategyMutation.mutate(), 500);
+      } else if (result.strategyWorthy === false) {
+        toast.info(`Strategy doc skipped — ${result.strategyWorthyReason || "simple job, not needed"}`);
       }
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Analysis failed"),
@@ -224,25 +226,30 @@ function NewProposal() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      // Step 1: Reuse strategy if already generated in background (strategyMutation auto-runs after analysis).
-      // Only regenerate if we don't have one — avoids redundant API call on the critical path.
-      let strategyResult = strategyDoc ?? null;
-      let slug: string | null = strategySlug;
+      const isStrategyWorthy = (analysis as any)?.strategyWorthy !== false;
 
-      if (!strategyResult || !slug) {
-        const freshStrategy = await generateStrategyDocument({
-          data: {
-            jobDescription: effectiveJob,
-            analysis,
-            budget: budget || undefined,
-          },
-        });
-        strategyResult = freshStrategy ?? null;
-        const saved = await saveStrategyDoc({ data: { doc: freshStrategy! } });
-        slug = saved.slug;
-      }
+      // Run hook crafting, CTA crafting, and strategy generation in parallel
+      const [hookResult, ctaResult, strategyData] = await Promise.all([
+        // Claude crafts the opening hook paragraph
+        craftHookLine({ data: { jobDescription: effectiveJob, analysis, hookId } }).catch(() => null),
+        // Mistral crafts the closing CTA line
+        craftCtaLine({ data: { jobDescription: effectiveJob, analysis, ctaId } }).catch(() => null),
+        // Strategy: reuse existing or generate new (only if job is strategy-worthy)
+        (async () => {
+          if (!isStrategyWorthy) return { strategyResult: null as StrategyDocument | null, slug: null as string | null };
+          if (strategyDoc && strategySlug) return { strategyResult: strategyDoc, slug: strategySlug };
+          const freshStrategy = await generateStrategyDocument({
+            data: { jobDescription: effectiveJob, analysis, budget: budget || undefined },
+          });
+          const saved = await saveStrategyDoc({ data: { doc: freshStrategy! } });
+          return { strategyResult: freshStrategy ?? null, slug: saved.slug };
+        })(),
+      ]);
 
-      const strategyLink = `I've already mapped out a full project strategy — phases, risk factors, and success metrics — you can review it here: ${window.location.origin}/strategy/${slug}`;
+      const { strategyResult, slug } = strategyData;
+      const strategyLink = slug
+        ? `I've already mapped out a full project strategy — phases, risk factors, and success metrics — you can review it here: ${window.location.origin}/strategy/${slug}`
+        : undefined;
 
       // Step 2: Generate proposal with strategy link
       const items = portfolio
@@ -272,6 +279,8 @@ function NewProposal() {
           toneFormalness,
           strategyDocument: strategyLink,
           extractedEntities: (analysis as any)?.extractedEntities ?? [],
+          craftedHookParagraph: hookResult?.hookParagraph ?? undefined,
+          craftedCtaLine: ctaResult?.ctaLine ?? undefined,
         },
       });
       return { proposalResult, strategyResult, slug };
