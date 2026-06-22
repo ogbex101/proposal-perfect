@@ -156,9 +156,9 @@ export const analyzeAndSaveOutreachTemplate = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { generateWithFallback } = await import("./ai-gateway.server");
+    const { generateWithProvider } = await import("./ai-gateway.server");
 
-    const analysis = await generateWithFallback({
+    const analysis = await generateWithProvider("verifier", {
       system: "You analyze cold email outreach templates for freelancers and extract their persuasion structure as JSON.",
       prompt: `Analyze this outreach email and extract its structural DNA. Return ONLY valid JSON (no markdown):
 {
@@ -253,11 +253,11 @@ export const matchTemplateToJob = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     if (data.templates.length === 0) return { bestId: null, reason: "No templates saved yet." };
-    const { generateWithFallback } = await import("./ai-gateway.server");
+    const { generateWithProvider } = await import("./ai-gateway.server");
     const list = data.templates.map((t, i) =>
       `${i + 1}. ID: ${t.id} | Name: ${t.name} | Category: ${t.category} | Hook: ${t.hook_style} | CTA: ${t.cta_style} | Analysis: ${t.structure_analysis}`
     ).join("\n");
-    const res = await generateWithFallback({
+    const res = await generateWithProvider("verifier", {
       system: "You match outreach email templates to job descriptions. Respond only with valid JSON.",
       prompt: `Given this job post, which outreach template would be the best fit?
 

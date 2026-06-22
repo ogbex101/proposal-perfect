@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateWithFallback, generateObjectWithFallback, generateObjectWithProvider, verifyOutput } from "./ai-gateway.server";
+import { generateWithFallback, generateWithProvider, generateObjectWithFallback, generateObjectWithProvider, verifyOutput } from "./ai-gateway.server";
 import { z } from "zod";
 import { CTAS, FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
@@ -136,7 +136,7 @@ export const analyzeJob = createServerFn({ method: "POST" })
       const ctaList = CTAS.map((c) => `- ${c.id}: ${c.name} — ${c.description}`).join("\n");
       // Gemini Flash handles structured extraction — fast, free, excellent at JSON
       return await structuredWith(
-        "verifier",
+        "analyzer",
         AnalysisSchema,
         `You are an expert freelance proposal strategist who has won hundreds of proposals. Your analysis is what separates winning proposals from generic ones. You must read between the lines.
 
@@ -248,7 +248,7 @@ export const generateMilestones = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      const result = await structured(
+      const result = await structuredWith("challenger",
         MilestonesSchema,
         `Create 2-4 sensible project milestones. Each has a short title and a one-sentence deliverable description. If a budget is given, distribute amounts realistically; otherwise omit amount.
 
@@ -289,7 +289,7 @@ export const generateAiHookStrategy = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      return await structured(
+      return await structuredWith("challenger",
         AiHookStrategySchema,
         `You are an expert freelance proposal strategist. Based on the job description, craft ONE highly specific hook opening and ONE tailored strategy that are uniquely designed for THIS job — not generic templates.
 
@@ -340,7 +340,7 @@ export const analyzeHookStrength = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      return await structured(
+      return await structuredWith("verifier",
         HookStrengthSchema,
         `You are a proposal conversion expert. You score the opening paragraph of a freelance proposal.
 
@@ -625,7 +625,7 @@ export const generateProfileSections = createServerFn({ method: "POST" })
       const jobBlock = data.jobContext
         ? `\n\nJob context (tailor the profile to fit this job):\n${data.jobContext}`
         : "";
-      const result = await structured(
+      const result = await structuredWith("challenger",
         ProfileSectionsSchema,
         `You generate professional freelancer profile content for a settings page. Be specific, credible, and human. No buzzwords. The freelancer's niches are: ${nicheList}.${jobBlock}
 
@@ -742,7 +742,7 @@ export const applyProposalEdit = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     try {
       const customFlags = await loadCustomFlags(context);
-      const text = await generateWithFallback({
+      const text = await generateWithProvider("writer", {
         system: `You are a professional proposal editor. The user gives you a freelance proposal and an instruction to improve it. Apply the instruction surgically — change ONLY what is asked. Preserve the overall structure and voice unless instructed otherwise. Return ONLY the revised proposal text with no commentary, no preamble, no "Here is the revised..." prefix. Just the proposal text itself.
 
 Rules:
@@ -857,7 +857,7 @@ Based on the FULL conversation history, assess: has Stage ${stage}'s criteria be
 - reason: 1 sentence explaining your assessment
 - Also extract from the conversation: deliverables mentioned, client pain points, scope of work, timeline discussed (leave fields empty if not yet mentioned)`;
 
-      const result = await structured(
+      const result = await structuredWith("writer",
         ConversionSchema,
         `You are a rapid-response conversion coach for freelancers. The client is waiting. Read the FULL conversation history carefully so you can continue the thread naturally — do not restart or summarize what was already said. Generate:
 
@@ -1009,7 +1009,7 @@ export const polishProposal = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      const result = await structured(
+      const result = await structuredWith("verifier",
         z.object({ content: z.string() }),
         `You are a professional editor. Fix ONLY mechanical issues in this freelance proposal — do not change the meaning, phrasing, tone, or structure. Your task:
 
@@ -1052,7 +1052,7 @@ export const injectPortfolioLinks = createServerFn({ method: "POST" })
         return { content: filtered.join("\n").replace(/\n{3,}/g, "\n\n").trim() };
       }
       const portfolioBlock = data.portfolioItems.map((p) => `- ${p.title}: ${p.url} — ${p.description}`).join("\n");
-      const result = await structured(
+      const result = await structuredWith("verifier",
         z.object({ content: z.string() }),
         `You are editing a freelance proposal. Your ONLY task: update the portfolio paragraph (paragraph 2, right after the hook) to include EXACTLY these portfolio links, each with a one-line relevance note. Keep every other sentence and paragraph 100% identical — word for word. Do not add, remove, or change anything else. If there's no portfolio paragraph yet, insert one as paragraph 2.
 
@@ -1203,7 +1203,7 @@ export const generateContestBrief = createServerFn({ method: "POST" })
         data.additionalContext ? `ADDITIONAL CONTEXT:\n${data.additionalContext}` : null,
       ].filter(Boolean).join("\n\n---\n\n");
 
-      return await structured(
+      return await structuredWith("writer",
         ContestBriefSchema,
         `You are a senior creative director and contest submission strategist. Analyze this design contest and produce a comprehensive creative brief that a designer can use as their submission document or pitch.
 
@@ -1364,7 +1364,9 @@ export const generateScoutOutreach = createServerFn({ method: "POST" })
         ? `\n\n3D ANIMATION DESIGN: The freelancer specializes in 3D web experiences. The vibeCodePrompt MUST include: Three.js or React Three Fiber for 3D scenes, GSAP for smooth animations, parallax scrolling effects, interactive 3D elements that respond to mouse/scroll, particle systems where appropriate, 3D product showcases or hero sections. The overall design language must be premium, cinematic, and motion-rich. Add these to the tech stack.`
         : "";
 
-      return await structured(
+      // Claude handles scout outreach — both the email and the Lovable prompt are client-facing
+      return await structuredWith(
+        "writer",
         ScoutOutreachSchema,
         `You are a Senior Creative Director, UX Strategist, Conversion Optimization Expert, Brand Consultant, Product Designer, Motion Designer, and AI Vibe Coding Specialist. You write two things: a consultative email and a production-ready Lovable prompt. Both must be exceptional.
 
@@ -1739,7 +1741,7 @@ export const analyzeClientWebsite = createServerFn({ method: "POST" })
         businessInsights: z.string().default(""),
       });
 
-      const analysis = await structured(
+      const analysis = await structuredWith("analyzer",
         WebsiteSchema,
         `You are a senior digital strategist, UX consultant, brand analyst, and CRO expert analyzing a client's website. Your analysis will directly power a web developer's outreach and mockup prompt — so extract everything with precision and business intelligence.
 
