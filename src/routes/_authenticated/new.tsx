@@ -121,6 +121,7 @@ function NewProposal() {
   const [avatar, setAvatar] = useState<{ path: string; url: string } | null>(null);
 
   const [content, setContent] = useState("");
+  const [aiGeneratedContent, setAiGeneratedContent] = useState("");
   const [explanation, setExplanation] = useState<{
     hook: string;
     strategy: string;
@@ -287,6 +288,7 @@ function NewProposal() {
     },
     onSuccess: ({ proposalResult, strategyResult, slug }) => {
       setContent(proposalResult!.content);
+      setAiGeneratedContent(proposalResult!.content);
       setExplanation(proposalResult!.explanation);
       setShowExplain(true);
       setProposalSubmitted(false);
@@ -481,6 +483,7 @@ function NewProposal() {
   function reset() {
     setAnalysis(null);
     setContent("");
+    setAiGeneratedContent("");
     setExplanation(null);
     setMilestones([]);
     setChosenProfile(null);
@@ -738,7 +741,6 @@ function NewProposal() {
               {/* Hook selector */}
               <div>
                 <Label className="annotation mb-2 block !text-muted-foreground">Hook style</Label>
-
                 {/* Top 3 AI-ranked hooks for this specific job — shown after analysis */}
                 {analysis?.hookSuggestions && analysis.hookSuggestions.length > 0 && (
                   <div className="mb-3 space-y-1.5">
@@ -749,140 +751,118 @@ function NewProposal() {
                         type="button"
                         onClick={() => setHookId(hs.hookId)}
                         className={cn(
-                          "w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
+                          "w-full rounded-lg border px-3 py-2 text-left transition-colors",
                           hookId === hs.hookId ? "border-gold/60 bg-gold/10" : "border-gold/20 bg-gold/[0.03] hover:border-gold/40"
                         )}
                       >
-                        <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
                           <span className={cn("text-[12px] font-semibold", hookId === hs.hookId ? "text-gold" : "text-white")}>{hs.hookName}</span>
                           <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold",
                             hs.score >= 85 ? "bg-green-500/20 text-green-400" : hs.score >= 70 ? "bg-teal/20 text-teal" : "bg-muted/40 text-muted-foreground"
                           )}>{hs.score}/100</span>
                         </div>
-                        <p className="text-[11px] text-teal/90 leading-snug italic mb-1">"{hs.openingLine}"</p>
                         <p className="text-[10px] text-muted-foreground">{hs.scoreReason}</p>
                       </button>
                     ))}
-                    <p className="annotation !text-muted-foreground">Or choose any style:</p>
                   </div>
                 )}
-
-                <div className="grid gap-1.5">
-                  {allHooks.map((h) => {
-                    const stat = analytics?.hookStats?.find((s) => s.id === h.id);
-                    const isActive = hookId === h.id;
-                    const isBest = analytics?.bestHook === h.id;
-                    return (
-                      <button
-                        key={h.id}
-                        type="button"
-                        onClick={() => setHookId(h.id)}
-                        className={cn(
-                          "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
-                          isActive ? "border-gold/50 bg-gold/8" : "border-border/40 bg-background/30 hover:border-border/70"
-                        )}
-                      >
-                        <div className={cn("mt-0.5 h-3 w-3 shrink-0 rounded-full border-2 transition-colors",
-                          isActive ? "border-gold bg-gold" : "border-muted-foreground")} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={cn("text-sm font-medium", isActive ? "text-white" : "text-foreground/80")}>{h.name}</span>
-                            {isBest && <span className="rounded-full bg-gold/20 border border-gold/30 px-1.5 py-0.5 text-[9px] font-medium text-gold">★ Best</span>}
-                            {stat && <span className="rounded-full bg-teal/10 border border-teal/20 px-1.5 py-0.5 text-[9px] text-teal">{stat.responseRate}% response</span>}
-                          </div>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{h.description}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                <Select value={hookId} onValueChange={setHookId}>
+                  <SelectTrigger className="h-9 bg-background/60 text-sm">
+                    <SelectValue placeholder="Select hook style" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {allHooks.map((h) => {
+                      const stat = analytics?.hookStats?.find((s) => s.id === h.id);
+                      const isBest = analytics?.bestHook === h.id;
+                      return (
+                        <SelectItem key={h.id} value={h.id}>
+                          <span className="flex items-center gap-1.5">
+                            {h.name}
+                            {isBest && <span className="text-[9px] text-gold">★ Best</span>}
+                            {stat ? <span className="text-[9px] text-teal">{stat.responseRate}%</span> : null}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {(() => {
+                  const selected = allHooks.find((h) => h.id === hookId);
+                  return selected ? (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">{selected.description}</p>
+                  ) : null;
+                })()}
               </div>
 
               {/* Strategy selector */}
               <div>
                 <Label className="annotation mb-2 block !text-muted-foreground">Strategy</Label>
-                <div className="grid gap-1.5">
-                  {allStrategies.map((s) => {
-                    const isActive = strategyId === s.id;
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => setStrategyId(s.id)}
-                        className={cn(
-                          "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
-                          isActive ? "border-teal/50 bg-teal/8" : "border-border/40 bg-background/30 hover:border-border/70"
-                        )}
-                      >
-                        <div className={cn("mt-0.5 h-3 w-3 shrink-0 rounded-full border-2 transition-colors",
-                          isActive ? "border-teal bg-teal" : "border-muted-foreground")} />
-                        <div className="min-w-0">
-                          <span className={cn("text-sm font-medium", isActive ? "text-white" : "text-foreground/80")}>{s.name}</span>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{s.description}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                <Select value={strategyId} onValueChange={setStrategyId}>
+                  <SelectTrigger className="h-9 bg-background/60 text-sm">
+                    <SelectValue placeholder="Select strategy" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {allStrategies.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(() => {
+                  const selected = allStrategies.find((s) => s.id === strategyId);
+                  return selected ? (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">{selected.description}</p>
+                  ) : null;
+                })()}
               </div>
 
               {/* CTA selector */}
               <div>
                 <Label className="annotation mb-2 block !text-muted-foreground">
-                  Call to Action (closing)
+                  Call to Action
                   {analysis && (analysis as any).ctaSuggestions?.length > 0 && (
-                    <span className="ml-1.5 text-[10px] text-gold">· AI ranked for this job</span>
+                    <span className="ml-1.5 text-[10px] text-gold">· AI ranked</span>
                   )}
                 </Label>
                 {/* AI-ranked CTA suggestions */}
                 {analysis && (analysis as any).ctaSuggestions?.length > 0 && (
                   <div className="mb-3 space-y-1.5">
-                    {(analysis as any).ctaSuggestions.slice(0, 3).map((cs: { ctaId: string; ctaName: string; closingLine: string; score: number; scoreReason: string }) => (
+                    {(analysis as any).ctaSuggestions.slice(0, 2).map((cs: { ctaId: string; ctaName: string; closingLine: string; score: number; scoreReason: string }) => (
                       <button
                         key={cs.ctaId}
                         type="button"
                         onClick={() => setCtaId(cs.ctaId)}
                         className={cn(
-                          "w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
+                          "w-full rounded-lg border px-3 py-2 text-left transition-colors",
                           ctaId === cs.ctaId ? "border-purple-400/60 bg-purple-400/10" : "border-purple-400/20 bg-purple-400/[0.03] hover:border-purple-400/40"
                         )}
                       >
-                        <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
                           <span className={cn("text-[12px] font-semibold", ctaId === cs.ctaId ? "text-purple-300" : "text-white")}>{cs.ctaName}</span>
                           <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold",
                             cs.score >= 85 ? "bg-green-500/20 text-green-400" : cs.score >= 70 ? "bg-teal/20 text-teal" : "bg-muted/40 text-muted-foreground"
                           )}>{cs.score}/100</span>
                         </div>
-                        <p className="text-[11px] text-purple-300/80 leading-snug italic mb-1">"{cs.closingLine}"</p>
                         <p className="text-[10px] text-muted-foreground">{cs.scoreReason}</p>
                       </button>
                     ))}
-                    <p className="annotation !text-muted-foreground">Or choose any style:</p>
                   </div>
                 )}
-                <div className="grid gap-1.5">
-                  {CTAS.map((c) => {
-                    const isActive = ctaId === c.id;
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => setCtaId(c.id)}
-                        className={cn(
-                          "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
-                          isActive ? "border-purple-400/50 bg-purple-400/8" : "border-border/40 bg-background/30 hover:border-border/70"
-                        )}
-                      >
-                        <div className={cn("mt-0.5 h-3 w-3 shrink-0 rounded-full border-2 transition-colors",
-                          isActive ? "border-purple-400 bg-purple-400" : "border-muted-foreground")} />
-                        <div className="min-w-0">
-                          <span className={cn("text-sm font-medium", isActive ? "text-purple-300" : "text-foreground/80")}>{c.name}</span>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{c.description}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                <Select value={ctaId} onValueChange={setCtaId}>
+                  <SelectTrigger className="h-9 bg-background/60 text-sm">
+                    <SelectValue placeholder="Select CTA style" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {CTAS.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(() => {
+                  const selected = CTAS.find((c) => c.id === ctaId);
+                  return selected ? (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">{selected.description}</p>
+                  ) : null;
+                })()}
               </div>
 
               <div>
@@ -1030,128 +1010,188 @@ function NewProposal() {
             </div>
           </CropCard>
 
-          {content && (
-            <OutputPanel
-              content={content}
-              setContent={setContent}
-              explanation={explanation}
-              showExplain={showExplain}
-              setShowExplain={setShowExplain}
-              title={effectiveJob.split("\n")[0].slice(0, 60) || "Proposal"}
-              onSave={requestSave}
-              saving={saveMutation.isPending}
-              onSaveTemplate={requestSaveTemplate}
-              savingTemplate={saveTemplateMutation.isPending}
-              chosenProfile={chosenProfile}
-              onGoHistory={() => navigate({ to: "/history" })}
-              injecting={injectMutation.isPending}
-              onPolish={() => polishMutation.mutate(undefined)}
-              polishing={polishMutation.isPending}
-            />
-          )}
+        </div>
+      </div>
 
-          {/* Strategy Document */}
-          {strategyDoc && showStrategy && (
-            <div className="mt-6 space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <Eyebrow>Project strategy</Eyebrow>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground"
-                    onClick={() => setShowStrategy(false)}
-                  >
-                    Hide
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => downloadPdf(`Strategy-${strategyDoc.projectTitle}`, formatStrategyAsText(strategyDoc))}
-                  >
-                    <FileDown className="mr-1.5 h-3.5 w-3.5" /> Download PDF
-                  </Button>
-                </div>
+      {/* ── Full-width output section ─────────────────────────────────────── */}
+      {content && (
+        <div className="mt-8 space-y-6">
+          {/* Comparison: AI Generated vs Your Version */}
+          {aiGeneratedContent && (
+            <div>
+              <div className="mb-3 flex items-center gap-3">
+                <Eyebrow>Proposal comparison</Eyebrow>
+                <span className="text-[11px] text-muted-foreground">AI original on the left · your edited version on the right</span>
               </div>
-
-              {/* Shareable strategy link — always shown, auto-generated */}
-              <div className="rounded-xl border border-teal/20 bg-teal/5 px-4 py-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-teal uppercase tracking-wider">Shareable Link</span>
-                  {strategyLinkSaving && <Loader2 className="h-3 w-3 animate-spin text-teal" />}
-                </div>
-                {strategySlug ? (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <a
-                      href={`/s/${strategySlug}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex-1 min-w-0 truncate font-mono text-xs text-teal hover:underline"
-                    >
-                      {typeof window !== "undefined" ? window.location.origin : ""}/s/{strategySlug}
-                    </a>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0 h-7 border-teal/30 text-teal hover:bg-teal/10 text-xs"
-                      onClick={() => {
-                        const url = `${window.location.origin}/s/${strategySlug}`;
-                        navigator.clipboard.writeText(url);
-                        toast.success("Strategy link copied");
-                      }}
-                    >
-                      <Copy className="mr-1 h-3 w-3" /> Copy link
-                    </Button>
-                  </div>
-                ) : strategyLinkSaving ? (
-                  <p className="text-xs text-white/40">Generating shareable link…</p>
-                ) : (
-                  <p className="text-xs text-red-400">Link generation failed — use Download PDF instead</p>
-                )}
-              </div>
-
-              {/* Digital skills portfolio samples */}
-              {(samplesGenerating || samplesSlug) && (
-                <div className="rounded-xl border border-gold/20 bg-gold/5 px-4 py-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-gold uppercase tracking-wider">Portfolio Samples</span>
-                    {samplesGenerating && <Loader2 className="h-3 w-3 animate-spin text-gold" />}
-                  </div>
-                  {samplesSlug ? (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <a
-                        href={`/sample/${samplesSlug}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 min-w-0 truncate font-mono text-xs text-gold hover:underline"
-                      >
-                        {typeof window !== "undefined" ? window.location.origin : ""}/sample/{samplesSlug}
-                      </a>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0 h-7 border-gold/30 text-gold hover:bg-gold/10 text-xs"
-                        onClick={() => {
-                          const url = `${window.location.origin}/sample/${samplesSlug}`;
-                          navigator.clipboard.writeText(url);
-                          toast.success("Samples link copied");
-                        }}
-                      >
-                        <Copy className="mr-1 h-3 w-3" /> Copy link
+              <div className="grid gap-4 lg:grid-cols-2">
+                {/* AI Generated */}
+                <CropCard className="p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-3.5 w-3.5 text-teal" />
+                      <span className="text-xs font-semibold text-teal uppercase tracking-wider">AI Generated</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[10px] text-muted-foreground">{aiGeneratedContent.length} chars</span>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] text-muted-foreground hover:text-white" onClick={() => copyText(aiGeneratedContent).then(() => toast.success("AI version copied"))}>
+                        <Copy className="mr-1 h-3 w-3" /> Copy
                       </Button>
                     </div>
-                  ) : (
-                    <p className="text-xs text-white/40">Generating portfolio samples…</p>
-                  )}
-                </div>
-              )}
+                  </div>
+                  <div className="max-h-[480px] overflow-y-auto rounded-xl border border-teal/20 bg-background/50 px-5 py-4 scrollbar-thin">
+                    {aiGeneratedContent.split(/\n{2,}/).map((p, i) => (
+                      <p key={i} className={cn("leading-[1.85] mb-4 last:mb-0", i === 0 ? "text-[14px] text-white font-medium" : "text-[13px] text-foreground/85")}>
+                        {p.replace(/\n/g, " ").trim()}
+                      </p>
+                    ))}
+                  </div>
+                </CropCard>
 
-              <StrategyDocumentView doc={strategyDoc} />
+                {/* Your Version */}
+                <CropCard glow="gold" className="p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <User className="h-3.5 w-3.5 text-gold" />
+                      <span className="text-xs font-semibold text-gold uppercase tracking-wider">Your Version</span>
+                      {content !== aiGeneratedContent && (
+                        <span className="rounded-full bg-gold/15 border border-gold/30 px-1.5 py-0.5 text-[9px] font-medium text-gold">Edited</span>
+                      )}
+                    </div>
+                    <span className="font-mono text-[10px] text-muted-foreground">{content.length} chars</span>
+                  </div>
+                  <div className="max-h-[480px] overflow-y-auto rounded-xl border border-gold/20 bg-background/50 px-5 py-4 scrollbar-thin">
+                    {content.split(/\n{2,}/).map((p, i) => (
+                      <p key={i} className={cn("leading-[1.85] mb-4 last:mb-0", i === 0 ? "text-[14px] text-white font-medium" : "text-[13px] text-foreground/85")}>
+                        {p.replace(/\n/g, " ").trim()}
+                      </p>
+                    ))}
+                  </div>
+                </CropCard>
+              </div>
             </div>
           )}
 
+          {/* Output panel (editable, save, export) */}
+          <OutputPanel
+            content={content}
+            setContent={setContent}
+            explanation={explanation}
+            showExplain={showExplain}
+            setShowExplain={setShowExplain}
+            title={effectiveJob.split("\n")[0].slice(0, 60) || "Proposal"}
+            onSave={requestSave}
+            saving={saveMutation.isPending}
+            onSaveTemplate={requestSaveTemplate}
+            savingTemplate={saveTemplateMutation.isPending}
+            chosenProfile={chosenProfile}
+            onGoHistory={() => navigate({ to: "/history" })}
+            injecting={injectMutation.isPending}
+            onPolish={() => polishMutation.mutate(undefined)}
+            polishing={polishMutation.isPending}
+          />
         </div>
-      </div>
+      )}
+
+      {/* Strategy Document */}
+      {strategyDoc && showStrategy && (
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <Eyebrow>Project strategy</Eyebrow>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => setShowStrategy(false)}
+              >
+                Hide
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadPdf(`Strategy-${strategyDoc.projectTitle}`, formatStrategyAsText(strategyDoc))}
+              >
+                <FileDown className="mr-1.5 h-3.5 w-3.5" /> Download PDF
+              </Button>
+            </div>
+          </div>
+
+          {/* Shareable strategy link */}
+          <div className="rounded-xl border border-teal/20 bg-teal/5 px-4 py-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono text-teal uppercase tracking-wider">Shareable Link</span>
+              {strategyLinkSaving && <Loader2 className="h-3 w-3 animate-spin text-teal" />}
+            </div>
+            {strategySlug ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <a
+                  href={`/s/${strategySlug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 min-w-0 truncate font-mono text-xs text-teal hover:underline"
+                >
+                  {typeof window !== "undefined" ? window.location.origin : ""}/s/{strategySlug}
+                </a>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 h-7 border-teal/30 text-teal hover:bg-teal/10 text-xs"
+                  onClick={() => {
+                    const url = `${window.location.origin}/s/${strategySlug}`;
+                    navigator.clipboard.writeText(url);
+                    toast.success("Strategy link copied");
+                  }}
+                >
+                  <Copy className="mr-1 h-3 w-3" /> Copy link
+                </Button>
+              </div>
+            ) : strategyLinkSaving ? (
+              <p className="text-xs text-white/40">Generating shareable link…</p>
+            ) : (
+              <p className="text-xs text-red-400">Link generation failed — use Download PDF instead</p>
+            )}
+          </div>
+
+          {/* Digital skills portfolio samples */}
+          {(samplesGenerating || samplesSlug) && (
+            <div className="rounded-xl border border-gold/20 bg-gold/5 px-4 py-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono text-gold uppercase tracking-wider">Portfolio Samples</span>
+                {samplesGenerating && <Loader2 className="h-3 w-3 animate-spin text-gold" />}
+              </div>
+              {samplesSlug ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a
+                    href={`/sample/${samplesSlug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 min-w-0 truncate font-mono text-xs text-gold hover:underline"
+                  >
+                    {typeof window !== "undefined" ? window.location.origin : ""}/sample/{samplesSlug}
+                  </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 h-7 border-gold/30 text-gold hover:bg-gold/10 text-xs"
+                    onClick={() => {
+                      const url = `${window.location.origin}/sample/${samplesSlug}`;
+                      navigator.clipboard.writeText(url);
+                      toast.success("Samples link copied");
+                    }}
+                  >
+                    <Copy className="mr-1 h-3 w-3" /> Copy link
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-white/40">Generating portfolio samples…</p>
+              )}
+            </div>
+          )}
+
+          <StrategyDocumentView doc={strategyDoc} />
+        </div>
+      )}
+
       {content && (
         <>
           <VoiceEditPrompt
