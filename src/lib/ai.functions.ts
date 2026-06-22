@@ -595,10 +595,23 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 - Use the assigned HOOK: ${hookLabel}
 - Use the assigned STRATEGY: ${strategyLabel}
 - Use the assigned CTA STYLE: ${ctaLabel}
-  The CTA is the VERY LAST sentence(s) of the proposal. It MUST take one of these two forms (pick whichever fits the CTA style assigned):
-  FORM A — A QUESTION: Ask one sharp, specific question that directly relates to a detail from their job post — their timeline, their existing setup, their specific challenge, their decision-making, or their goal. The question must make them want to answer it. It should NOT be answerable with yes/no. It should open a conversation about the project. Examples: "Are you looking to have the MVP ready before [their stated date], or is there flexibility on phasing the features?" / "What does your current [their tool/process] look like — are you starting from scratch or migrating existing data?" / "Which part of the project concerns you most — the [technical challenge] or getting the first version live fast?"
-  FORM B — A SPECIFIC NEXT STEP: Offer one concrete, low-friction action. Not "let me know if interested" — a real invite with specificity. Examples: "If you want, I can put together a quick scope breakdown for the first phase before we even agree on anything." / "Happy to jump on a 15-minute call this week to walk through my approach — no pitch, just the plan." / "I can have a first concept ready in 48 hours if you want to see the direction before deciding."
-  HARD RULES for the CTA: Never use "Let me know if interested", "Feel free to reach out", "Looking forward to hearing from you", "I'd love the opportunity", or any variation of these. The CTA must reference something SPECIFIC from their job post — a timeline, a feature, a concern they mentioned, their industry. Generic CTAs are not acceptable.
+  ⚠️ CTA = THE LAST PARAGRAPH. NON-NEGOTIABLE RULE: The final paragraph MUST end with a question mark "?" OR a concrete offer sentence. There is NO third option.
+
+  ❌ FORBIDDEN CTA EXAMPLES — these will cause rejection:
+  "For this project, I'll deliver X, Y, and Z with professional quality."
+  "I can handle the full scope including A, B, and C within your timeline."
+  "My approach covers everything from start to finish."
+  Any sentence that describes what you will DO or DELIVER. Deliverable statements belong in the body — NEVER in the final paragraph.
+
+  ✅ REQUIRED CTA FORMAT — pick one:
+  FORM A (question — preferred, 80% of cases): One sharp, open-ended question tied directly to a specific detail from their job post. Must end with "?". Must NOT be answerable with yes/no. Must make the client want to reply.
+    Good: "Which of the three languages is the most critical to launch with — so I can sequence the delivery around your biggest market?"
+    Good: "What does your current video review process look like — are you giving feedback in the edit or after final export?"
+    Good: "When does the first batch need to be live, and is there a particular market where speed matters most?"
+  FORM B (concrete offer with question): A specific next-step offer followed immediately by a question.
+    Good: "I can have the first edited video ready in 48 hours as a proof-of-concept — want me to start with the English version so you can approve the style before the other languages?"
+
+  The CTA must reference something SPECIFIC from their job post — a language, a deadline, a tool, a deliverable they mentioned, their market. A generic CTA with no job-specific detail is not acceptable.
 - LENGTH ENFORCEMENT (this is a hard rule):
   * brief: MAXIMUM 1500 characters total. This is for Freelancer.com where character limits are strict. Structure (in this order): Hook paragraph (3-4 sentences, each a distinct insight about THEIR specific problem — no filler, no transitions), one razor-sharp question that pivots from problem to solution, one confident CTA that gives a specific next step (e.g. timeline, a quick call, a scope doc — never "let me know"). Zero portfolio links. Zero milestones. Zero execution plan. These 1500 characters must hit harder than a 4000-character generic proposal.
   * robust: 2000–3000 characters. Hook paragraph → portfolio paragraph (PARAGRAPH 2 — immediately after hook) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
@@ -665,6 +678,28 @@ Return a JSON object with this exact shape:
 
       // Hard-enforce brief limit
       let finalResult = currentResult;
+
+      // ── CTA Enforcer: last paragraph MUST contain a question mark ──────────
+      // If it doesn't, Gemini Flash rewrites just the last paragraph as a question.
+      // This catches cases where Claude generated a deliverable statement as the CTA.
+      const paragraphs = currentResult.content.split(/\n\n+/);
+      const lastPara = paragraphs[paragraphs.length - 1]?.trim() ?? "";
+      if (lastPara && !lastPara.includes("?")) {
+        try {
+          const ctaFix = await generateObjectWithProvider("verifier", {
+            schema: z.object({ ctaParagraph: z.string() }),
+            system: `You rewrite the final paragraph of a freelance proposal as a question or concrete offer+question. The paragraph must end with "?". Reference a specific detail from the job post. Keep it to 1-2 sentences. Never use "Let me know if interested", "Feel free to reach out", "Looking forward to hearing from you".`,
+            prompt: `Job post (for context):\n${data.jobDescription.slice(0, 1000)}\n\nBad CTA paragraph to replace:\n"${lastPara}"\n\nRewrite this as a sharp, job-specific question or offer+question. Return JSON: { "ctaParagraph": "<rewritten closing 1-2 sentences ending with ?>" }`,
+          });
+          if (ctaFix.ctaParagraph && ctaFix.ctaParagraph.includes("?")) {
+            paragraphs[paragraphs.length - 1] = ctaFix.ctaParagraph;
+            currentResult = { ...currentResult, content: paragraphs.join("\n\n") };
+          }
+        } catch {
+          // CTA enforcer failed — keep original rather than block generation
+        }
+      }
+      // ── End CTA Enforcer ───────────────────────────────────────────────────
       if (data.length === "brief") {
         const MAX = 1500;
         let text = currentResult.content;
