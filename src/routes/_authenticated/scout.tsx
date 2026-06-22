@@ -453,7 +453,50 @@ function ScoutMode() {
               <div className="mt-4 space-y-3 border-t border-blue-400/20 pt-4">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Website analyzed ✓</span>
-                  <button onClick={() => setWebsiteData(null)} className="text-[10px] text-white/30 hover:text-white/60">Clear</button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const text = [
+                          `BRAND: ${websiteData.brandName} — ${websiteData.businessType} in ${websiteData.industry}`,
+                          `TITLE: ${websiteData.title}`,
+                          `DESCRIPTION: ${websiteData.description}`,
+                          `GOAL: ${websiteData.primaryGoal}`,
+                          websiteData.targetAudience && `AUDIENCE: ${websiteData.targetAudience}`,
+                          websiteData.uniqueValueProp && `VALUE PROP: ${websiteData.uniqueValueProp}`,
+                          websiteData.pricingPosition && `PRICING: ${websiteData.pricingPosition}`,
+                          websiteData.brandColors.length && `BRAND COLORS: ${websiteData.brandColors.join(", ")}`,
+                          websiteData.fontFamilies.length && `FONTS: ${websiteData.fontFamilies.join(", ")}`,
+                          websiteData.existingTech.length && `TECH STACK: ${websiteData.existingTech.join(", ")}`,
+                          websiteData.navigationStructure.length && `NAVIGATION: ${websiteData.navigationStructure.join(" → ")}`,
+                          websiteData.callsToAction.length && `CTAs: ${websiteData.callsToAction.join(", ")}`,
+                          websiteData.trustSignals.length && `TRUST SIGNALS: ${websiteData.trustSignals.join(", ")}`,
+                          websiteData.designLanguage && `DESIGN LANGUAGE: ${websiteData.designLanguage}`,
+                          websiteData.buttonStyle && `BUTTON STYLE: ${websiteData.buttonStyle}`,
+                          websiteData.layoutStyle && `LAYOUT: ${websiteData.layoutStyle}`,
+                          websiteData.scores && [
+                            `SCORES — Overall: ${websiteData.scores.overall}/10`,
+                            `  Branding: ${websiteData.scores.branding} | UX: ${websiteData.scores.ux} | Visual Design: ${websiteData.scores.visualDesign} | Content: ${websiteData.scores.content}`,
+                            `  Performance: ${websiteData.scores.performance} | Trust: ${websiteData.scores.trust} | SEO: ${websiteData.scores.seo} | Conversion: ${websiteData.scores.conversion}`,
+                            `  Weakest: ${websiteData.scores.weakestAreas.join(", ")}`,
+                            `  Notes: ${websiteData.scores.scoreNotes}`,
+                          ].join("\n"),
+                          websiteData.whatWorks && `WHAT WORKS: ${websiteData.whatWorks}`,
+                          websiteData.opportunities && `OPPORTUNITIES: ${websiteData.opportunities}`,
+                          websiteData.conversionBottlenecks && `BOTTLENECKS: ${websiteData.conversionBottlenecks}`,
+                          websiteData.businessInsights && `BUSINESS INSIGHTS: ${websiteData.businessInsights}`,
+                          websiteData.seoStructure && `SEO: ${websiteData.seoStructure}`,
+                          websiteData.mobileExperience && `MOBILE: ${websiteData.mobileExperience}`,
+                          websiteData.contentSections.length && `CONTENT SECTIONS:\n${websiteData.contentSections.map(s => `  [${s.section}] "${s.content}" — ${s.usefulness}`).join("\n")}`,
+                          websiteData.imageUrls.length && `IMAGE ASSETS:\n${websiteData.imageUrls.map(u => `  ${u}`).join("\n")}`,
+                        ].filter(Boolean).join("\n");
+                        navigator.clipboard.writeText(text).then(() => toast.success("Analysis copied"));
+                      }}
+                      className="flex items-center gap-1 text-[10px] text-blue-400/70 hover:text-blue-400 transition-colors"
+                    >
+                      <Copy className="h-3 w-3" /> Copy analysis
+                    </button>
+                    <button onClick={() => setWebsiteData(null)} className="text-[10px] text-white/30 hover:text-white/60">Clear</button>
+                  </div>
                 </div>
 
                 {/* Logo + brand colors */}
@@ -571,11 +614,46 @@ function ScoutMode() {
                 {/* Image thumbnails */}
                 {websiteData.imageUrls.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-1.5">{websiteData.imageUrls.length} Image Assets</p>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-white/30">{websiteData.imageUrls.length} Image Assets</p>
+                      <button
+                        onClick={async () => {
+                          let downloaded = 0;
+                          for (const url of websiteData.imageUrls) {
+                            try {
+                              const res = await fetch(url);
+                              const blob = await res.blob();
+                              const ext = url.split(".").pop()?.split("?")[0] ?? "jpg";
+                              const filename = `asset-${++downloaded}.${ext}`;
+                              const a = document.createElement("a");
+                              a.href = URL.createObjectURL(blob);
+                              a.download = filename;
+                              a.click();
+                              URL.revokeObjectURL(a.href);
+                              await new Promise(r => setTimeout(r, 200));
+                            } catch { downloaded++; }
+                          }
+                          toast.success(`Downloaded ${downloaded} assets`);
+                        }}
+                        className="flex items-center gap-1 text-[10px] text-white/40 hover:text-white/70 transition-colors"
+                      >
+                        <Download className="h-3 w-3" /> Download all
+                      </button>
+                    </div>
                     <div className="grid grid-cols-4 gap-1.5">
                       {websiteData.imageUrls.slice(0, 8).map((url, i) => (
-                        <div key={i} className="aspect-video rounded overflow-hidden bg-white/5 border border-white/10">
-                          <img src={url} alt="" className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        <div key={i} className="group relative aspect-video rounded overflow-hidden bg-white/5 border border-white/10">
+                          <img src={url} alt="" className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }} />
+                          <a
+                            href={url}
+                            download={`asset-${i + 1}.${url.split(".").pop()?.split("?")[0] ?? "jpg"}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Download className="h-4 w-4 text-white" />
+                          </a>
                         </div>
                       ))}
                     </div>
