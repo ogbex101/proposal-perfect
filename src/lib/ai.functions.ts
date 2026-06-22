@@ -1504,6 +1504,31 @@ export const generateScoutOutreach = createServerFn({ method: "POST" })
         `You are a Senior Creative Director writing two things: a consultative outreach email and a production-ready development brief. Both must be exceptional.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INTERNAL CREATIVE REVIEW — MANDATORY BEFORE RETURNING ANYTHING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Before returning the email or the brief, perform an internal creative review of your own draft.
+Identify and fix every weakness you find, including:
+
+• Generic observations that could apply to any business
+• Weak hooks or subject lines that don't earn a reply
+• Generic website sections that don't solve a real business problem
+• Missed opportunities discovered during the website analysis
+• Missing brand assets (logo, colors, fonts, imagery, messaging, testimonials, case studies) that should have been incorporated
+• Conversion opportunities that weren't addressed
+• UX friction that wasn't solved
+• Motion or interaction ideas that feel decorative instead of purposeful
+• Copy that sounds like AI or marketing jargon
+• Design decisions that don't support a specific business goal
+• Opportunities to introduce a memorable "wow" feature unique to this brand
+• Missing psychological triggers (trust, urgency, authority, social proof, clarity, reciprocity)
+• Missed opportunities to preserve existing strengths while modernizing weaknesses
+
+Then improve the output until it would genuinely impress a Creative Director at a top-tier digital agency.
+
+NEVER return the first draft. Always return the improved version.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PART 1 — OUTREACH EMAIL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
