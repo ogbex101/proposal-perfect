@@ -6,6 +6,8 @@ export const PROVIDER_ROLES = {
   verifier: "google",        // Gemini Flash — entity extraction, specificity scoring, similarity matching
   challenger: "mistral",     // future: cross-provider candidate competition
 } as const;
+
+export type ProviderRole = keyof typeof PROVIDER_ROLES;
 // Configure providers by setting environment variables in Lovable Cloud → Settings → Secrets.
 // At least ONE key must be present, but the system works with any subset.
 //
@@ -181,7 +183,33 @@ export async function generateObjectWithFallback<T>(params: {
 }
 
 /**
- * Generates using a specific named provider role (from PROVIDER_ROLES).
+ * Structured output routed to a specific provider role.
+ * Tries the designated provider first, then falls back to the full waterfall.
+ */
+export async function generateObjectWithProvider<T>(role: keyof typeof PROVIDER_ROLES, params: {
+  system: string;
+  prompt: string;
+  schema: z.ZodType<T>;
+}): Promise<T> {
+  const providerName = PROVIDER_ROLES[role];
+  const allProviders = buildProviders();
+
+  const roleProvider = allProviders.find((p) => p.name.toLowerCase().includes(providerName));
+  if (roleProvider) {
+    try {
+      const model = await roleProvider.load();
+      const { object } = await generateObject({ model, schema: params.schema, system: params.system, prompt: params.prompt });
+      return object;
+    } catch {
+      // Fall through to full waterfall
+    }
+  }
+
+  return generateObjectWithFallback(params);
+}
+
+/**
+ * Text generation routed to a specific provider role.
  * Falls back to the full waterfall if the designated provider is unavailable.
  */
 export async function generateWithProvider(role: keyof typeof PROVIDER_ROLES, params: {
@@ -191,7 +219,6 @@ export async function generateWithProvider(role: keyof typeof PROVIDER_ROLES, pa
   const providerName = PROVIDER_ROLES[role];
   const allProviders = buildProviders();
 
-  // Try the designated role provider first
   const roleProvider = allProviders.find((p) => p.name.toLowerCase().includes(providerName));
   if (roleProvider) {
     try {

@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateWithFallback, generateObjectWithFallback, verifyOutput } from "./ai-gateway.server";
+import { generateWithFallback, generateObjectWithFallback, generateObjectWithProvider, verifyOutput } from "./ai-gateway.server";
 import { z } from "zod";
 import { CTAS, FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
@@ -34,6 +34,8 @@ function handleAiError(err: unknown): never {
  * This works with every gateway/model — no SDK structured-output features needed.
  */
 async function structured<T>(schema: z.ZodType<T>, system: string, prompt: string): Promise<T> {
+  // PROVIDER ROUTING: this default function uses the full waterfall.
+  // Use structuredWith() to pin a task to a specific provider role.
   // Primary: native AI SDK structured output — enforces schema at model level (JSON mode / tool use)
   // This eliminates "malformed JSON" errors entirely for providers that support it.
   try {
@@ -71,6 +73,21 @@ async function structured<T>(schema: z.ZodType<T>, system: string, prompt: strin
     throw new Error("AI response did not match the expected format. Please try again.");
   }
   return parsed.data;
+}
+
+/**
+ * Like structured(), but routes to a specific provider role first.
+ * - 'verifier' → Gemini Flash (fast, free, great at structured extraction)
+ * - 'writer'   → Claude (best prose quality)
+ * - 'challenger' → Mistral (alternative perspective)
+ */
+async function structuredWith<T>(role: import("./ai-gateway.server").ProviderRole, schema: z.ZodType<T>, system: string, prompt: string): Promise<T> {
+  try {
+    return await generateObjectWithProvider(role, { system, prompt, schema });
+  } catch {
+    // fall back to full waterfall
+  }
+  return structured(schema, system, prompt);
 }
 
 // ---------- Analyze Job ----------
@@ -117,7 +134,9 @@ export const analyzeJob = createServerFn({ method: "POST" })
       const hookList = HOOKS.map((h) => `- ${h.id}: ${h.name} — ${h.description}`).join("\n");
       const strategyList = STRATEGIES.map((s) => `- ${s.id}: ${s.name} — ${s.description}`).join("\n");
       const ctaList = CTAS.map((c) => `- ${c.id}: ${c.name} — ${c.description}`).join("\n");
-      return await structured(
+      // Gemini Flash handles structured extraction — fast, free, excellent at JSON
+      return await structuredWith(
+        "verifier",
         AnalysisSchema,
         `You are an expert freelance proposal strategist who has won hundreds of proposals. Your analysis is what separates winning proposals from generic ones. You must read between the lines.
 
@@ -457,7 +476,9 @@ ${data.portfolioItems.map((p) => {
         return `\n- TONE: Be ${assertStyle}. Write in a ${formalStyle} style.`;
       })();
 
-      const result = await structured(
+      // Claude handles proposal writing — best prose quality
+      const result = await structuredWith(
+        "writer",
         ProposalSchema,
         `You write freelance proposals that win because the client FEELS understood — not impressed, not sold to, understood.
 
@@ -486,6 +507,7 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
   * explanatory: 3000–5000 characters. All sections fully developed. Detailed execution plan. Full milestones if provided.
   You are writing a "${length.name}" proposal so the rules for "${length.id}" apply.
 - PARAGRAPH ORDER (mandatory): 1) Hook paragraph — your most compelling opening insight. ${data.portfolioItems.length > 0 ? "2) Portfolio paragraph — IMMEDIATELY after the hook, before anything else. Include EVERY portfolio link from the PORTFOLIO ITEMS section above, each with a one-line sentence explaining how it's relevant to THIS specific job. Do not bury portfolio links later in the proposal. 3) " : "2) "}Deliverables paragraph (2-4 sentences about outcomes, not steps). ${data.portfolioItems.length > 0 ? "4" : "3"}) One non-obvious advice/warning sentence. ${data.includePlan ? (data.portfolioItems.length > 0 ? "5" : "4") + ") 2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a natural paragraph. " : ""}Final paragraph: One open-ended question followed by a specific call to action.
+- EXECUTION DETAIL RULE: Do NOT describe phases, timelines, or HOW you will execute the work unless the job post explicitly uses language like "walk me through your process", "describe your workflow", "how would you approach", "what is your methodology", or it is clearly a detailed RFP. Most freelance clients want to feel understood and see the outcome — not read a project plan inside a proposal. If the job is straightforward (e.g. "build a landing page", "write email sequences", "edit this video"), focus on insight, outcome, and trust — not steps. Only include a high-level execution note if the job is highly technical and clearly signals the client wants methodology.
 - FORMATTING RULES: Write in clean flowing prose. Separate paragraphs with ONE blank line. No dashes, asterisks, or any markdown. No horizontal rules. No numbered lists. No bullet symbols of any kind.
 ${data.extractedEntities && data.extractedEntities.length >= 3 ? `- GROUNDING ENFORCEMENT (non-negotiable): The following specific entities were extracted from the job post. Your proposal MUST reference AT LEAST 3 of them naturally — exact names, numbers, or paraphrases. A proposal that could apply to any job will be rejected. Entities: ${data.extractedEntities.join(", ")}` : ""}
 
@@ -669,7 +691,9 @@ export const generateStrategyDocument = createServerFn({ method: "POST" })
       const languageInstruction = data.targetLanguage && data.targetLanguage.toLowerCase() !== "english"
         ? `\n\nLANGUAGE: Write ALL text fields in ${data.targetLanguage}. Every word must be in ${data.targetLanguage}.`
         : "";
-      return await structured(
+      // Claude handles strategy documents — needs structured, professional prose
+      return await structuredWith(
+        "writer",
         StrategySchema,
         `You are a senior project manager writing a strategy document for a freelancer to share with a client. Be specific, realistic, and professional. Break the project into 3-5 clear phases.${languageInstruction}
 

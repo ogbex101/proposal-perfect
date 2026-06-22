@@ -461,11 +461,34 @@ function AdminPanel() {
             <div className="mt-4 rounded-xl border border-border/40 bg-background/60 px-4 py-3">
               <p className="text-xs text-white font-medium mb-1.5">Quick recommendation</p>
               <p className="text-xs text-muted-foreground">
-                Start with <strong className="text-teal">Google Gemini</strong> (free, 1M tokens/day) and{" "}
-                <strong className="text-teal">Groq</strong> (free, very fast). Add{" "}
-                <strong className="text-gold">Anthropic Claude</strong> as your primary key for the most reliable experience.
-                Having 2–3 providers means generation never fails even if one is down.
+                Your active stack — <strong className="text-gold">Anthropic Claude</strong> (writer), <strong className="text-teal">Google Gemini Flash</strong> (analysis + verifier), <strong className="text-teal">Mistral</strong> (fallback) — is a solid 3-provider setup. Each role is pinned: Claude writes all proposals and strategies, Gemini handles job analysis and specificity scoring, Mistral provides redundancy. Adding <strong className="text-white">Groq</strong> or <strong className="text-white">Cerebras</strong> gives you ultra-fast free inference as a 4th layer.
               </p>
+            </div>
+          </CropCard>
+
+          {/* Groq troubleshooting */}
+          <CropCard className="p-5 border-blue-400/20 bg-blue-400/5">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-blue-400/15 flex items-center justify-center">
+                <Zap className="h-3.5 w-3.5 text-blue-400" />
+              </div>
+              <Eyebrow className="text-blue-400">Getting Your Groq API Key (Step by Step)</Eyebrow>
+            </div>
+            <ol className="space-y-2.5 text-xs text-muted-foreground list-decimal list-inside">
+              <li>Go to <span className="font-mono text-white">console.groq.com</span> — click <strong className="text-white">Sign Up</strong> (use your Google or GitHub account for fastest access)</li>
+              <li>After login, click your profile icon in the top-right → <strong className="text-white">API Keys</strong> in the sidebar</li>
+              <li>Click <strong className="text-white">Create API Key</strong> — give it a name like "XperienceProps"</li>
+              <li>Copy the key immediately — it is only shown once</li>
+              <li>In your Lovable project → <strong className="text-white">Settings → Secrets</strong>, add a new secret: <code className="font-mono bg-background/60 border border-border/40 px-1 py-0.5 rounded text-[10px]">GROQ_API_KEY</code> = your copied key</li>
+              <li>Redeploy or restart your app — Groq will appear as Active here</li>
+            </ol>
+            <div className="mt-3 rounded-lg border border-blue-400/20 bg-background/40 px-3 py-2">
+              <p className="text-[11px] text-blue-300 font-medium">Common issues:</p>
+              <ul className="mt-1 space-y-1 text-[11px] text-muted-foreground list-disc list-inside">
+                <li><strong className="text-white">Key not working</strong> — make sure you're adding it under Secrets (not just env vars) and that you redeployed</li>
+                <li><strong className="text-white">Rate limited</strong> — free tier is 30 req/min; if you hit it, the system auto-falls-back to Gemini or Mistral</li>
+                <li><strong className="text-white">Dashboard not loading</strong> — try incognito mode or clear your browser cache; console.groq.com can be slow to load</li>
+              </ul>
             </div>
           </CropCard>
 

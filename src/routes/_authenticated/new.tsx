@@ -224,15 +224,24 @@ function NewProposal() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      // Step 1: Generate strategy first, save it, get slug
-      const strategyResult = await generateStrategyDocument({
-        data: {
-          jobDescription: effectiveJob,
-          analysis,
-          budget: budget || undefined,
-        },
-      });
-      const { slug } = await saveStrategyDoc({ data: { doc: strategyResult! } });
+      // Step 1: Reuse strategy if already generated in background (strategyMutation auto-runs after analysis).
+      // Only regenerate if we don't have one — avoids redundant API call on the critical path.
+      let strategyResult = strategyDoc ?? null;
+      let slug: string | null = strategySlug;
+
+      if (!strategyResult || !slug) {
+        const freshStrategy = await generateStrategyDocument({
+          data: {
+            jobDescription: effectiveJob,
+            analysis,
+            budget: budget || undefined,
+          },
+        });
+        strategyResult = freshStrategy ?? null;
+        const saved = await saveStrategyDoc({ data: { doc: freshStrategy! } });
+        slug = saved.slug;
+      }
+
       const strategyLink = `I've already mapped out a full project strategy — phases, risk factors, and success metrics — you can review it here: ${window.location.origin}/strategy/${slug}`;
 
       // Step 2: Generate proposal with strategy link
@@ -277,7 +286,7 @@ function NewProposal() {
         setStrategyDoc(strategyResult);
         setShowStrategy(true);
       }
-      setStrategySlug(slug);
+      if (slug) setStrategySlug(slug);
       // Increment daily generated counter
       const fresh = readDayStats();
       const updated = { ...fresh, generated: fresh.generated + 1 };

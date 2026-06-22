@@ -189,6 +189,30 @@ export const getApiKeyStatus = createServerFn({ method: "GET" })
         signupUrl: "https://platform.openai.com/api-keys",
         description: "Pay-per-use. Uses GPT-4o mini. Last-resort fallback.",
       },
+      {
+        name: "Together AI",
+        envVar: "TOGETHER_API_KEY",
+        priority: 7,
+        free: false,
+        signupUrl: "https://api.together.xyz/settings/api-keys",
+        description: "Fast inference for open models (Llama, Qwen, Mixtral). $1 free credit on signup. Good price/performance for bulk use.",
+      },
+      {
+        name: "Cerebras",
+        envVar: "CEREBRAS_API_KEY",
+        priority: 8,
+        free: true,
+        signupUrl: "https://cloud.cerebras.ai",
+        description: "Free tier available. Wafer-scale chip delivers extremely fast inference — great for real-time features.",
+      },
+      {
+        name: "Fireworks AI",
+        envVar: "FIREWORKS_API_KEY",
+        priority: 9,
+        free: false,
+        signupUrl: "https://fireworks.ai/api-keys",
+        description: "Fast hosted inference for Llama, Mixtral, and other open models. $1 free credit. Low latency.",
+      },
     ];
     return providers.map((p) => ({
       ...p,
