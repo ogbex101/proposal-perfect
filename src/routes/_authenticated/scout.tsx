@@ -294,7 +294,7 @@ function ScoutMode() {
         customChanges: customChanges || undefined,
         mockupLink: mockupLink || undefined,
         enable3d,
-        websiteData: websiteDataStr,
+        websiteData: websiteDataStr ? websiteDataStr.slice(0, 14000) : undefined,
       },
     }),
     onSuccess: async (data) => {

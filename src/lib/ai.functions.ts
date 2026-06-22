@@ -1476,7 +1476,7 @@ export const generateScoutOutreach = createServerFn({ method: "POST" })
       customChanges: z.string().max(2000).optional(),
       mockupLink: z.string().max(500).optional(),
       enable3d: z.boolean().optional(),
-      websiteData: z.string().max(5000).optional(),
+      websiteData: z.string().max(15000).optional(),
     }).parse(d),
   )
   .handler(async ({ data }) => {
@@ -1490,7 +1490,7 @@ export const generateScoutOutreach = createServerFn({ method: "POST" })
         : "";
 
       const websiteInstruction = data.websiteData
-        ? `\n\nCLIENT EXISTING WEBSITE DATA (use these details in the email — reference their brand, existing design, assets):\n${data.websiteData}`
+        ? `\n\nCLIENT EXISTING WEBSITE DATA (use these details in the email — reference their brand, existing design, assets):\n${data.websiteData.slice(0, 8000)}`
         : "";
 
       const animation3dInstruction = data.enable3d
@@ -1619,7 +1619,7 @@ Return JSON:
     "estimatedComplexity": "<Simple|Medium|Complex|Enterprise>"
   }
 }`,
-        `JOB POST:\n${data.jobDescription}${data.freelancerContext ? `\n\nFREELANCER CONTEXT:\n${data.freelancerContext}` : ""}${data.websiteData ? `\n\nCLIENT WEBSITE DATA:\n${data.websiteData}` : ""}`,
+        `JOB POST:\n${data.jobDescription}${data.freelancerContext ? `\n\nFREELANCER CONTEXT:\n${data.freelancerContext}` : ""}${data.websiteData ? `\n\nCLIENT WEBSITE DATA:\n${data.websiteData.slice(0, 8000)}` : ""}`,
       );
     } catch (err) {
       handleAiError(err);
