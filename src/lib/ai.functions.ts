@@ -309,26 +309,46 @@ export const generateAiHookStrategy = createServerFn({ method: "POST" })
     try {
       return await structuredWith("challenger",
         AiHookStrategySchema,
-        `You are an expert freelance proposal strategist. Based on the job description, craft ONE highly specific hook opening and ONE tailored strategy that are uniquely designed for THIS job — not generic templates.
+        `You are a senior brand strategist writing for a freelancer who wants to stand out from 50 identical bids.
 
-The hook should:
-- Be specific to details visible in this job post (mention their industry, problem, or an insight they wouldn't expect)
-- Immediately signal the freelancer has done this exact kind of work before
-- Not start with "I" — use an observation, a question, a fact, or a reframe
+Your job is NOT to rewrite the standard proposal in a different tone.
+Your job is to produce something that feels like it was written by someone who thought deeply about this client's business — before submitting anything.
 
-The strategy should:
-- Define how the ENTIRE proposal flows (not just the opening)
-- Be shaped by what this client actually cares about (urgency, quality, cost, trust)
-- Give a structural approach the proposal writer can execute
+THE DIFFERENCE BETWEEN STANDARD AND HOOK & STRATEGY:
+Standard proposal → explains what will be built.
+Hook & Strategy proposal → explains WHY it should be built, WHO it's for, and WHAT it unlocks commercially.
+
+THE HOOK must:
+- Open with a psychological observation — something the founder would read and think "this person actually gets it"
+- Identify ONE specific business opportunity (not a design observation, a business opportunity)
+- Explain why it matters commercially — in revenue, trust, or competitive terms
+- Position the solution as a natural evolution of where the brand is already heading
+- Never start with "I" — open with an observation, a reframe, a fact, or a precise insight
+- Reference something SPECIFIC from the job post — not a generic opener that works for any client
+- Never critique the website. Always acknowledge something they are doing well, then identify the opportunity to elevate it
+
+THE STRATEGY must:
+- Be a genuine structural approach for THIS proposal — not a generic template
+- Define how the entire proposal flows from hook to CTA
+- Show understanding of the founder's positioning, audience, and business model
+- Explain why this structure earns trust with THIS specific type of client
+- Be immediately noticeably different from a standard AI proposal
+
+WHAT TO AVOID:
+- Generic opener like "I noticed your website could convert better"
+- Summarizing what the client said in the job post
+- Any sentence that works for any other job
+- Design observations without business implications
+- Vague strategy advice like "build trust and show expertise"
 
 Return a JSON object with this exact shape:
 {
   "hookName": "<short memorable name for this hook, 2-4 words>",
-  "hookOpeningLine": "<the actual opening sentence or two the freelancer should use — ready to paste>",
-  "hookRationale": "<why this specific hook works for this specific job>",
+  "hookOpeningLine": "<the actual opening 2-3 sentences — psychologically sharp, business-specific, evidence-based, ready to paste>",
+  "hookRationale": "<why this specific hook creates immediate 'they understand my business' recognition — not generic praise>",
   "strategyName": "<short memorable name for this strategy, 2-4 words>",
-  "strategyApproach": "<describe how the proposal should be structured from hook to CTA — specific to this job>",
-  "strategyRationale": "<why this strategy will work for this client>"
+  "strategyApproach": "<describe exactly how the proposal should flow from hook to CTA — specific to this job, this client type, this business problem>",
+  "strategyRationale": "<why this structure earns trust with this specific client — what psychological principle it activates>"
 }`,
         `Job post:\n${data.jobDescription}\n\n${data.analysis ? `Analysis:\n${JSON.stringify(data.analysis, null, 2)}` : ""}`,
       );
@@ -582,6 +602,42 @@ ${data.portfolioItems.map((p) => {
 
 The gold standard: the client reads this and thinks "this person has seen my exact problem before and knows exactly how it ends." That feeling comes from specificity, not claims. Never say "I understand your needs." Instead, name the specific thing they're dealing with, name the downstream cost of it, name the thing they probably haven't tried yet.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FOUNDER PSYCHOLOGY — OPTIMIZE FOR HOW FOUNDERS READ PROPOSALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A founder reading a proposal is asking exactly five questions:
+1. Does this person understand my business?
+2. Did they actually study my situation?
+3. Do they understand my positioning and audience?
+4. Are they thinking beyond the immediate deliverable?
+5. Can they improve my revenue, trust, or conversions — not just produce output?
+
+Every sentence must answer at least one of those questions. Any sentence that answers none of them is filler. Delete it.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EVIDENCE-BASED OBSERVATIONS ONLY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Never write generic observations. Every claim must reference something specific that exists in the job post.
+
+❌ GENERIC (rejected):
+"Your website could convert better."
+"Your UX could be improved."
+"Your design feels outdated."
+"Users might be confused."
+
+✅ SPECIFIC (required):
+Reference exactly what was mentioned — a specific tool, platform, timeline, deliverable, team structure, pain point, audience segment, budget constraint, or outcome they described.
+
+The first paragraph must make the client think: "This person actually read my brief."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ELIMINATE GENERIC AI LANGUAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Never use these phrases — they signal AI-generated filler:
+"Modern and clean" · "User-friendly" · "Visually appealing" · "Enhance the user experience" · "Professional website" · "Seamless experience" · "Cutting-edge" · "Best practices" · "Robust solution" · "Leverage" · "Streamline" · "Optimize" · "Deliver value" · "Holistic approach"
+
+Replace every generic phrase with a concrete observation tied to the specific business.
+
 Hard rules:
 - No greeting. No "Hi". Start directly with the hook.${languageInstruction}${toneInstruction}
 - NO BULLET POINTS. NO HYPHENS. NO DASHES as list markers. Write in clean flowing prose only. If listing items, embed them naturally in sentences ("I'll handle X, Y, and Z" not "- X\n- Y\n- Z"). The proposal must look like a confident personal message, not a formatted document.
@@ -595,23 +651,33 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 - Use the assigned HOOK: ${hookLabel}
 - Use the assigned STRATEGY: ${strategyLabel}
 - Use the assigned CTA STYLE: ${ctaLabel}
-  ⚠️ CTA = THE LAST PARAGRAPH. NON-NEGOTIABLE RULE: The final paragraph MUST end with a question mark "?" OR a concrete offer sentence. There is NO third option.
 
-  ❌ FORBIDDEN CTA EXAMPLES — these will cause rejection:
-  "For this project, I'll deliver X, Y, and Z with professional quality."
-  "I can handle the full scope including A, B, and C within your timeline."
-  "My approach covers everything from start to finish."
-  Any sentence that describes what you will DO or DELIVER. Deliverable statements belong in the body — NEVER in the final paragraph.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CTA — HARD REQUIREMENT (NO EXCEPTIONS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The final paragraph MUST end with a natural, conversational question that invites a response.
+This is a hard requirement. There is no third option.
 
-  ✅ REQUIRED CTA FORMAT — pick one:
-  FORM A (question — preferred, 80% of cases): One sharp, open-ended question tied directly to a specific detail from their job post. Must end with "?". Must NOT be answerable with yes/no. Must make the client want to reply.
-    Good: "Which of the three languages is the most critical to launch with — so I can sequence the delivery around your biggest market?"
-    Good: "What does your current video review process look like — are you giving feedback in the edit or after final export?"
-    Good: "When does the first batch need to be live, and is there a particular market where speed matters most?"
-  FORM B (concrete offer with question): A specific next-step offer followed immediately by a question.
-    Good: "I can have the first edited video ready in 48 hours as a proof-of-concept — want me to start with the English version so you can approve the style before the other languages?"
+❌ FORBIDDEN — will cause rejection:
+"I'd love to hear your thoughts."
+"Looking forward to hearing from you."
+"I can build this for you."
+"Let me know."
+"I'll deliver X, Y, and Z."
+"My approach covers everything."
+Any sentence ending without a question mark. Any statement about what you will do or deliver.
 
-  The CTA must reference something SPECIFIC from their job post — a language, a deadline, a tool, a deliverable they mentioned, their market. A generic CTA with no job-specific detail is not acceptable.
+✅ REQUIRED — the CTA must end with a question like:
+"Does this feel aligned with where you're taking the brand?"
+"Would this direction be worth exploring together?"
+"Is this close to what you have in mind?"
+"Could you see this fitting the direction you're aiming for?"
+"Which of the [specific detail] matters most to you right now — that shapes how I'd sequence everything?"
+
+FORM A (question — preferred, 80% of cases): One sharp, open-ended question tied directly to a specific detail from their job post. Must end with "?". Must invite a genuine reply.
+FORM B (concrete offer + question): A specific next-step offer followed immediately by a question ending with "?".
+
+The CTA must always reference something SPECIFIC from their job post. A generic CTA that could appear in any proposal is not acceptable.
 - LENGTH ENFORCEMENT (this is a hard rule):
   * brief: MAXIMUM 1500 characters total. This is for Freelancer.com where character limits are strict. Structure (in this order): Hook paragraph (3-4 sentences, each a distinct insight about THEIR specific problem — no filler, no transitions), one razor-sharp question that pivots from problem to solution, one confident CTA that gives a specific next step (e.g. timeline, a quick call, a scope doc — never "let me know"). Zero portfolio links. Zero milestones. Zero execution plan. These 1500 characters must hit harder than a 4000-character generic proposal.
   * robust: 2000–3000 characters. Hook paragraph → portfolio paragraph (PARAGRAPH 2 — immediately after hook) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
@@ -647,7 +713,11 @@ Return a JSON object with this exact shape:
             ProposalSchema,
             `You write freelance proposals that win because the client FEELS understood — not impressed, not sold to, understood.
 
-The gold standard: the client reads this and thinks "this person has seen my exact problem before and knows exactly how it ends." That feeling comes from specificity, not claims. Never say "I understand your needs." Instead, name the specific thing they're dealing with, name the downstream cost of it, name the thing they probably haven't tried yet.
+FOUNDER PSYCHOLOGY: Every sentence must answer at least one of these questions — Does this person understand my business? Did they study my situation? Do they understand my positioning? Are they thinking beyond the deliverable? A sentence that answers none of them is filler. Delete it.
+
+EVIDENCE-BASED ONLY: Never write generic observations. Every claim must reference something specific that exists in the job post — a tool, timeline, deliverable, audience, or pain point they actually mentioned.
+
+ELIMINATE GENERIC AI LANGUAGE: Never write "modern and clean", "user-friendly", "visually appealing", "enhance the user experience", "professional website", "seamless", "leverage", "streamline". Replace every generic phrase with a concrete business-specific observation.
 
 Hard rules:
 - No greeting. No "Hi". Start directly with the hook.${data.targetLanguage && data.targetLanguage.toLowerCase() !== "english" ? `\n- LANGUAGE: Write the ENTIRE proposal in ${data.targetLanguage}.` : ""}
@@ -659,6 +729,7 @@ Hard rules:
 - Use the assigned STRATEGY: ${data.customStrategyText ? `AI-Generated Custom Strategy — ${data.customStrategyText}` : (() => { const s = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0]; return `${s.name} — ${s.description}`; })()}
 - GROUNDING ENFORCEMENT (non-negotiable): The following specific entities MUST appear in the proposal. Reference AT LEAST 3 naturally: ${(data.extractedEntities ?? []).join(", ")}
 - SPECIFICITY FAILURE DETECTED — previous draft scored ${verification.specificity}/10 with only ${verification.entityUsage} entity references. Verifier complaint: "${verification.complaint}". Fix this by anchoring EVERY paragraph to a specific detail from the job post.
+- CTA HARD REQUIREMENT: The final paragraph MUST end with a natural conversational question ending in "?". NEVER end with statements like "I'd love to hear your thoughts", "Looking forward to hearing from you", "Let me know", or any deliverable description. The question must be specific to this job, not generic.
 - FORMATTING RULES: Write in clean flowing prose. Separate paragraphs with ONE blank line. No markdown.
 
 Return a JSON object with this exact shape:
