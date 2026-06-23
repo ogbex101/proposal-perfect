@@ -608,7 +608,8 @@ export const generateProposal = createServerFn({ method: "POST" })
         ? `AI-Generated Custom Strategy — ${data.customStrategyText}`
         : (() => { const s = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0]; return `${s.name} — ${s.description}`; })();
       const cta = CTAS.find((c) => c.id === data.ctaId) ?? CTAS[0];
-      const ctaLabel = data.craftedCtaLine
+      const craftedCtaValid = data.craftedCtaLine?.trimEnd().endsWith("?");
+      const ctaLabel = data.craftedCtaLine && craftedCtaValid
         ? `PRE-CRAFTED CLOSING — use this EXACTLY as your final sentence(s): "${data.craftedCtaLine}"`
         : `${cta.name} — ${cta.description}`;
       const hook = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0];
@@ -745,37 +746,44 @@ ${FORBIDDEN_PHRASES.map((p) => `  • "${p}"`).join("\n")}
 - Use the assigned CTA STYLE: ${ctaLabel}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CTA — HARD REQUIREMENT (NO EXCEPTIONS)
+CTA — THE FINAL PARAGRAPH IS ONE QUESTION. NOTHING ELSE.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-The final paragraph MUST end with a natural, conversational question that invites a response.
-This is a hard requirement. There is no third option.
+The final paragraph is a single question that starts a conversation. It is not an observation, a summary, a closing remark, or a statement followed by a question.
 
-❌ FORBIDDEN — will cause rejection:
+The last character of the entire proposal must be "?". If it isn't, the proposal is wrong.
+
+❌ THESE ARE NOT CTAs — they are hooks or strategy points placed in the wrong position:
+"The real risk here isn't the recording — it's..."  ← observation, not a CTA
+"The real challenge with this project is..."  ← analysis, not a CTA
+"What makes this project difficult is..."  ← insight, not a CTA
+"Most clients who come to me with this problem..."  ← experience claim, not a CTA
+
+❌ THESE ARE FORBIDDEN ENDINGS:
 "I'd love to hear your thoughts."
 "Looking forward to hearing from you."
 "I can build this for you."
-"Let me know."
-"I'll deliver X, Y, and Z."
-"My approach covers everything."
-Any sentence ending without a question mark. Any statement about what you will do or deliver.
+"Let me know." / "Happy to discuss." / "Feel free to reach out."
+"I'll deliver X by Y." / "My approach covers everything."
+Any statement. Any sentence that does not end with "?".
+Anything that sounds like a closing remark, not an opener to a conversation.
 
-✅ REQUIRED — the CTA must end with a question like:
+✅ THE CTA IS ONE QUESTION — examples:
+"Are you planning to build on the existing architecture, or are you open to restructuring parts of it if it leads to a cleaner implementation?"
+"Which part of the current workflow has been the biggest bottleneck so far?"
+"Would you prefer I prioritize performance first, or feature completeness for the initial release?"
 "Does this feel aligned with where you're taking the brand?"
-"Would this direction be worth exploring together?"
-"Is this close to what you have in mind?"
-"Could you see this fitting the direction you're aiming for?"
-"Which of the [specific detail] matters most to you right now — that shapes how I'd sequence everything?"
+"Is improving trust your biggest priority right now, or is generating more enquiries the immediate goal?"
 
-FORM A (question — preferred, 80% of cases): One sharp, open-ended question tied directly to a specific detail from their job post. Must end with "?". Must invite a genuine reply.
-FORM B (concrete offer + question): A specific next-step offer followed immediately by a question ending with "?".
-
-The CTA must always reference something SPECIFIC from their job post. A generic CTA that could appear in any proposal is not acceptable.
+The question must be:
+- Specific to this client's project — impossible to paste into any other proposal
+- Something a consultant would ask, not a salesperson
+- An opener to a real conversation, not a formality
 - LENGTH ENFORCEMENT (this is a hard rule):
   * brief: MAXIMUM 1500 characters total. This is for Freelancer.com where character limits are strict. Structure (in this order): Hook paragraph (3-4 sentences, each a distinct insight about THEIR specific problem — no filler, no transitions), one razor-sharp question that pivots from problem to solution, one confident CTA that gives a specific next step (e.g. timeline, a quick call, a scope doc — never "let me know"). Zero portfolio links. Zero milestones. Zero execution plan. These 1500 characters must hit harder than a 4000-character generic proposal.
   * robust: 2000–3000 characters. Hook paragraph → portfolio paragraph (PARAGRAPH 2 — immediately after hook) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
   * explanatory: 3000–5000 characters. All sections fully developed. Detailed execution plan. Full milestones if provided.
   You are writing a "${length.name}" proposal so the rules for "${length.id}" apply.
-- PARAGRAPH ORDER (mandatory): 1) Hook paragraph — your most compelling opening insight. ${data.portfolioItems.length > 0 ? "2) Portfolio paragraph — IMMEDIATELY after the hook, before anything else. Include EVERY portfolio link from the PORTFOLIO ITEMS section above, each with a one-line sentence explaining how it's relevant to THIS specific job. Do not bury portfolio links later in the proposal. 3) " : "2) "}Deliverables paragraph (2-4 sentences about outcomes, not steps). ${data.portfolioItems.length > 0 ? "4" : "3"}) One non-obvious advice/warning sentence. ${data.includePlan ? (data.portfolioItems.length > 0 ? "5" : "4") + ") 2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a natural paragraph. " : ""}Final paragraph: One open-ended question followed by a specific call to action.
+- PARAGRAPH ORDER (mandatory): 1) Hook paragraph — your most compelling opening insight. ${data.portfolioItems.length > 0 ? "2) Portfolio paragraph — IMMEDIATELY after the hook, before anything else. Include EVERY portfolio link from the PORTFOLIO ITEMS section above, each with a one-line sentence explaining how it's relevant to THIS specific job. Do not bury portfolio links later in the proposal. 3) " : "2) "}Deliverables paragraph (2-4 sentences about outcomes, not steps). ${data.portfolioItems.length > 0 ? "4" : "3"}) One non-obvious advice/warning sentence. ${data.includePlan ? (data.portfolioItems.length > 0 ? "5" : "4") + ") 2-3 sentence execution plan. " : ""}${data.milestones && data.milestones.length > 0 ? "Milestones as a natural paragraph. " : ""}Final paragraph: ONE question only. This question IS the entire CTA. Nothing after it. No statement. No closing remark. The proposal ends with "?".
 - EXECUTION DETAIL RULE: Do NOT describe phases, timelines, or HOW you will execute the work unless the job post explicitly uses language like "walk me through your process", "describe your workflow", "how would you approach", "what is your methodology", or it is clearly a detailed RFP. Most freelance clients want to feel understood and see the outcome — not read a project plan inside a proposal. If the job is straightforward (e.g. "build a landing page", "write email sequences", "edit this video"), focus on insight, outcome, and trust — not steps. Only include a high-level execution note if the job is highly technical and clearly signals the client wants methodology.
 - FORMATTING RULES: Write in clean flowing prose. Separate paragraphs with ONE blank line. No dashes, asterisks, or any markdown. No horizontal rules. No numbered lists. No bullet symbols of any kind.
 ${data.extractedEntities && data.extractedEntities.length >= 3 ? `- GROUNDING ENFORCEMENT (non-negotiable): The following specific entities were extracted from the job post. Your proposal MUST reference AT LEAST 3 of them naturally — exact names, numbers, or paraphrases. A proposal that could apply to any job will be rejected. Entities: ${data.extractedEntities.join(", ")}` : ""}
@@ -852,14 +860,14 @@ Return a JSON object with this exact shape:
       // This catches cases where Claude generated a deliverable statement as the CTA.
       const paragraphs = currentResult.content.split(/\n\n+/);
       const lastPara = paragraphs[paragraphs.length - 1]?.trim() ?? "";
-      if (lastPara && !lastPara.includes("?")) {
+      if (lastPara && !lastPara.trimEnd().endsWith("?")) {
         try {
           const ctaFix = await generateObjectWithProvider("verifier", {
             schema: z.object({ ctaParagraph: z.string() }),
             system: `You rewrite the final paragraph of a freelance proposal as a question or concrete offer+question. The paragraph must end with "?". Reference a specific detail from the job post. Keep it to 1-2 sentences. Never use "Let me know if interested", "Feel free to reach out", "Looking forward to hearing from you".`,
             prompt: `Job post (for context):\n${data.jobDescription.slice(0, 1000)}\n\nBad CTA paragraph to replace:\n"${lastPara}"\n\nRewrite this as a sharp, job-specific question or offer+question. Return JSON: { "ctaParagraph": "<rewritten closing 1-2 sentences ending with ?>" }`,
           });
-          if (ctaFix.ctaParagraph && ctaFix.ctaParagraph.includes("?")) {
+          if (ctaFix.ctaParagraph && ctaFix.ctaParagraph.trimEnd().endsWith("?")) {
             paragraphs[paragraphs.length - 1] = ctaFix.ctaParagraph;
             currentResult = { ...currentResult, content: paragraphs.join("\n\n") };
           }
@@ -1319,6 +1327,12 @@ export const polishProposal = createServerFn({ method: "POST" })
 3. Remove stray symbols: delete any lone dashes at line starts, remove "---" or "***" or "___ " horizontal rules, remove double asterisks used as bullets
 4. Clean paragraph breaks: each paragraph separated by exactly one blank line, no trailing spaces
 5. Fix run-together sentences: if two complete sentences are joined without punctuation, split them
+
+CRITICAL — DO NOT TOUCH THESE:
+- The final paragraph must end with "?" — if it already does, do NOT change it
+- Do NOT add any sentence after a question mark at the end of the proposal
+- Do NOT convert the final question into a statement
+- Do NOT add closing remarks like "Looking forward to hearing from you" or "Let me know"
 
 Do NOT rephrase, reorder, shorten, or change any words. Return the proposal with mechanical fixes only.
 
