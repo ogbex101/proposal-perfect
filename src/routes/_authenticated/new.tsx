@@ -47,6 +47,7 @@ import { listPortfolio } from "@/lib/portfolio.functions";
 import { PortfolioPicker } from "@/components/PortfolioPicker";
 import { ProfileImageGallery } from "@/components/ProfileImageGallery";
 import { SnippetsPanel } from "@/components/SnippetsPanel";
+import { ProposalTemplatePicker } from "@/components/ProposalTemplatePicker";
 import { InlineRewriteToolbar } from "@/components/InlineRewriteToolbar";
 import { getDraft, saveDraft, clearDraft } from "@/lib/proposal-drafts.functions";
 type FreelancerProfile = { id: string; label: string };
@@ -677,6 +678,12 @@ function NewProposal() {
           <ProfileImageGallery
             selectedPath={avatar?.path ?? null}
             onSelect={(v) => setAvatar(v)}
+          />
+          <ProposalTemplatePicker
+            onApply={(body) => {
+              setContent(body);
+              toast.info("Template loaded — replace placeholders, then polish with AI.");
+            }}
           />
           <SnippetsPanel onInsert={insertSnippet} />
           <CropCard glow="gold" className="p-5">
