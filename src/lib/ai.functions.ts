@@ -309,46 +309,71 @@ export const generateAiHookStrategy = createServerFn({ method: "POST" })
     try {
       return await structuredWith("challenger",
         AiHookStrategySchema,
-        `You are a senior brand strategist writing for a freelancer who wants to stand out from 50 identical bids.
+        `You are a senior brand strategist and business consultant writing for a freelancer who needs to stand out from 50 identical bids.
 
 Your job is NOT to rewrite the standard proposal in a different tone.
-Your job is to produce something that feels like it was written by someone who thought deeply about this client's business — before submitting anything.
+Your job is to produce something that feels like it was written by someone who thought deeply about this client's business before submitting anything.
 
-THE DIFFERENCE BETWEEN STANDARD AND HOOK & STRATEGY:
-Standard proposal → explains what will be built.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE CORE DIFFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Standard proposal → describes what will be built.
 Hook & Strategy proposal → explains WHY it should be built, WHO it's for, and WHAT it unlocks commercially.
 
-THE HOOK must:
-- Open with a psychological observation — something the founder would read and think "this person actually gets it"
-- Identify ONE specific business opportunity (not a design observation, a business opportunity)
-- Explain why it matters commercially — in revenue, trust, or competitive terms
-- Position the solution as a natural evolution of where the brand is already heading
-- Never start with "I" — open with an observation, a reframe, a fact, or a precise insight
-- Reference something SPECIFIC from the job post — not a generic opener that works for any client
-- Never critique the website. Always acknowledge something they are doing well, then identify the opportunity to elevate it
+The difference must be immediately obvious when reading both side by side.
 
-THE STRATEGY must:
-- Be a genuine structural approach for THIS proposal — not a generic template
-- Define how the entire proposal flows from hook to CTA
-- Show understanding of the founder's positioning, audience, and business model
-- Explain why this structure earns trust with THIS specific type of client
-- Be immediately noticeably different from a standard AI proposal
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE HOOK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The first sentence must make the client stop and think. It should feel like it was written specifically for them.
 
-WHAT TO AVOID:
-- Generic opener like "I noticed your website could convert better"
+NEVER open with:
+- "I noticed..." / "I reviewed..." / "I looked through..." / "I saw your project..."
+- "Your website..." (leads with critique before establishing credibility)
+- "I" as the first word
+- Anything generic that works for any client
+
+INSTEAD, do ONE of these:
+- Ask a thoughtful question that reveals what the client is actually trying to solve beneath the stated request
+- Name the hidden business problem (a redesign request = positioning problem; landing page = conversion problem; CMS = ownership/scalability problem)
+- Identify a contradiction between what they asked for and what their business actually needs
+- Show understanding of the founder's psychology — their worry, their ambition, what winning looks like for them
+- Point to a specific non-obvious insight from the brief that most applicants would miss
+
+NEVER critique first. If referencing the current site, acknowledge what's working before identifying the opportunity to elevate it.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE STRATEGY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The strategy must explain the reasoning behind the approach — not list deliverables or phases.
+
+Focus on:
+- Messaging hierarchy — what to lead with and why
+- Information architecture — what the visitor needs to understand, in what order
+- Trust building — what signals credibility for this specific audience
+- Conversion flow — where the decision point is and how to guide toward it
+- Brand positioning — what makes this client different and how to make that viscerally obvious
+- User psychology — what the target audience actually fears, wants, and responds to
+
+The strategy must show understanding of the founder's positioning, audience, and business model — not generic structural advice.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WHAT TO AVOID
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Any opener that works for any other client
 - Summarizing what the client said in the job post
-- Any sentence that works for any other job
 - Design observations without business implications
-- Vague strategy advice like "build trust and show expertise"
+- Vague advice like "build trust and show expertise"
+- Generic marketing language: modern, clean, user-friendly, professional, sleek, stunning, seamless, cutting-edge
 
 Return a JSON object with this exact shape:
 {
   "hookName": "<short memorable name for this hook, 2-4 words>",
-  "hookOpeningLine": "<the actual opening 2-3 sentences — psychologically sharp, business-specific, evidence-based, ready to paste>",
-  "hookRationale": "<why this specific hook creates immediate 'they understand my business' recognition — not generic praise>",
+  "hookOpeningLine": "<the actual opening 2-3 sentences — psychologically sharp, business-specific, reads like a senior consultant, ready to paste>",
+  "hookRationale": "<why this specific hook creates 'they understand my business' recognition — not generic praise>",
   "strategyName": "<short memorable name for this strategy, 2-4 words>",
-  "strategyApproach": "<describe exactly how the proposal should flow from hook to CTA — specific to this job, this client type, this business problem>",
-  "strategyRationale": "<why this structure earns trust with this specific client — what psychological principle it activates>"
+  "strategyApproach": "<describe exactly how the proposal should flow from hook to CTA — focused on reasoning, not deliverables, specific to this client's real business problem>",
+  "strategyRationale": "<why this structure earns trust with this specific client — what psychological principle it activates and why>"
 }`,
         `Job post:\n${data.jobDescription}\n\n${data.analysis ? `Analysis:\n${JSON.stringify(data.analysis, null, 2)}` : ""}`,
       );
@@ -427,19 +452,36 @@ export const craftHookLine = createServerFn({ method: "POST" })
       return await structuredWith(
         "writer",
         z.object({ hookParagraph: z.string() }),
-        `You craft the opening paragraph of freelance proposals. Write the FIRST PARAGRAPH ONLY — 2-4 sentences, nothing else.
+        `You write the opening paragraph of a freelance proposal. This is the most important paragraph — it determines whether the client reads the rest.
 
-Hook technique to deploy: "${hook.name}" — ${hook.description}
+Hook technique: "${hook.name}" — ${hook.description}
 
-Rules:
-- Do NOT start with "I" — open with an observation, question, fact, or reframe
-- Reference at least one SPECIFIC detail from the job post or client context
-- The client must read this and think "this person has done this exact work before"
-- Sound like a confident human being, not a pitch machine
-- No generic opener, no praise for the job posting, no "I came across your post"
-- 2-4 sentences maximum
+WHAT THE HOOK MUST DO:
+The first sentence must make the client stop and think. It should feel like it was written specifically for them — impossible to send to another client by simply changing the name.
 
-Return JSON: { "hookParagraph": "<the opening paragraph — ready to paste>" }`,
+NEVER open with:
+- "I noticed..." / "I reviewed..." / "I looked through..." / "I saw your project..."
+- "Your website..." (leads with critique before establishing credibility)
+- "I" as the first word — it signals the pitch is about the freelancer, not the client
+- Generic observation that works for any job ("great opportunity", "interesting project")
+
+INSTEAD, open by doing ONE of these:
+- Ask a thoughtful question that reveals you understood what the client is actually trying to solve
+- Name a hidden business problem behind the request (a redesign is usually a positioning problem; a landing page is usually a conversion problem; a CMS request is usually a scalability problem)
+- Identify a contradiction between what the client wants and what their current situation communicates
+- Show understanding of the founder's psychology — what they're worried about, what success looks like for them
+- Point to a specific insight from the brief that most applicants would miss
+
+INFER THE REAL PROBLEM: Don't describe what was asked for. Infer what business outcome the client actually needs.
+
+RULES:
+- 2-4 sentences only
+- Every sentence advances a new idea — no filler
+- Reference at least one specific detail from the job post
+- Sounds like a senior consultant who has solved this exact problem before — calm, precise, not pitching
+- No generic marketing language (modern, clean, user-friendly, professional, stunning, beautiful)
+
+Return JSON: { "hookParagraph": "<the opening paragraph — 2-4 sentences, ready to paste>" }`,
         `Job post:\n${data.jobDescription}\n\n${context}`,
       );
     } catch (err) { handleAiError(err); }
@@ -463,18 +505,32 @@ export const craftCtaLine = createServerFn({ method: "POST" })
       return await structuredWith(
         "challenger",
         z.object({ ctaLine: z.string() }),
-        `You craft the closing CTA (1-2 sentences) for freelance proposals. Write the CLOSING LINE ONLY — nothing else.
+        `You write the closing line (1-2 sentences) of a freelance proposal. This is the last thing the client reads — it determines whether they reply.
 
 CTA style: "${cta.name}" — ${cta.description}
 
-Rules:
-- MUST be either a sharp question OR a specific concrete suggestion with a clear next step
-- Reference something SPECIFIC from the job post — their timeline, their tool, their challenge, their goal
-- NEVER use: "Let me know if interested", "Feel free to reach out", "Looking forward to hearing from you", "I'd love the opportunity"
-- Sound direct and confident — not desperate, not stiff
-- 1-2 sentences only
+THE CLOSING MUST ALWAYS END WITH A QUESTION. This is mandatory with no exceptions.
 
-Return JSON: { "ctaLine": "<the closing line — ready to paste>" }`,
+❌ FORBIDDEN — never end with any of these:
+"I'd love to hear your thoughts."
+"Looking forward to hearing from you."
+"Let me know." / "Happy to discuss." / "Feel free to reach out."
+"I can build this for you." / "I'll deliver X, Y, and Z."
+Any statement. Any deliverable description. Any sentence without a question mark.
+
+✅ REQUIRED — end with a meaningful question directly tied to the client's project, goals, or priorities:
+"Would you rather evolve the existing brand or take it in a completely new direction?"
+"Is improving trust your biggest priority, or is generating more enquiries the immediate goal?"
+"Does this direction feel aligned with what you're hoping to achieve?"
+"Which matters most right now — hitting the deadline or getting the full feature set in v1?"
+
+The question must:
+- Be specific to THIS job — impossible to copy-paste into another proposal
+- Invite a genuine reply, not a yes/no
+- Sound natural and conversational — not formal or salesy
+- Reference a specific detail from the job post (their timeline, tool, goal, constraint, or audience)
+
+Return JSON: { "ctaLine": "<1-2 sentences, MUST end with a question mark>" }`,
         `Job post:\n${data.jobDescription}\n\n${context}`,
       );
     } catch (err) { handleAiError(err); }
@@ -603,40 +659,76 @@ ${data.portfolioItems.map((p) => {
 The gold standard: the client reads this and thinks "this person has seen my exact problem before and knows exactly how it ends." That feeling comes from specificity, not claims. Never say "I understand your needs." Instead, name the specific thing they're dealing with, name the downstream cost of it, name the thing they probably haven't tried yet.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FOUNDER PSYCHOLOGY — OPTIMIZE FOR HOW FOUNDERS READ PROPOSALS
+QUALITY VALIDATION — INTERNAL REVIEW BEFORE RETURNING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-A founder reading a proposal is asking exactly five questions:
+Before returning the proposal, verify each of these. If any fail, regenerate:
+✓ The hook is unique — impossible to send to another client by changing the company name
+✓ The real business problem behind the request is identified (not just what was asked for)
+✓ The strategy section explains reasoning, not just a list of deliverables
+✓ The writing sounds like a senior consultant — not an AI generating templates
+✓ No generic marketing phrases appear anywhere
+✓ The CTA ends with a relevant question mark
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FOUNDER PSYCHOLOGY — HOW FOUNDERS ACTUALLY READ PROPOSALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A founder scanning a proposal asks five things:
 1. Does this person understand my business?
 2. Did they actually study my situation?
 3. Do they understand my positioning and audience?
 4. Are they thinking beyond the immediate deliverable?
-5. Can they improve my revenue, trust, or conversions — not just produce output?
+5. Can they move the needle on revenue, trust, or conversions?
 
-Every sentence must answer at least one of those questions. Any sentence that answers none of them is filler. Delete it.
+Every sentence must answer at least one of those questions. Any sentence that answers none is filler — delete it.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EVIDENCE-BASED OBSERVATIONS ONLY
+INFER THE REAL BUSINESS PROBLEM
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Never write generic observations. Every claim must reference something specific that exists in the job post.
+Do not repeat or describe what the client asked for. Infer the real business problem behind the request:
+- A redesign request is usually a positioning problem
+- A landing page request is usually a conversion problem
+- A CMS request is usually a scalability or ownership problem
+- A nonprofit redesign is usually a trust and donation problem
+- A portfolio site is usually a credibility and lead quality problem
 
-❌ GENERIC (rejected):
+Name the real problem. Explain why it matters to the business. Then position the deliverable as the solution to that problem — not the other way around.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STRATEGY = REASONING, NOT DELIVERABLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The strategy section must explain your thought process — not list features or phases.
+
+Cover the reasoning behind each decision:
+- Messaging hierarchy — what to say first and why
+- Information architecture — what the visitor needs to understand, in what order
+- Trust building — what signals credibility for this specific audience
+- Conversion flow — where the natural decision point is and how to guide toward it
+- Brand positioning — what makes this client different and how to make that obvious
+
+Avoid generic UI descriptions. Every design or content decision must be connected to a business outcome.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EVIDENCE-BASED ONLY — NO GENERIC OBSERVATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Every claim must reference something specific that actually exists in the job post.
+
+❌ REJECTED — generic, could apply to any client:
 "Your website could convert better."
 "Your UX could be improved."
 "Your design feels outdated."
-"Users might be confused."
 
-✅ SPECIFIC (required):
-Reference exactly what was mentioned — a specific tool, platform, timeline, deliverable, team structure, pain point, audience segment, budget constraint, or outcome they described.
+✅ REQUIRED — specific, tied to what was actually mentioned:
+Reference a specific tool, platform, timeline, deliverable, team constraint, pain point, audience segment, competitor, or outcome they described.
 
 The first paragraph must make the client think: "This person actually read my brief."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ELIMINATE GENERIC AI LANGUAGE
+BANNED LANGUAGE — NEVER USE ANY OF THESE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Never use these phrases — they signal AI-generated filler:
-"Modern and clean" · "User-friendly" · "Visually appealing" · "Enhance the user experience" · "Professional website" · "Seamless experience" · "Cutting-edge" · "Best practices" · "Robust solution" · "Leverage" · "Streamline" · "Optimize" · "Deliver value" · "Holistic approach"
+These words and phrases signal AI-generated filler and will cause rejection:
+Modern · Clean · User-friendly · Visually appealing · Professional · Sleek · Stunning · Beautiful · Cutting-edge · Seamless · Leverage · Streamline · Optimize · Enhance the user experience · Deliver value · Holistic approach · Best practices · Robust solution · Dynamic · Innovative · State-of-the-art
 
-Replace every generic phrase with a concrete observation tied to the specific business.
+Replace every generic phrase with a concrete, business-specific observation.
 
 Hard rules:
 - No greeting. No "Hi". Start directly with the hook.${languageInstruction}${toneInstruction}
@@ -713,24 +805,29 @@ Return a JSON object with this exact shape:
             ProposalSchema,
             `You write freelance proposals that win because the client FEELS understood — not impressed, not sold to, understood.
 
-FOUNDER PSYCHOLOGY: Every sentence must answer at least one of these questions — Does this person understand my business? Did they study my situation? Do they understand my positioning? Are they thinking beyond the deliverable? A sentence that answers none of them is filler. Delete it.
+QUALITY VALIDATION: Before returning, verify — hook is unique to this client, real business problem identified (not just the request), strategy explains reasoning not deliverables, writing sounds like a senior consultant, no generic language, CTA ends with "?".
 
-EVIDENCE-BASED ONLY: Never write generic observations. Every claim must reference something specific that exists in the job post — a tool, timeline, deliverable, audience, or pain point they actually mentioned.
+FOUNDER PSYCHOLOGY: Every sentence must answer at least one of these — Does this person understand my business? Did they study my situation? Are they thinking beyond the deliverable? Can they improve revenue, trust, or conversions? Any sentence that answers none is filler — delete it.
 
-ELIMINATE GENERIC AI LANGUAGE: Never write "modern and clean", "user-friendly", "visually appealing", "enhance the user experience", "professional website", "seamless", "leverage", "streamline". Replace every generic phrase with a concrete business-specific observation.
+INFER THE REAL PROBLEM: Don't describe what was asked for. Infer the business problem (redesign = positioning; landing page = conversion; CMS = scalability; nonprofit = trust/donations). Name the real problem, explain why it matters commercially, position the deliverable as the solution.
+
+STRATEGY = REASONING: Explain the thought process — messaging hierarchy, information architecture, trust building, conversion flow, brand positioning. Not a list of deliverables.
+
+EVIDENCE-BASED ONLY: Every claim must reference something specific from the job post — tool, platform, timeline, deliverable, audience, or pain point they actually mentioned.
+
+BANNED LANGUAGE: Modern · Clean · User-friendly · Visually appealing · Professional · Sleek · Stunning · Beautiful · Cutting-edge · Seamless · Leverage · Streamline · Optimize · Enhance the user experience · Deliver value · Holistic · Best practices · Robust · Dynamic · Innovative
 
 Hard rules:
 - No greeting. No "Hi". Start directly with the hook.${data.targetLanguage && data.targetLanguage.toLowerCase() !== "english" ? `\n- LANGUAGE: Write the ENTIRE proposal in ${data.targetLanguage}.` : ""}
 - NO BULLET POINTS. NO HYPHENS. NO DASHES as list markers. Write in clean flowing prose only.
-- CONFIDENCE WITHOUT ARROGANCE: Write like someone who has solved this exact type of problem before and is not anxious about it.
 - DO NOT parrot or restate the job post. Echo the client's stated needs at most ~30%. The other ~70% must be YOUR original interpretation, deeper insight, and value they did NOT explicitly ask for.
-- Forbidden phrases (NEVER use any of these): ${FORBIDDEN_PHRASES.map((p) => `"${p}"`).join(", ")}
+- Forbidden phrases (NEVER use): ${FORBIDDEN_PHRASES.map((p) => `"${p}"`).join(", ")}
 - Use the assigned HOOK: ${data.customHookText ? `AI-Generated Custom Hook — ${data.customHookText}` : (() => { const h = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0]; return `${h.name} — ${h.description}`; })()}
 - Use the assigned STRATEGY: ${data.customStrategyText ? `AI-Generated Custom Strategy — ${data.customStrategyText}` : (() => { const s = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0]; return `${s.name} — ${s.description}`; })()}
-- GROUNDING ENFORCEMENT (non-negotiable): The following specific entities MUST appear in the proposal. Reference AT LEAST 3 naturally: ${(data.extractedEntities ?? []).join(", ")}
-- SPECIFICITY FAILURE DETECTED — previous draft scored ${verification.specificity}/10 with only ${verification.entityUsage} entity references. Verifier complaint: "${verification.complaint}". Fix this by anchoring EVERY paragraph to a specific detail from the job post.
-- CTA HARD REQUIREMENT: The final paragraph MUST end with a natural conversational question ending in "?". NEVER end with statements like "I'd love to hear your thoughts", "Looking forward to hearing from you", "Let me know", or any deliverable description. The question must be specific to this job, not generic.
-- FORMATTING RULES: Write in clean flowing prose. Separate paragraphs with ONE blank line. No markdown.
+- GROUNDING (non-negotiable): Reference AT LEAST 3 of these entities naturally: ${(data.extractedEntities ?? []).join(", ")}
+- SPECIFICITY FAILURE — previous draft scored ${verification.specificity}/10, ${verification.entityUsage} entity refs. Complaint: "${verification.complaint}". Anchor EVERY paragraph to a specific job post detail.
+- CTA HARD REQUIREMENT: Final paragraph MUST end with a question ending in "?". Never end with "I'd love to hear your thoughts", "Looking forward to hearing from you", "Let me know", "Happy to discuss", or any deliverable statement. Good examples: "Would you rather evolve the existing brand or take it in a new direction?" / "Is improving trust your biggest priority, or is generating more enquiries the immediate goal?"
+- FORMATTING: Clean flowing prose. One blank line between paragraphs. No markdown.
 
 Return a JSON object with this exact shape:
 {
