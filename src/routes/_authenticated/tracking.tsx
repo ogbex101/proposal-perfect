@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { getTrackingData, updateScoutStatus, updateProposalFullStatus } from "@/lib/scout.functions";
 import type { TrackingRow } from "@/lib/scout.functions";
 
-// @ts-expect-error — route registered at runtime
 export const Route = createFileRoute("/_authenticated/tracking")({
   component: TrackingPage,
 });

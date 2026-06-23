@@ -4,7 +4,6 @@ import { Loader2, Copy, Check, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { getPublicPortfolioSamples, type PortfolioSamplesDoc, type SampleItem } from "@/lib/portfolio-samples.functions";
 
-// @ts-expect-error — route registered at runtime via TanStack Router file-based routing
 export const Route = createFileRoute("/sample/$slug")({
   component: SamplesPage,
 });
