@@ -205,6 +205,45 @@ export type Database = {
         }
         Relationships: []
       }
+      outreach_templates: {
+        Row: {
+          category: string
+          created_at: string | null
+          cta_style: string
+          email_content: string
+          hook_style: string
+          id: string
+          insight_approach: string
+          name: string
+          structure_analysis: string
+          user_id: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string | null
+          cta_style?: string
+          email_content: string
+          hook_style?: string
+          id?: string
+          insight_approach?: string
+          name: string
+          structure_analysis?: string
+          user_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          cta_style?: string
+          email_content?: string
+          hook_style?: string
+          id?: string
+          insight_approach?: string
+          name?: string
+          structure_analysis?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       page_views: {
         Row: {
           created_at: string
@@ -268,6 +307,36 @@ export type Database = {
           updated_at?: string
           url?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      portfolio_samples: {
+        Row: {
+          category: string
+          created_at: string | null
+          id: string
+          job_excerpt: string
+          samples: Json
+          slug: string
+          user_id: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          id?: string
+          job_excerpt?: string
+          samples: Json
+          slug: string
+          user_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          id?: string
+          job_excerpt?: string
+          samples?: Json
+          slug?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -408,8 +477,11 @@ export type Database = {
           budget: string | null
           client_responded: boolean | null
           content: string
+          converted: boolean
           created_at: string
+          cta: string | null
           explanation: Json | null
+          got_reply: boolean
           hook: string | null
           id: string
           include_plan: boolean
@@ -418,8 +490,10 @@ export type Database = {
           length: string
           milestones: Json | null
           portfolio_ids: string[]
+          read_by_client: boolean
           responded_at: string | null
           strategy: string | null
+          submitted: boolean
           title: string | null
           updated_at: string
           user_id: string
@@ -428,8 +502,11 @@ export type Database = {
           budget?: string | null
           client_responded?: boolean | null
           content?: string
+          converted?: boolean
           created_at?: string
+          cta?: string | null
           explanation?: Json | null
+          got_reply?: boolean
           hook?: string | null
           id?: string
           include_plan?: boolean
@@ -438,8 +515,10 @@ export type Database = {
           length?: string
           milestones?: Json | null
           portfolio_ids?: string[]
+          read_by_client?: boolean
           responded_at?: string | null
           strategy?: string | null
+          submitted?: boolean
           title?: string | null
           updated_at?: string
           user_id: string
@@ -448,8 +527,11 @@ export type Database = {
           budget?: string | null
           client_responded?: boolean | null
           content?: string
+          converted?: boolean
           created_at?: string
+          cta?: string | null
           explanation?: Json | null
+          got_reply?: boolean
           hook?: string | null
           id?: string
           include_plan?: boolean
@@ -458,8 +540,10 @@ export type Database = {
           length?: string
           milestones?: Json | null
           portfolio_ids?: string[]
+          read_by_client?: boolean
           responded_at?: string | null
           strategy?: string | null
+          submitted?: boolean
           title?: string | null
           updated_at?: string
           user_id?: string
@@ -511,6 +595,60 @@ export type Database = {
           ref_id?: string | null
           snapshot?: Json
           user_id?: string
+        }
+        Relationships: []
+      }
+      scout_outreach: {
+        Row: {
+          converted: boolean
+          created_at: string | null
+          dev_prompt_title: string | null
+          email_body: string | null
+          got_reply: boolean
+          hook_rationale: string | null
+          id: string
+          job_description: string
+          job_excerpt: string
+          job_type: string | null
+          read_by_client: boolean
+          strategy_note: string | null
+          subject_line: string | null
+          submitted: boolean
+          user_id: string | null
+        }
+        Insert: {
+          converted?: boolean
+          created_at?: string | null
+          dev_prompt_title?: string | null
+          email_body?: string | null
+          got_reply?: boolean
+          hook_rationale?: string | null
+          id?: string
+          job_description?: string
+          job_excerpt?: string
+          job_type?: string | null
+          read_by_client?: boolean
+          strategy_note?: string | null
+          subject_line?: string | null
+          submitted?: boolean
+          user_id?: string | null
+        }
+        Update: {
+          converted?: boolean
+          created_at?: string | null
+          dev_prompt_title?: string | null
+          email_body?: string | null
+          got_reply?: boolean
+          hook_rationale?: string | null
+          id?: string
+          job_description?: string
+          job_excerpt?: string
+          job_type?: string | null
+          read_by_client?: boolean
+          strategy_note?: string | null
+          subject_line?: string | null
+          submitted?: boolean
+          user_id?: string | null
         }
         Relationships: []
       }

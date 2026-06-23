@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { getTrackingData } from "@/lib/scout.functions";
 import type { TrackingRow } from "@/lib/scout.functions";
 
-// @ts-expect-error — route registered at runtime
 export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
 });

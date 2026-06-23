@@ -13,13 +13,16 @@ import { Route as StrategyRouteImport } from './routes/strategy'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SampleSlugRouteImport } from './routes/sample.$slug'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as PSlugRouteImport } from './routes/p.$slug'
 import { Route as CtSlugRouteImport } from './routes/ct.$slug'
+import { Route as AuthenticatedTrackingRouteImport } from './routes/_authenticated/tracking'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedScoutRouteImport } from './routes/_authenticated/scout'
 import { Route as AuthenticatedSavedRouteImport } from './routes/_authenticated/saved'
 import { Route as AuthenticatedResearchRouteImport } from './routes/_authenticated/research'
+import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedPortfolioRouteImport } from './routes/_authenticated/portfolio'
 import { Route as AuthenticatedNewRouteImport } from './routes/_authenticated/new'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
@@ -47,6 +50,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SampleSlugRoute = SampleSlugRouteImport.update({
+  id: '/sample/$slug',
+  path: '/sample/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SSlugRoute = SSlugRouteImport.update({
   id: '/s/$slug',
   path: '/s/$slug',
@@ -61,6 +69,11 @@ const CtSlugRoute = CtSlugRouteImport.update({
   id: '/ct/$slug',
   path: '/ct/$slug',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedTrackingRoute = AuthenticatedTrackingRouteImport.update({
+  id: '/tracking',
+  path: '/tracking',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
@@ -80,6 +93,11 @@ const AuthenticatedSavedRoute = AuthenticatedSavedRouteImport.update({
 const AuthenticatedResearchRoute = AuthenticatedResearchRouteImport.update({
   id: '/research',
   path: '/research',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedPortfolioRoute = AuthenticatedPortfolioRouteImport.update({
@@ -129,13 +147,16 @@ export interface FileRoutesByFullPath {
   '/history': typeof AuthenticatedHistoryRoute
   '/new': typeof AuthenticatedNewRoute
   '/portfolio': typeof AuthenticatedPortfolioRoute
+  '/reports': typeof AuthenticatedReportsRoute
   '/research': typeof AuthenticatedResearchRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/scout': typeof AuthenticatedScoutRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/tracking': typeof AuthenticatedTrackingRoute
   '/ct/$slug': typeof CtSlugRoute
   '/p/$slug': typeof PSlugRoute
   '/s/$slug': typeof SSlugRoute
+  '/sample/$slug': typeof SampleSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -148,13 +169,16 @@ export interface FileRoutesByTo {
   '/history': typeof AuthenticatedHistoryRoute
   '/new': typeof AuthenticatedNewRoute
   '/portfolio': typeof AuthenticatedPortfolioRoute
+  '/reports': typeof AuthenticatedReportsRoute
   '/research': typeof AuthenticatedResearchRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/scout': typeof AuthenticatedScoutRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/tracking': typeof AuthenticatedTrackingRoute
   '/ct/$slug': typeof CtSlugRoute
   '/p/$slug': typeof PSlugRoute
   '/s/$slug': typeof SSlugRoute
+  '/sample/$slug': typeof SampleSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -169,13 +193,16 @@ export interface FileRoutesById {
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/new': typeof AuthenticatedNewRoute
   '/_authenticated/portfolio': typeof AuthenticatedPortfolioRoute
+  '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/research': typeof AuthenticatedResearchRoute
   '/_authenticated/saved': typeof AuthenticatedSavedRoute
   '/_authenticated/scout': typeof AuthenticatedScoutRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/tracking': typeof AuthenticatedTrackingRoute
   '/ct/$slug': typeof CtSlugRoute
   '/p/$slug': typeof PSlugRoute
   '/s/$slug': typeof SSlugRoute
+  '/sample/$slug': typeof SampleSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -190,13 +217,16 @@ export interface FileRouteTypes {
     | '/history'
     | '/new'
     | '/portfolio'
+    | '/reports'
     | '/research'
     | '/saved'
     | '/scout'
     | '/settings'
+    | '/tracking'
     | '/ct/$slug'
     | '/p/$slug'
     | '/s/$slug'
+    | '/sample/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -209,13 +239,16 @@ export interface FileRouteTypes {
     | '/history'
     | '/new'
     | '/portfolio'
+    | '/reports'
     | '/research'
     | '/saved'
     | '/scout'
     | '/settings'
+    | '/tracking'
     | '/ct/$slug'
     | '/p/$slug'
     | '/s/$slug'
+    | '/sample/$slug'
   id:
     | '__root__'
     | '/'
@@ -229,13 +262,16 @@ export interface FileRouteTypes {
     | '/_authenticated/history'
     | '/_authenticated/new'
     | '/_authenticated/portfolio'
+    | '/_authenticated/reports'
     | '/_authenticated/research'
     | '/_authenticated/saved'
     | '/_authenticated/scout'
     | '/_authenticated/settings'
+    | '/_authenticated/tracking'
     | '/ct/$slug'
     | '/p/$slug'
     | '/s/$slug'
+    | '/sample/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -246,6 +282,7 @@ export interface RootRouteChildren {
   CtSlugRoute: typeof CtSlugRoute
   PSlugRoute: typeof PSlugRoute
   SSlugRoute: typeof SSlugRoute
+  SampleSlugRoute: typeof SampleSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -278,6 +315,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sample/$slug': {
+      id: '/sample/$slug'
+      path: '/sample/$slug'
+      fullPath: '/sample/$slug'
+      preLoaderRoute: typeof SampleSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/s/$slug': {
       id: '/s/$slug'
       path: '/s/$slug'
@@ -298,6 +342,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/ct/$slug'
       preLoaderRoute: typeof CtSlugRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/tracking': {
+      id: '/_authenticated/tracking'
+      path: '/tracking'
+      fullPath: '/tracking'
+      preLoaderRoute: typeof AuthenticatedTrackingRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
@@ -325,6 +376,13 @@ declare module '@tanstack/react-router' {
       path: '/research'
       fullPath: '/research'
       preLoaderRoute: typeof AuthenticatedResearchRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/reports': {
+      id: '/_authenticated/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof AuthenticatedReportsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/portfolio': {
@@ -387,10 +445,12 @@ interface AuthenticatedRouteChildren {
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
   AuthenticatedNewRoute: typeof AuthenticatedNewRoute
   AuthenticatedPortfolioRoute: typeof AuthenticatedPortfolioRoute
+  AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedResearchRoute: typeof AuthenticatedResearchRoute
   AuthenticatedSavedRoute: typeof AuthenticatedSavedRoute
   AuthenticatedScoutRoute: typeof AuthenticatedScoutRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedTrackingRoute: typeof AuthenticatedTrackingRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -401,10 +461,12 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
   AuthenticatedNewRoute: AuthenticatedNewRoute,
   AuthenticatedPortfolioRoute: AuthenticatedPortfolioRoute,
+  AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedResearchRoute: AuthenticatedResearchRoute,
   AuthenticatedSavedRoute: AuthenticatedSavedRoute,
   AuthenticatedScoutRoute: AuthenticatedScoutRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedTrackingRoute: AuthenticatedTrackingRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
@@ -419,6 +481,7 @@ const rootRouteChildren: RootRouteChildren = {
   CtSlugRoute: CtSlugRoute,
   PSlugRoute: PSlugRoute,
   SSlugRoute: SSlugRoute,
+  SampleSlugRoute: SampleSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
