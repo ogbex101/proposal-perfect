@@ -199,8 +199,7 @@ function ScoutMode() {
     // Handle plain URLs and markdown [text](url) links
     const mdLinkMatch = jobText.match(/\[[^\]]+\]\((https?:\/\/[^)]+)\)/);
     const plainMatch = jobText.match(/https?:\/\/[^\s\]>)"]+/);
-    const match = mdLinkMatch ? { 0: mdLinkMatch[1] } : plainMatch;
-    const url = match ? match[0] : null;
+    const url = mdLinkMatch ? mdLinkMatch[1] : (plainMatch ? plainMatch[0] : null);
     setDetectedUrl(url);
     if (!url) {
       setWebsiteData(null);
@@ -436,7 +435,7 @@ function ScoutMode() {
                 className="bg-background/60 text-sm font-mono flex-1"
               />
               <button
-                onClick={() => runWebsiteAnalysis(manualUrl.trim() || detectedUrl || undefined)}
+                onClick={() => runWebsiteAnalysis()}
                 disabled={analyzingWebsite || (!manualUrl.trim() && !detectedUrl)}
                 className="flex items-center gap-1.5 rounded-lg bg-blue-400/20 border border-blue-400/30 px-3 py-2 text-xs font-medium text-blue-300 hover:bg-blue-400/30 transition-colors disabled:opacity-40 whitespace-nowrap"
               >
