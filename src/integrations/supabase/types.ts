@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       conversion_messages: {
         Row: {
           created_at: string
@@ -216,7 +234,7 @@ export type Database = {
           insight_approach: string
           name: string
           structure_analysis: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           category?: string
@@ -228,7 +246,7 @@ export type Database = {
           insight_approach?: string
           name: string
           structure_analysis?: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           category?: string
@@ -240,7 +258,7 @@ export type Database = {
           insight_approach?: string
           name?: string
           structure_analysis?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -733,6 +751,21 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
           whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      user_access: {
+        Row: {
+          user_id: string
+          verified_at: string | null
+        }
+        Insert: {
+          user_id: string
+          verified_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          verified_at?: string | null
         }
         Relationships: []
       }

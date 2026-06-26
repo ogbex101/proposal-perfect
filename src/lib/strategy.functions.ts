@@ -27,12 +27,8 @@ export const saveStrategyDoc = createServerFn({ method: "POST" })
 export const getPublicStrategy = createServerFn({ method: "GET" })
   .inputValidator((d: { slug: string }) => z.object({ slug: z.string().min(1).max(20) }).parse(d))
   .handler(async ({ data }) => {
-    const { createClient } = await import("@supabase/supabase-js");
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_PUBLISHABLE_KEY;
-    if (!url || !key) throw new Error("Supabase not configured.");
-    const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data: row, error } = await (supabase as any)
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await (supabaseAdmin as any)
       .from("strategies")
       .select("doc")
       .eq("slug", data.slug)
