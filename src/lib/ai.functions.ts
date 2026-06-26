@@ -4,6 +4,8 @@ import { generateWithFallback, generateWithProvider, generateObjectWithFallback,
 import { z } from "zod";
 import { CTAS, FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
+import { runProposalIntelligencePipeline, type ProposalIntelligenceObject } from "./proposal-intelligence";
+import { saveProposalMemoryInternal } from "./proposal-memory.functions";
 
 // Load a user's custom red-flag phrases. Defaults always apply regardless;
 // this only adds the user's own phrases. Wrapped so a missing table never
@@ -133,13 +135,87 @@ export const analyzeJob = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      const hookList = HOOKS.map((h) => `- ${h.id}: ${h.name} — ${h.description}`).join("\n");
-      const strategyList = STRATEGIES.map((s) => `- ${s.id}: ${s.name} — ${s.description}`).join("\n");
-      const ctaList = CTAS.map((c) => `- ${c.id}: ${c.name} — ${c.description}`).join("\n");
-      // Gemini Flash handles structured extraction — fast, free, excellent at JSON
-      return await structuredWith(
-        "analyzer",
-        AnalysisSchema,
+      // Run the full 4-engine intelligence pipeline first
+      const intelligence = await runProposalIntelligencePipeline(data.jobDescription);
+      const bp = intelligence.proposalBlueprint;
+      const ci = intelligence.clientIntelligence;
+      const biz = intelligence.businessIntelligence;
+      const psych = intelligence.psychology;
+
+      // Map intelligence output back to the existing JobAnalysis shape for UI compatibility.
+      // The full intelligence object is also returned for use in generateProposal.
+      const hookSuggestions = (bp as any).alternativeStrategies?.slice(0, 3).map((s: string, i: number) => {
+        const h = HOOKS[i % HOOKS.length];
+        return {
+          hookId: h.id,
+          hookName: h.name,
+          openingLine: bp.openingLine,
+          score: Math.max(60, 90 - i * 8),
+          scoreReason: s,
+        };
+      }) ?? [];
+      if (hookSuggestions.length === 0) {
+        const mapped = HOOKS.find((h) => h.id === bp.mappedHookId) ?? HOOKS[0];
+        hookSuggestions.push({
+          hookId: mapped.id,
+          hookName: mapped.name,
+          openingLine: bp.openingLine,
+          score: 92,
+          scoreReason: "Primary strategy from intelligence pipeline",
+        });
+      }
+
+      const mappedCta = CTAS.find((c) => c.id === bp.mappedCtaId) ?? CTAS[0];
+      const ctaSuggestions = [{
+        ctaId: mappedCta.id,
+        ctaName: mappedCta.name,
+        closingLine: bp.ctaLine,
+        score: 92,
+        scoreReason: "Derived from client psychology analysis",
+      }];
+
+      const analysis: JobAnalysis & { intelligence: ProposalIntelligenceObject } = {
+        summary: biz.coreBusinessInsight ?? ci.projectSummary,
+        painPoint: biz.coreBusinessProblem,
+        hiddenNeeds: psych.realReasonForHiring,
+        technicalDifficulties: (ci.technicalRequirements ?? []).slice(0, 4).map((t: string) => ({
+          title: t,
+          explanation: `Technical requirement identified from job post`,
+        })),
+        recommendedApproach: bp.proposalMandates?.join(" ") ?? biz.coreBusinessInsight,
+        suggestedHookId: bp.mappedHookId,
+        hookReason: `${bp.primaryStrategy} strategy selected by intelligence pipeline`,
+        hookSuggestions,
+        suggestedStrategyId: bp.mappedStrategyId,
+        strategyReason: biz.coreBusinessInsight,
+        suggestedCtaId: bp.mappedCtaId,
+        ctaReason: `CTA derived from client psychology: ${psych.primaryDesire}`,
+        ctaSuggestions,
+        detectedLanguage: ci.detectedLanguage ?? "English",
+        suggestedLength: "robust",
+        detectedNiche: ci.detectedNiche ?? "",
+        extractedEntities: [
+          ...ci.namedTools ?? [],
+          ...ci.namedCompanies ?? [],
+          ...(ci.technicalRequirements ?? []).slice(0, 3),
+        ].slice(0, 10),
+        strategyWorthy: intelligence.overallConfidence >= 70,
+        strategyWorthyReason: intelligence.requiresHumanReview
+          ? `Confidence ${intelligence.overallConfidence.toFixed(0)}% — human review recommended`
+          : `Confidence ${intelligence.overallConfidence.toFixed(0)}% — high-quality analysis`,
+        intelligence,
+      };
+
+      return analysis;
+    } catch (err) {
+      // Fall back to legacy single-engine analysis if pipeline fails
+      try {
+        const hookList = HOOKS.map((h) => `- ${h.id}: ${h.name} — ${h.description}`).join("\n");
+        const strategyList = STRATEGIES.map((s) => `- ${s.id}: ${s.name} — ${s.description}`).join("\n");
+        const ctaList = CTAS.map((c) => `- ${c.id}: ${c.name} — ${c.description}`).join("\n");
+        return await structuredWith(
+          "analyzer",
+          AnalysisSchema,
         `You are an expert freelance proposal strategist who has won hundreds of proposals. Your analysis is what separates winning proposals from generic ones. You must read between the lines.
 
 DEEP ANALYSIS REQUIREMENTS:
@@ -245,10 +321,11 @@ Return a JSON object with these exact keys:
 }
 
 IMPORTANT for hookSuggestions / ctaSuggestions: The openingLine and closingLine must be specific, concrete sentences written for THIS job — not templates. Ready to paste directly. Score 85-100 = excellent fit, 70-84 = good fit, 50-69 = workable.${redFlagPromptBlock()}`,
-        `Analyze this job post:\n\n${data.jobDescription}`,
-      );
-    } catch (err) {
-      handleAiError(err);
+          `Analyze this job post:\n\n${data.jobDescription}`,
+        );
+      } catch (fallbackErr) {
+        handleAiError(fallbackErr);
+      }
     }
   });
 
@@ -550,7 +627,8 @@ export const generateProposal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: {
     jobDescription: string;
-    analysis?: JobAnalysis | null;
+    analysis?: (JobAnalysis & { intelligence?: ProposalIntelligenceObject }) | null;
+    intelligence?: ProposalIntelligenceObject | null;
     hookId: string;
     strategyId: string;
     ctaId?: string;
@@ -568,6 +646,7 @@ export const generateProposal = createServerFn({ method: "POST" })
     extractedEntities?: string[];
     craftedHookParagraph?: string;
     craftedCtaLine?: string;
+    platform?: string;
   }) =>
     z.object({
       jobDescription: z.string().min(10),
@@ -593,11 +672,18 @@ export const generateProposal = createServerFn({ method: "POST" })
       extractedEntities: z.array(z.string()).optional(),
       craftedHookParagraph: z.string().max(1000).optional(),
       craftedCtaLine: z.string().max(500).optional(),
+      intelligence: z.any().optional().nullable(),
+      platform: z.string().optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
     try {
+      const { supabase, userId } = context as any;
       const customFlags = await loadCustomFlags(context);
+
+      // Resolve intelligence — from explicit field or nested in analysis
+      const intelligence: ProposalIntelligenceObject | null =
+        (data as any).intelligence ?? (data.analysis as any)?.intelligence ?? null;
       // Use AI-generated custom text if provided, otherwise fall back to preset lists
       const hookLabel = data.craftedHookParagraph
         ? `PRE-CRAFTED OPENING — use this EXACTLY as your first paragraph: "${data.craftedHookParagraph}"`
@@ -630,6 +716,48 @@ ${data.portfolioItems.map((p) => {
         : "";
       const analysisBlock = data.analysis
         ? `Job analysis:\n${JSON.stringify(data.analysis, null, 2)}`
+        : "";
+
+      // Intelligence block — drives proposal if pipeline ran
+      const intelligenceBlock = intelligence
+        ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROPOSAL INTELLIGENCE (DO NOT IGNORE — USE ALL OF THIS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CLIENT INTELLIGENCE:
+- Personality: ${intelligence.clientIntelligence.personality}
+- Emotional state: ${intelligence.clientIntelligence.emotionalState}
+- Hiring maturity: ${intelligence.clientIntelligence.hiringMaturity}
+- Decision style: ${intelligence.clientIntelligence.decisionStyle}
+- Budget sensitivity: ${intelligence.clientIntelligence.budgetSensitivity}
+- Risk tolerance: ${intelligence.clientIntelligence.riskTolerance}
+- Hidden frustrations: ${intelligence.clientIntelligence.hiddenFrustrations?.join("; ")}
+- Hidden expectations: ${intelligence.clientIntelligence.hiddenExpectations?.join("; ")}
+- Evidence (verbatim quotes from post): ${intelligence.clientIntelligence.evidenceQuotes?.join(" | ")}
+
+BUSINESS INTELLIGENCE:
+- Core business problem: ${intelligence.businessIntelligence.coreBusinessProblem}
+- Business opportunity: ${intelligence.businessIntelligence.businessOpportunity}
+- Business risk: ${intelligence.businessIntelligence.businessRisk}
+- Core business insight: ${intelligence.businessIntelligence.coreBusinessInsight}
+
+CLIENT PSYCHOLOGY:
+- Primary fear: ${intelligence.psychology.primaryFear}
+- Primary desire: ${intelligence.psychology.primaryDesire}
+- Urgency driver: ${intelligence.psychology.urgencyDriver}
+- Real reason for hiring: ${intelligence.psychology.realReasonForHiring}
+- What will make them reply: ${intelligence.psychology.whatWillMakeThemReply}
+- What will make them ignore: ${intelligence.psychology.whatWillMakeThemIgnore}
+- What will make them hire: ${intelligence.psychology.whatWillMakeThemHire}
+- What will make them reject: ${intelligence.psychology.whatWillMakeThemReject}
+
+PROPOSAL BLUEPRINT:
+- Primary strategy: ${intelligence.proposalBlueprint.primaryStrategy}
+- OPENING LINE (use this verbatim or as your first sentence): "${intelligence.proposalBlueprint.openingLine}"
+- CTA LINE (use this verbatim as your final sentence — it ends with "?"): "${intelligence.proposalBlueprint.ctaLine}"
+- Mandates (MUST follow all of these): ${intelligence.proposalBlueprint.proposalMandates?.join(" | ")}
+- Forbidden approaches (DO NOT use any of these): ${intelligence.proposalBlueprint.forbiddenApproaches?.join(" | ")}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
         : "";
       const strategyBlock = data.strategyDocument
         ? `\nSTRATEGY DOCUMENT (you prepared this for the client — reference it naturally in the proposal):\n${data.strategyDocument}`
@@ -797,7 +925,7 @@ Return a JSON object with this exact shape:
     "question": "<why this closing question works>"
   }
 }${redFlagPromptBlock(customFlags)}`,
-        `Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}${data.strategyDocument ? `\n\nStrategy reference:\n${data.strategyDocument}` : ""}\n\n${strategyBlock}${data.targetLanguage && data.targetLanguage.toLowerCase() !== "english" ? `\n\nOUTPUT LANGUAGE: ${data.targetLanguage}` : ""}`,
+        `${intelligenceBlock}${intelligenceBlock ? "\n\n" : ""}Job post:\n${data.jobDescription}\n\n${analysisBlock}\n\n${portfolioBlock}\n\n${milestoneBlock}\n\nBudget: ${data.budget || "not specified"}${data.strategyDocument ? `\n\nStrategy reference:\n${data.strategyDocument}` : ""}\n\n${strategyBlock}${data.targetLanguage && data.targetLanguage.toLowerCase() !== "english" ? `\n\nOUTPUT LANGUAGE: ${data.targetLanguage}` : ""}`,
       );
       // Phase 1.3 — Specificity gate (Gemini Flash verifier, max 1 retry)
       let currentResult = result;
@@ -905,7 +1033,20 @@ Return a JSON object with this exact shape:
         .join("\n")
         .replace(/\n{3,}/g, "\n\n")
         .trim();
-      return { ...finalResult, content: scrubRedFlags(cleanContent, customFlags) };
+      const finalProposal = { ...finalResult, content: scrubRedFlags(cleanContent, customFlags) };
+
+      // Auto-save to proposal memory (non-fatal)
+      if (intelligence) {
+        saveProposalMemoryInternal(
+          supabase,
+          userId,
+          intelligence,
+          (data as any).platform ?? "upwork",
+          data.jobDescription,
+        ).catch(() => {});
+      }
+
+      return finalProposal;
     } catch (err) {
       handleAiError(err);
     }
