@@ -1,8 +1,9 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/use-auth";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { AccessGate } from "@/components/AccessGate";
 
 export const Route = createFileRoute("/_authenticated")({
   component: AuthenticatedLayout,
@@ -11,12 +12,18 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   const auth = useAuth();
   const navigate = useNavigate();
+  const [accessGranted, setAccessGranted] = useState(false);
 
   useEffect(() => {
     if (auth.status === "out") {
       navigate({ to: "/auth", search: { mode: "login" } });
     }
   }, [auth.status, navigate]);
+
+  // Sync local access state when auth resolves
+  useEffect(() => {
+    if (auth.hasAccess) setAccessGranted(true);
+  }, [auth.hasAccess]);
 
   if (auth.status !== "in") {
     return (
@@ -27,6 +34,11 @@ function AuthenticatedLayout() {
         </div>
       </div>
     );
+  }
+
+  // Admins bypass the access code gate
+  if (!accessGranted && !auth.isAdmin) {
+    return <AccessGate onGranted={() => setAccessGranted(true)} />;
   }
 
   return (

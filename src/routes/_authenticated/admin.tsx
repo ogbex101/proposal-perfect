@@ -5,6 +5,7 @@ import {
   Users, Activity, Shield, Terminal, Play, X, Loader2, Database, ChevronDown, ChevronUp,
   Copy, Check, TrendingUp, Eye, UserCheck, Globe, ArrowUp, ArrowDown, Minus,
   Search, KeyRound, Trash2, AlertTriangle, Key, ExternalLink, CheckCircle2, XCircle, Zap,
+  Lock, RefreshCw, UserCog,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader, CropCard, Eyebrow } from "@/components/blueprint";
@@ -14,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/use-auth";
 import { listAdminUsers, getPageViewStats, runAdminSql, sendPasswordReset, deleteAdminUser, getApiKeyStatus } from "@/lib/admin.functions";
 import type { AdminUser, ApiKeyStatus } from "@/lib/admin.functions";
+import { getAccessCode, updateAccessCode, makeUserAdmin, revokeAdminRole, revokeUserAccess } from "@/lib/access.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -35,7 +37,7 @@ function timeSince(date: string | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-const TABS = ["Overview", "Users", "API Keys", "Database"] as const;
+const TABS = ["Overview", "Users", "Access", "API Keys", "Database"] as const;
 type Tab = typeof TABS[number];
 
 function AdminPanel() {
@@ -46,6 +48,7 @@ function AdminPanel() {
   const [sqlError, setSqlError] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
+  const [newAccessCode, setNewAccessCode] = useState("");
 
   const sqlMutation = useMutation({
     mutationFn: () => runAdminSql({ data: { sql } }),
@@ -87,6 +90,40 @@ function AdminPanel() {
     queryKey: ["admin-api-keys"],
     queryFn: () => getApiKeyStatus(),
     enabled: auth.isAdmin && activeTab === "API Keys",
+  });
+
+  const accessCodeQuery = useQuery({
+    queryKey: ["admin-access-code"],
+    queryFn: () => getAccessCode(),
+    enabled: auth.isAdmin && activeTab === "Access",
+  });
+
+  const updateCodeMutation = useMutation({
+    mutationFn: () => updateAccessCode({ data: { newCode: newAccessCode } }),
+    onSuccess: () => {
+      toast.success("Access code updated");
+      setNewAccessCode("");
+      qc?.invalidateQueries({ queryKey: ["admin-access-code"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const makeAdminMutation = useMutation({
+    mutationFn: (targetUserId: string) => makeUserAdmin({ data: { targetUserId } }),
+    onSuccess: () => { toast.success("Admin role granted"); qc?.invalidateQueries({ queryKey: ["admin-users"] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const revokeAdminMutation = useMutation({
+    mutationFn: (targetUserId: string) => revokeAdminRole({ data: { targetUserId } }),
+    onSuccess: () => { toast.success("Admin role revoked"); qc?.invalidateQueries({ queryKey: ["admin-users"] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const revokeAccessMutation = useMutation({
+    mutationFn: (targetUserId: string) => revokeUserAccess({ data: { targetUserId } }),
+    onSuccess: () => toast.success("Access revoked — user must re-enter code"),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   if (!auth.isAdmin) {
@@ -336,6 +373,114 @@ function AdminPanel() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Access Tab ── */}
+      {activeTab === "Access" && (
+        <div className="space-y-6">
+          {/* Access Code */}
+          <CropCard className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-7 w-7 rounded-lg bg-gold/15 flex items-center justify-center">
+                <Lock className="h-3.5 w-3.5 text-gold" />
+              </div>
+              <Eyebrow>Access Code</Eyebrow>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Users must enter this code once after logging in to access the platform.
+            </p>
+            {accessCodeQuery.isPending ? (
+              <div className="flex items-center gap-2 text-muted-foreground py-4">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading…</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 mb-5 p-3 rounded-lg bg-background/60 border border-border/60">
+                <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="font-mono text-lg tracking-[0.3em] text-foreground">
+                  {accessCodeQuery.data?.code ?? "—"}
+                </span>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newAccessCode}
+                onChange={(e) => setNewAccessCode(e.target.value)}
+                placeholder="New access code (4–20 chars)"
+                className="flex-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:border-gold/50 focus:outline-none"
+              />
+              <Button
+                size="sm"
+                disabled={updateCodeMutation.isPending || newAccessCode.trim().length < 4}
+                onClick={() => updateCodeMutation.mutate()}
+                className="bg-gold/20 border border-gold/30 text-gold hover:bg-gold/30"
+              >
+                {updateCodeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                <span className="ml-1.5">Update</span>
+              </Button>
+            </div>
+          </CropCard>
+
+          {/* User Access & Admin Management */}
+          <CropCard className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-7 w-7 rounded-lg bg-teal/15 flex items-center justify-center">
+                <UserCog className="h-3.5 w-3.5 text-teal" />
+              </div>
+              <Eyebrow>User Permissions</Eyebrow>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Grant or revoke admin roles. Revoking access forces a user to re-enter the code.
+            </p>
+            {usersQuery.isPending ? (
+              <div className="flex items-center gap-2 text-muted-foreground py-4 justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading users…</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {(usersQuery.data ?? []).map((u: AdminUser) => {
+                  const isMe = u.id === auth.userId;
+                  return (
+                    <div key={u.id} className="flex items-center gap-3 rounded-lg border border-border/40 bg-background/40 px-3 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{u.email}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{u.id.slice(0, 8)}…</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {u.isAdmin ? (
+                          <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold">admin</span>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={isMe}
+                          onClick={() => u.isAdmin
+                            ? revokeAdminMutation.mutate(u.id)
+                            : makeAdminMutation.mutate(u.id)
+                          }
+                        >
+                          {u.isAdmin ? "Revoke admin" : "Make admin"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs text-destructive/80 border-destructive/30 hover:bg-destructive/10"
+                          disabled={isMe}
+                          onClick={() => revokeAccessMutation.mutate(u.id)}
+                        >
+                          Revoke access
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CropCard>
         </div>
       )}
 

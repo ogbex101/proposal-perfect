@@ -7,6 +7,7 @@ export type AuthState = {
   email: string | null;
   name: string | null;
   isAdmin: boolean;
+  hasAccess: boolean;
 };
 
 const initial: AuthState = {
@@ -15,12 +16,9 @@ const initial: AuthState = {
   email: null,
   name: null,
   isAdmin: false,
+  hasAccess: false,
 };
 
-/**
- * Client-side session tracker. Auth tokens live in localStorage, so guarding
- * happens on the client (the layout shows a loader until this resolves).
- */
 export function useAuth(): AuthState {
   const [state, setState] = useState<AuthState>(initial);
 
@@ -35,13 +33,25 @@ export function useAuth(): AuthState {
       return (data ?? []).some((r) => r.role === "admin");
     }
 
+    async function resolveAccess(userId: string) {
+      const { data } = await (supabase as any)
+        .from("user_access")
+        .select("verified_at")
+        .eq("user_id", userId)
+        .single();
+      return !!data;
+    }
+
     async function apply(session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]) {
       if (!active) return;
       if (!session?.user) {
-        setState({ status: "out", userId: null, email: null, name: null, isAdmin: false });
+        setState({ status: "out", userId: null, email: null, name: null, isAdmin: false, hasAccess: false });
         return;
       }
-      const isAdmin = await resolveRole(session.user.id).catch(() => false);
+      const [isAdmin, hasAccess] = await Promise.all([
+        resolveRole(session.user.id).catch(() => false),
+        resolveAccess(session.user.id).catch(() => false),
+      ]);
       if (!active) return;
       setState({
         status: "in",
@@ -49,6 +59,7 @@ export function useAuth(): AuthState {
         email: session.user.email ?? null,
         name: (session.user.user_metadata?.name as string) ?? null,
         isAdmin,
+        hasAccess,
       });
     }
 

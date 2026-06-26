@@ -6,6 +6,8 @@ import {
   ChevronDown, ChevronUp, Sparkles, Shield, Layers,
   ArrowRight, FileCode, Brain, Target, Link2, MessageSquarePlus,
   Image, Download, Pencil, RefreshCw, Trash2, BookTemplate, Star,
+  BarChart2, Eye, Palette, Activity, TrendingUp, Lightbulb,
+  CheckCircle2, XCircle, AlertCircle, Users, Search,
 } from "lucide-react";
 import { PageHeader, CropCard, Eyebrow } from "@/components/blueprint";
 import { Button } from "@/components/ui/button";
@@ -15,8 +17,10 @@ import { Label } from "@/components/ui/label";
 import { MicButton } from "@/components/MicButton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { generateScoutOutreach, enhanceProposal, generateProposalImage, analyzeClientWebsite } from "@/lib/ai.functions";
-import type { ScoutOutreach, WebsiteData } from "@/lib/ai.functions";
+import { enhanceProposal, generateProposalImage, analyzeClientWebsite } from "@/lib/ai.functions";
+import type { WebsiteData } from "@/lib/ai.functions";
+import { runScoutPipeline } from "@/lib/scout.pipeline";
+import type { ScoutPipelineResult, OutreachEngineType } from "@/lib/scout.pipeline";
 import { copyText } from "@/lib/export";
 import {
   saveScoutOutreach, listOutreachTemplates, analyzeAndSaveOutreachTemplate,
@@ -93,6 +97,73 @@ function Section({ open: defaultOpen = true, icon, title, badge, children }: {
   );
 }
 
+function CollapsibleSection({ icon, title, badge, children, defaultOpen = false }: {
+  icon: React.ReactNode;
+  title: string;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <CropCard className="overflow-hidden">
+      <button className="flex w-full items-center gap-3 p-5 text-left" onClick={() => setOpen(v => !v)}>
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-muted-foreground">{icon}</div>
+        <span className="flex-1 font-semibold text-white">{title}</span>
+        {badge}
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+      {open && <div className="border-t border-border/40 p-5">{children}</div>}
+    </CropCard>
+  );
+}
+
+function ConfidenceBadge({ score }: { score: number }) {
+  return (
+    <span className={cn(
+      "rounded-full border px-2 py-0.5 text-[10px] font-mono",
+      score >= 80 ? "border-teal/30 bg-teal/10 text-teal" :
+      score >= 60 ? "border-gold/30 bg-gold/10 text-gold" :
+      "border-white/20 bg-white/5 text-muted-foreground"
+    )}>
+      {score}% confidence
+    </span>
+  );
+}
+
+function InsightBlock({ label, text, highlight }: { label: string; text: string; highlight?: boolean }) {
+  return (
+    <div className={cn("rounded-lg border p-3", highlight ? "border-gold/20 bg-gold/5" : "border-white/10 bg-white/[0.03]")}>
+      <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">{label}</p>
+      <p className="text-sm text-foreground/90 leading-relaxed">{text}</p>
+    </div>
+  );
+}
+
+function TagList({ label, items, color }: { label: string; items: string[]; color: string }) {
+  if (!items?.length) return null;
+  const colorMap: Record<string, string> = {
+    teal: "border-teal/30 bg-teal/10 text-teal/90",
+    gold: "border-gold/30 bg-gold/10 text-gold/90",
+    red: "border-red-400/30 bg-red-400/10 text-red-300",
+    purple: "border-purple-400/30 bg-purple-400/10 text-purple-300",
+    orange: "border-orange-400/30 bg-orange-400/10 text-orange-300",
+    cyan: "border-cyan-400/30 bg-cyan-400/10 text-cyan-300",
+  };
+  return (
+    <div>
+      <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((item, i) => (
+          <span key={i} className={cn("rounded-full border px-2.5 py-1 text-xs", colorMap[color] ?? "border-white/20 bg-white/5 text-foreground/70")}>
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Daily scout counter (localStorage) ──────────────────────────────────────
 type ScoutDayStats = { date: string; generated: number; submitted: number };
 function scoutTodayKey() { return new Date().toISOString().slice(0, 10); }
@@ -158,7 +229,7 @@ function ScoutMode() {
   const [customChanges, setCustomChanges] = useState("");
   const [mockupLink, setMockupLink] = useState("");
   const [enable3d, setEnable3d] = useState(false);
-  const [result, setResult] = useState<ScoutOutreach | null>(null);
+  const [result, setResult] = useState<ScoutPipelineResult | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [scoutSubmitted, setScoutSubmitted] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -286,47 +357,49 @@ function ScoutMode() {
     : undefined;
 
   const scoutMutation = useMutation({
-    mutationFn: () => generateScoutOutreach({
+    mutationFn: () => runScoutPipeline({
       data: {
         jobDescription: jobText,
         freelancerContext: context || undefined,
-        customChanges: customChanges || undefined,
         mockupLink: mockupLink || undefined,
-        enable3d,
         websiteData: websiteDataStr ? websiteDataStr.slice(0, 14000) : undefined,
+        websiteUrl: detectedUrl || undefined,
       },
     }),
     onSuccess: async (data) => {
-      const outreach = data as ScoutOutreach;
-      setResult(outreach);
+      const pipeline = data as ScoutPipelineResult;
+      setResult(pipeline);
       setScoutSubmitted(false);
       setSavedId(null);
       setPreviewImage(null);
       incrementGenerated();
-      toast.success("Scout outreach generated!");
+      toast.success("Analysis complete!");
       setTimeout(() => {
         document.getElementById("scout-results")?.scrollIntoView({ behavior: "smooth" });
       }, 100);
 
-      // Auto-save to DB (non-fatal)
-      saveScoutOutreach({
-        data: {
-          job_description: jobText,
-          job_excerpt: jobText.slice(0, 200),
-          job_type: outreach.devPrompt.jobType,
-          subject_line: outreach.subjectLine,
-          email_body: outreach.emailBody,
-          hook_rationale: outreach.hookRationale,
-          strategy_note: outreach.strategyNote,
-          dev_prompt_title: outreach.devPrompt.projectTitle,
-        },
-      }).then(({ id }) => setSavedId(id)).catch(() => {});
+      // Auto-save to DB using outreach results (non-fatal)
+      const outreach = pipeline.outreach;
+      if (outreach) {
+        saveScoutOutreach({
+          data: {
+            job_description: jobText,
+            job_excerpt: jobText.slice(0, 200),
+            job_type: "web_design",
+            subject_line: outreach.subjectLines[0] ?? "",
+            email_body: outreach.emailBody,
+            hook_rationale: pipeline.businessIntelligence?.coreBusinessInsight ?? "",
+            strategy_note: pipeline.decisionEngine?.redesignStrategy ?? "",
+            dev_prompt_title: pipeline.lovablePrompt ? "Creative Brief" : "",
+          },
+        }).then(({ id }) => setSavedId(id)).catch(() => {});
+      }
 
       // Auto-generate preview image
       setGeneratingImage(true);
       try {
-        const proj = (data as ScoutOutreach).devPrompt;
-        const imgPrompt = `Professional project preview card for "${proj.projectTitle}", ${proj.jobTypeName}, ${proj.estimatedComplexity} complexity. Modern dark UI dashboard mockup, clean design, dark background, tech startup style, high quality digital art`;
+        const bizName = pipeline.businessIntelligence?.industry ?? "web project";
+        const imgPrompt = `Professional project preview card for ${bizName} website redesign. Modern dark UI dashboard mockup, clean design, dark background, tech startup style, high quality digital art`;
         const res = await generateProposalImage({ data: { prompt: imgPrompt } });
         if (res?.dataUrl) setPreviewImage(res.dataUrl);
       } catch {
@@ -337,8 +410,6 @@ function ScoutMode() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
-  const jobTypeMeta = result ? (JOB_TYPE_META[result.devPrompt.jobType] ?? JOB_TYPE_META["general-web"]) : null;
 
   return (
     <div>
@@ -734,243 +805,339 @@ function ScoutMode() {
 
       {/* Results */}
       {result && (
-        <div id="scout-results" className="space-y-4">
-          {/* Job type badge */}
-          {jobTypeMeta && (
-            <div className="flex flex-wrap items-center gap-3">
-              <span className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold", jobTypeMeta.color)}>
-                {jobTypeMeta.icon}
-                {result.devPrompt.jobTypeName}
-              </span>
-              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", COMPLEXITY_COLOR[result.devPrompt.estimatedComplexity] ?? "text-muted-foreground")}>
-                {result.devPrompt.estimatedComplexity} project
-              </span>
-            </div>
+        <div id="scout-results" className="space-y-4 mt-6">
+
+          {/* ── Qualification Score ── */}
+          {result.qualification && (
+            <CropCard className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <BarChart2 className="h-4 w-4 text-gold" />
+                  <Eyebrow>Opportunity Qualification</Eyebrow>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-bold font-mono",
+                    result.qualification.outreachPriority === "A" ? "border-teal/40 bg-teal/10 text-teal" :
+                    result.qualification.outreachPriority === "B" ? "border-gold/40 bg-gold/10 text-gold" :
+                    "border-white/20 bg-white/5 text-muted-foreground"
+                  )}>
+                    Priority {result.qualification.outreachPriority}
+                  </span>
+                  <span className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-semibold",
+                    result.qualification.redesignImpact === "High" ? "border-teal/40 bg-teal/10 text-teal" :
+                    result.qualification.redesignImpact === "Medium" ? "border-gold/40 bg-gold/10 text-gold" :
+                    "border-white/20 bg-white/5 text-muted-foreground"
+                  )}>
+                    {result.qualification.redesignImpact} Impact
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-muted-foreground">Prospect Score</span>
+                    <span className="text-sm font-bold font-mono text-foreground">{result.qualification.prospectScore}/100</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className={cn("h-full rounded-full transition-all", result.qualification.prospectScore >= 70 ? "bg-teal" : result.qualification.prospectScore >= 45 ? "bg-gold" : "bg-destructive/60")}
+                      style={{ width: `${result.qualification.prospectScore}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="rounded-lg bg-white/[0.03] border border-white/10 p-3">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Website Quality</p>
+                  <p className="text-sm font-medium text-foreground">{result.qualification.currentWebsiteQuality}</p>
+                </div>
+                <div className="rounded-lg bg-white/[0.03] border border-white/10 p-3">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Primary Opportunity</p>
+                  <p className="text-sm font-medium text-foreground">{result.qualification.primaryOpportunity}</p>
+                </div>
+              </div>
+              <p className="text-sm text-foreground/80 leading-relaxed">{result.qualification.reasoning}</p>
+            </CropCard>
           )}
 
-          {/* ── PREVIEW IMAGE ── */}
-          {(generatingImage || previewImage) && (
-            <Section icon={<Image className="h-4 w-4 text-blue-400" />} title="Preview Image" badge={
-              <span className="rounded-full border border-blue-400/30 bg-blue-400/10 px-2.5 py-0.5 text-[10px] font-mono text-blue-400">send with email</span>
-            }>
-              {generatingImage ? (
-                <div className="flex items-center gap-3 py-6 justify-center text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span className="text-sm">Generating preview image…</span>
+          {/* ── Business Intelligence ── */}
+          {result.businessIntelligence && (
+            <CollapsibleSection
+              icon={<Brain className="h-4 w-4 text-purple-400" />}
+              title="Business Intelligence"
+              badge={<ConfidenceBadge score={result.businessIntelligence.confidenceScore} />}
+              defaultOpen={false}
+            >
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    ["Industry", result.businessIntelligence.industry],
+                    ["Business Model", result.businessIntelligence.businessModel],
+                    ["Revenue Model", result.businessIntelligence.revenueModel],
+                    ["Pricing Level", result.businessIntelligence.pricingLevel],
+                  ].map(([label, val]) => (
+                    <div key={label} className="rounded-lg bg-white/[0.03] border border-white/10 p-3">
+                      <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">{label}</p>
+                      <p className="text-sm text-foreground">{val}</p>
+                    </div>
+                  ))}
                 </div>
-              ) : previewImage ? (
-                <div className="space-y-4">
-                  <p className="text-xs text-muted-foreground">
-                    Attach this image to your email or use it as a visual teaser alongside the mockup link. It shows you've already thought through the project.
-                  </p>
-                  <div className="overflow-hidden rounded-xl border border-white/10">
-                    <img src={previewImage} alt="Project preview" className="w-full object-cover" />
-                  </div>
-                  <div className="flex gap-2">
-                    <a
-                      href={previewImage}
-                      download={`preview-${result.devPrompt.projectTitle.replace(/\s+/g, "-")}.png`}
-                      className="flex items-center gap-1.5 rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 py-1.5 text-xs text-blue-400 hover:bg-blue-400/20 transition-colors"
-                    >
-                      <Download className="h-3.5 w-3.5" /> Download image
-                    </a>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-border/60 text-xs"
-                      onClick={async () => {
-                        setGeneratingImage(true);
-                        setPreviewImage(null);
-                        try {
-                          const proj = result.devPrompt;
-                          const imgPrompt = `Professional project preview card for "${proj.projectTitle}", ${proj.jobTypeName}, modern dark UI dashboard mockup, clean design, dark background, tech startup style, high quality digital art, different angle`;
-                          const res = await generateProposalImage({ data: { prompt: imgPrompt } });
-                          if (res?.dataUrl) setPreviewImage(res.dataUrl);
-                        } catch {
-                          toast.error("Could not regenerate image");
-                        } finally {
-                          setGeneratingImage(false);
-                        }
-                      }}
-                    >
-                      <RefreshCw className="mr-1.5 h-3 w-3" /> Regenerate
-                    </Button>
-                  </div>
+                <InsightBlock label="Core Business Insight" text={result.businessIntelligence.coreBusinessInsight} highlight />
+                <InsightBlock label="Biggest Conversion Bottleneck" text={result.businessIntelligence.biggestConversionBottleneck} />
+                <InsightBlock label="Biggest Trust Bottleneck" text={result.businessIntelligence.biggestTrustBottleneck} />
+                <InsightBlock label="Biggest Perception Bottleneck" text={result.businessIntelligence.biggestPerceptionBottleneck} />
+                <TagList label="Emotional Drivers" items={result.businessIntelligence.emotionalDrivers} color="purple" />
+                <TagList label="Buying Objections" items={result.businessIntelligence.buyingObjections} color="red" />
+                <TagList label="Trust Requirements" items={result.businessIntelligence.trustRequirements} color="teal" />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* ── UX Psychology ── */}
+          {result.uxPsychology && (
+            <CollapsibleSection
+              icon={<Eye className="h-4 w-4 text-blue-400" />}
+              title="UX Psychology"
+              badge={<ConfidenceBadge score={result.uxPsychology.confidenceScore} />}
+              defaultOpen={false}
+            >
+              <div className="space-y-3">
+                <InsightBlock label="Cognitive Load" text={result.uxPsychology.cognitiveLoad} />
+                <InsightBlock label="Trust Progression" text={result.uxPsychology.trustProgression} />
+                <InsightBlock label="Emotional Journey" text={result.uxPsychology.emotionalJourney} />
+                <InsightBlock label="CTA Hierarchy" text={result.uxPsychology.ctaHierarchy} />
+                <TagList label="User Friction Points" items={result.uxPsychology.userFriction} color="red" />
+                <TagList label="User Uncertainty Points" items={result.uxPsychology.userUncertainty} color="gold" />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* ── Creative Direction ── */}
+          {result.creativeDirection && (
+            <CollapsibleSection
+              icon={<Palette className="h-4 w-4 text-pink-400" />}
+              title="Creative Direction"
+              badge={
+                <span className="rounded-full border border-pink-400/30 bg-pink-400/10 px-2 py-0.5 text-[10px] font-medium text-pink-300">
+                  {result.creativeDirection.redesignPhilosophy}
+                </span>
+              }
+              defaultOpen={false}
+            >
+              <div className="space-y-3">
+                <InsightBlock label="Design Objective" text={result.creativeDirection.designObjective} highlight />
+                <InsightBlock label="Brand Direction" text={result.creativeDirection.brandDirection} />
+                <TagList label="Strengths to Preserve" items={result.creativeDirection.strengths} color="teal" />
+                <TagList label="Weaknesses to Address" items={result.creativeDirection.weaknesses} color="red" />
+                <TagList label="Recommendations" items={result.creativeDirection.recommendations} color="gold" />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* ── Motion Director ── */}
+          {result.motionAnalysis && (
+            <CollapsibleSection
+              icon={<Activity className="h-4 w-4 text-cyan-400" />}
+              title="Motion Analysis"
+              badge={<ConfidenceBadge score={result.motionAnalysis.confidenceScore} />}
+              defaultOpen={false}
+            >
+              <div className="space-y-3">
+                <InsightBlock label="Psychological Impact" text={result.motionAnalysis.psychologicalImpact} />
+                <InsightBlock label="Animation Philosophy" text={result.motionAnalysis.animationPhilosophy} />
+                <div className="flex items-center gap-2">
+                  {result.motionAnalysis.motionStrengthensPositioning
+                    ? <CheckCircle2 className="h-4 w-4 text-teal shrink-0" />
+                    : <XCircle className="h-4 w-4 text-destructive shrink-0" />
+                  }
+                  <span className="text-sm text-foreground/80">
+                    Motion {result.motionAnalysis.motionStrengthensPositioning ? "strengthens" : "weakens"} brand positioning
+                  </span>
                 </div>
-              ) : null}
+                <TagList label="Motion Recommendations" items={result.motionAnalysis.recommendations} color="cyan" />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* ── Design System ── */}
+          {result.designSystem && (
+            <CollapsibleSection
+              icon={<Layers className="h-4 w-4 text-indigo-400" />}
+              title="Design System"
+              badge={<ConfidenceBadge score={result.designSystem.confidenceScore} />}
+              defaultOpen={false}
+            >
+              <div className="grid grid-cols-1 gap-2">
+                {[
+                  ["Typography", result.designSystem.typography],
+                  ["Color System", result.designSystem.colorSystem],
+                  ["Layout & Grid", result.designSystem.layout],
+                  ["Components", result.designSystem.components],
+                  ["Accessibility", result.designSystem.accessibility],
+                  ["Responsive Behaviour", result.designSystem.responsiveBehaviour],
+                ].map(([label, val]) => (
+                  <div key={label} className="rounded-lg bg-white/[0.03] border border-white/10 p-3">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">{label}</p>
+                    <p className="text-sm text-foreground/80 leading-relaxed">{val}</p>
+                  </div>
+                ))}
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* ── Competitive Intelligence ── */}
+          {result.competitiveIntelligence && (
+            <CollapsibleSection
+              icon={<TrendingUp className="h-4 w-4 text-orange-400" />}
+              title="Competitive Intelligence"
+              badge={<ConfidenceBadge score={result.competitiveIntelligence.confidenceScore} />}
+              defaultOpen={false}
+            >
+              <div className="space-y-3">
+                <InsightBlock label="Messaging Opportunity" text={result.competitiveIntelligence.messagingOpportunity} highlight />
+                <InsightBlock label="Luxury Perception Gap" text={result.competitiveIntelligence.luxuryPerceptionGap} />
+                <TagList label="Identified Competitors" items={result.competitiveIntelligence.identifiedCompetitors} color="orange" />
+                <TagList label="Competitive Gaps" items={result.competitiveIntelligence.competitiveGaps} color="red" />
+                <TagList label="Opportunities" items={result.competitiveIntelligence.opportunities} color="teal" />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* ── Decision Engine ── */}
+          {result.decisionEngine && (
+            <CollapsibleSection
+              icon={<Target className="h-4 w-4 text-gold" />}
+              title="Redesign Decision"
+              badge={<ConfidenceBadge score={result.decisionEngine.confidenceScore} />}
+              defaultOpen
+            >
+              <div className="space-y-3">
+                <InsightBlock label="Redesign Strategy" text={result.decisionEngine.redesignStrategy} highlight />
+                <InsightBlock label="Biggest ROI" text={result.decisionEngine.biggestROI} />
+                <InsightBlock label="Lowest Effort / Highest Impact" text={result.decisionEngine.lowestEffortHighestImpact} />
+                <TagList label="What Should Change" items={result.decisionEngine.whatShouldChange} color="teal" />
+                <TagList label="What Should Never Change" items={result.decisionEngine.whatShouldNeverChange} color="red" />
+                <TagList label="Changes Client Would Approve" items={result.decisionEngine.changesClientWouldApprove} color="gold" />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* ── Lovable Creative Brief ── */}
+          {result.lovablePrompt && (
+            <Section
+              icon={<Lightbulb className="h-4 w-4 text-yellow-400" />}
+              title="Lovable Creative Brief"
+              badge={
+                <CopyButton text={result.lovablePrompt.creativeBrief} label="Copy brief" />
+              }
+            >
+              <pre className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90 font-sans">{result.lovablePrompt.creativeBrief}</pre>
             </Section>
           )}
 
-          {/* ── EMAIL SECTION ── */}
-          <Section icon={<Mail className="h-4 w-4 text-teal" />} title="Cold Email" badge={
-            <span className="rounded-full border border-teal/30 bg-teal/10 px-2.5 py-0.5 text-[10px] font-mono text-teal">spam-safe</span>
-          }>
-            <div className="mb-5">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Subject Line</p>
-                <CopyButton text={result.subjectLine} label="Copy subject" />
-              </div>
-              <div className="rounded-xl border border-gold/40 bg-gold/5 px-4 py-3">
-                <p className="text-lg font-semibold text-white">{result.subjectLine}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">{result.subjectLine.length} characters · {result.subjectLine.length < 50 ? "✓ Under 50 char limit" : "⚠ Consider shortening"}</p>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Email Body</p>
-                <CopyButton text={result.emailBody} label="Copy full email" />
-              </div>
-              <div className="rounded-xl border border-white/10 bg-background/60 p-5">
-                <pre className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90 font-sans">{result.emailBody}</pre>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button
-                  className="bg-teal text-white hover:bg-teal/80"
-                  size="sm"
-                  onClick={async () => {
-                    await copyText(`Subject: ${result.subjectLine}\n\n${result.emailBody}`);
-                    toast.success("Subject + body copied — ready to paste into Gmail/Outlook!");
-                  }}
-                >
-                  <Mail className="mr-1.5 h-3.5 w-3.5" /> Copy subject + body together
-                </Button>
-              </div>
-            </div>
-          </Section>
-
-          {/* ── STRATEGY ANALYSIS ── */}
-          <Section icon={<Target className="h-4 w-4 text-gold" />} title="Email Strategy & Analysis">
-            <div className="space-y-4">
-              <div className="rounded-xl border border-teal/20 bg-teal/5 p-4">
-                <p className="text-[10px] font-mono uppercase tracking-widest text-teal mb-1.5">Why the hook works</p>
-                <p className="text-sm leading-relaxed text-white/90">{result.hookRationale}</p>
-              </div>
-              <div className="rounded-xl border border-gold/20 bg-gold/5 p-4">
-                <p className="text-[10px] font-mono uppercase tracking-widest text-gold mb-1.5">Persuasion strategy</p>
-                <p className="text-sm leading-relaxed text-white/90">{result.strategyNote}</p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-background/40 p-4">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Shield className="h-3.5 w-3.5 text-green-400" />
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-green-400">Spam avoidance checklist</p>
-                </div>
-                <ul className="space-y-1.5">
-                  {result.spamAvoidanceTips.map((tip, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs text-white/80">
-                      <Check className="h-3.5 w-3.5 shrink-0 mt-0.5 text-green-400" />
-                      {tip}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </Section>
-
-          {/* ── DEV PROMPT SECTION ── */}
-          <Section icon={<FileCode className="h-4 w-4 text-purple-400" />} title="Development Prompt" badge={
-            <span className="rounded-full border border-purple-400/30 bg-purple-400/10 px-2.5 py-0.5 text-[10px] font-mono text-purple-400">
-              Cursor · Lovable · Bolt · v0
-            </span>
-          }>
-            <div className="space-y-5">
-              <div>
-                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">{result.devPrompt.projectTitle}</p>
-                <p className="text-sm leading-relaxed text-white/90">{result.devPrompt.overview}</p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
+          {/* ── Outreach Email ── */}
+          {result.outreach && (
+            <Section
+              icon={<Mail className="h-4 w-4 text-teal" />}
+              title="Outreach Email"
+              badge={<CopyButton text={result.outreach.emailBody} label="Copy email" />}
+            >
+              <div className="space-y-4">
+                {/* Subject Lines */}
                 <div>
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Tech Stack</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {result.devPrompt.techStack.map((t) => (
-                      <span key={t} className="rounded-md border border-teal/30 bg-teal/10 px-2 py-0.5 text-[11px] font-mono text-teal">{t}</span>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Integrations</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {result.devPrompt.integrations.map((t) => (
-                      <span key={t} className="rounded-md border border-gold/30 bg-gold/10 px-2 py-0.5 text-[11px] font-mono text-gold">{t}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Core Features</p>
-                <div className="space-y-2">
-                  {result.devPrompt.coreFeatures.map((f, i) => (
-                    <div key={i} className="flex items-start gap-3 rounded-lg border border-border/40 bg-background/40 p-3">
-                      <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider mt-0.5", PRIORITY_COLOR[f.priority] ?? "text-muted-foreground bg-white/5")}>
-                        {f.priority === "Must Have" ? "MUST" : f.priority === "Should Have" ? "SHOULD" : "NICE"}
-                      </span>
-                      <div>
-                        <p className="text-xs font-semibold text-white">{f.feature}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">{f.description}</p>
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Subject Lines</p>
+                  <div className="space-y-1.5">
+                    {result.outreach.subjectLines.map((s, i) => (
+                      <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] border border-white/10 px-3 py-2">
+                        <span className="text-[10px] font-mono text-muted-foreground w-4">{i + 1}.</span>
+                        <span className="text-sm text-foreground flex-1">{s}</span>
+                        <CopyButton text={s} label="Copy" />
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Enhancements & Ideas</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {result.devPrompt.enhancements.map((e, i) => (
-                    <div key={i} className="rounded-lg border border-purple-400/20 bg-purple-400/5 p-3">
-                      <p className="text-xs font-semibold text-purple-300">{e.title}</p>
-                      <p className="text-[11px] text-muted-foreground mt-1">{e.description}</p>
-                      <p className="text-[10px] text-purple-400/70 mt-1.5 italic">Impact: {e.impact}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-background/40 p-4">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Layers className="h-3.5 w-3.5 text-blue-400" />
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-blue-400">Architecture</p>
-                </div>
-                <p className="text-sm leading-relaxed text-white/80">{result.devPrompt.architecture}</p>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-background/40 p-4">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <ArrowRight className="h-3.5 w-3.5 text-green-400" />
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-green-400">Scalability</p>
-                </div>
-                <p className="text-sm leading-relaxed text-white/80">{result.devPrompt.scalabilityNotes}</p>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded bg-purple-400/20 flex items-center justify-center">
-                      <Sparkles className="h-3.5 w-3.5 text-purple-400" />
-                    </div>
-                    <p className="text-sm font-bold text-white">Paste-Ready AI Coding Prompt</p>
+                    ))}
                   </div>
-                  <CopyButton text={result.devPrompt.vibeCodePrompt} label="Copy prompt" />
                 </div>
-                <div className="rounded-xl border border-purple-400/30 bg-purple-400/5 p-5">
-                  <pre className="whitespace-pre-wrap text-sm leading-relaxed text-purple-100/90 font-mono text-[12px]">
-                    {result.devPrompt.vibeCodePrompt}
-                  </pre>
+
+                {/* Opening Hooks */}
+                <div>
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Opening Hooks</p>
+                  <div className="space-y-1.5">
+                    {result.outreach.hooks.map((h, i) => (
+                      <div key={i} className="flex items-start gap-2 rounded-lg bg-white/[0.03] border border-white/10 px-3 py-2">
+                        <span className="text-[10px] font-mono text-muted-foreground w-4 mt-0.5">{i + 1}.</span>
+                        <span className="text-sm text-foreground/90 flex-1 leading-relaxed">{h}</span>
+                        <CopyButton text={h} label="Copy" />
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Email Body */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Email Body</p>
+                    <span className="text-[10px] text-muted-foreground">{result.outreach.emailBody.split(/\s+/).length} words</span>
+                  </div>
+                  <div className="rounded-lg bg-white/[0.03] border border-white/10 p-4">
+                    <pre className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90 font-sans">{result.outreach.emailBody}</pre>
+                  </div>
+                </div>
+
+                {/* CTA */}
+                <div className="rounded-lg border border-teal/20 bg-teal/5 p-3 flex items-start gap-2">
+                  <MessageSquarePlus className="h-4 w-4 text-teal mt-0.5 shrink-0" />
+                  <p className="text-sm text-teal/90 leading-relaxed">{result.outreach.cta}</p>
+                </div>
+
+                {/* Copy full */}
                 <Button
-                  className="mt-3 w-full bg-purple-500/20 text-purple-300 border border-purple-400/30 hover:bg-purple-500/30 font-semibold"
+                  className="w-full"
+                  variant="outline"
                   onClick={async () => {
-                    await copyText(result.devPrompt.vibeCodePrompt);
-                    toast.success("Prompt copied — paste into Cursor, Lovable, Bolt, or v0!");
+                    const full = `Subject: ${result.outreach!.subjectLines[0]}\n\n${result.outreach!.emailBody}`;
+                    await copyText(full);
+                    toast.success("Full email copied!");
                   }}
                 >
-                  <FileCode className="mr-2 h-4 w-4" /> Copy & paste into your AI coding tool
+                  <Copy className="mr-2 h-4 w-4" /> Copy full email
                 </Button>
               </div>
-            </div>
-          </Section>
+            </Section>
+          )}
+
+          {/* ── Agency Review ── */}
+          {result.agencyReview && (
+            <CollapsibleSection
+              icon={<Shield className="h-4 w-4 text-teal" />}
+              title="Agency Review"
+              badge={
+                result.agencyReview.overallApproval
+                  ? <span className="flex items-center gap-1 rounded-full border border-teal/30 bg-teal/10 px-2 py-0.5 text-[10px] text-teal"><CheckCircle2 className="h-3 w-3" />Approved</span>
+                  : <span className="flex items-center gap-1 rounded-full border border-red-400/30 bg-red-400/10 px-2 py-0.5 text-[10px] text-red-400"><XCircle className="h-3 w-3" />Needs Revision</span>
+              }
+              defaultOpen={false}
+            >
+              <div className="space-y-3">
+                {[
+                  ["Creative Director", result.agencyReview.creativeDirFeedback],
+                  ["Brand Strategist", result.agencyReview.brandStrategistFeedback],
+                  ["UX Director", result.agencyReview.uxDirectorFeedback],
+                  ["Motion Director", result.agencyReview.motionDirectorFeedback],
+                  ["Conversion Specialist", result.agencyReview.conversionSpecialistFeedback],
+                ].map(([role, feedback]) => (
+                  <InsightBlock key={role} label={role} text={feedback} />
+                ))}
+                {result.agencyReview.revisionsRequired.length > 0 && (
+                  <TagList label="Revisions Required" items={result.agencyReview.revisionsRequired} color="red" />
+                )}
+                {result.agencyReview.finalNotes && (
+                  <InsightBlock label="Final Notes" text={result.agencyReview.finalNotes} />
+                )}
+              </div>
+            </CollapsibleSection>
+          )}
+
         </div>
       )}
     </div>

@@ -21,6 +21,7 @@ export type AdminUser = {
   last_sign_in_at: string | null;
   proposal_count: number;
   portfolio_count: number;
+  isAdmin: boolean;
 };
 
 export const listAdminUsers = createServerFn({ method: "GET" })
@@ -45,6 +46,10 @@ export const listAdminUsers = createServerFn({ method: "GET" })
     (proposals ?? []).forEach((r: any) => { proposalCounts[r.user_id] = (proposalCounts[r.user_id] ?? 0) + 1; });
     (portfolios ?? []).forEach((r: any) => { portfolioCounts[r.user_id] = (portfolioCounts[r.user_id] ?? 0) + 1; });
 
+    // Fetch admin roles
+    const { data: adminRoles } = await (context.supabase as any).from("user_roles").select("user_id").eq("role", "admin");
+    const adminSet = new Set((adminRoles ?? []).map((r: any) => r.user_id));
+
     return (users ?? []).map((u: any): AdminUser => ({
       id: u.id,
       email: u.email ?? null,
@@ -52,6 +57,7 @@ export const listAdminUsers = createServerFn({ method: "GET" })
       last_sign_in_at: u.last_sign_in_at ?? null,
       proposal_count: proposalCounts[u.id] ?? 0,
       portfolio_count: portfolioCounts[u.id] ?? 0,
+      isAdmin: adminSet.has(u.id),
     }));
   });
 
