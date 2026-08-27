@@ -1244,6 +1244,13 @@ function formatStrategyAsText(doc: StrategyDocument): string {
 }
 
 /* ---------- Analysis panel ---------- */
+// Humanize a raw id (e.g. "authority_proof" → "Authority Proof") so a lookup miss
+// never shows the user a broken snake_case string.
+function prettyId(id: string | undefined): string {
+  if (!id) return "—";
+  return id.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function AnalysisPanel({ analysis }: { analysis: JobAnalysis }) {
   const hook = HOOKS.find((h) => h.id === analysis.suggestedHookId);
   const strat = STRATEGIES.find((s) => s.id === analysis.suggestedStrategyId);
@@ -1275,8 +1282,8 @@ function AnalysisPanel({ analysis }: { analysis: JobAnalysis }) {
         <Block title="Recommended approach">{analysis.recommendedApproach}</Block>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <SuggestionCard label="Suggested hook" name={hook?.name ?? analysis.suggestedHookId} reason={analysis.hookReason} />
-          <SuggestionCard label="Suggested strategy" name={strat?.name ?? analysis.suggestedStrategyId} reason={analysis.strategyReason} />
+          <SuggestionCard label="Suggested hook" name={hook?.name ?? prettyId(analysis.suggestedHookId)} reason={analysis.hookReason} />
+          <SuggestionCard label="Suggested strategy" name={strat?.name ?? prettyId(analysis.suggestedStrategyId)} reason={analysis.strategyReason} />
         </div>
         <p className="annotation !text-muted-foreground">
           Suggestions applied below — override the dropdowns any time.

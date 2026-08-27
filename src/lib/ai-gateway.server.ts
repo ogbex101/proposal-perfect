@@ -1,20 +1,41 @@
 // Server-only AI gateway with provider role specialization.
 //
-// ┌─────────────────────────────────────────────────────────────────────┐
-// │                     PROVIDER ROLE MAP                               │
-// │  writer     → Claude (Anthropic)  — client-facing prose             │
-// │  analyzer   → Gemini Flash (Google) — structured extraction         │
-// │  verifier   → Gemini Flash (Google) — scoring, gating, matching     │
-// │  challenger → Mistral — utility tasks, polish, alt perspectives     │
-// │                                                                      │
-// │  Each role tries its designated provider first, then falls back      │
-// │  through the full waterfall — generation never fails silently.       │
-// └─────────────────────────────────────────────────────────────────────┘
+// Each role tries its designated provider first, then falls back through the
+// full waterfall — generation never fails silently.
+//
+// The lists below reflect the ACTUAL structuredWith()/generateWithProvider()
+// calls in ai.functions.ts and proposal-intelligence.ts — not the original
+// aspirational design. Keep them accurate when routing changes.
+//
+// ┌──────────────────────────────────────────────────────────────────────────┐
+// │                          PROVIDER ROLE MAP                               │
+// │                                                                          │
+// │  writer     → Claude Sonnet (Anthropic) — all client-facing prose:       │
+// │      craftHookLine, generateProposal, generateStrategyDocument,          │
+// │      applyProposalEdit, generateConversionResponses, generateContestBrief,│
+// │      generateScoutOutreach, and intelligence Engine 3 (psychology) +     │
+// │      Engine 4 (proposal blueprint).                                      │
+// │                                                                          │
+// │  analyzer   → Gemini Flash (Google) — structured extraction:             │
+// │      analyzeJob (legacy fallback path), analyzeClientWebsite, and         │
+// │      intelligence Engine 1 (client) + Engine 2 (business).               │
+// │                                                                          │
+// │  verifier   → Gemini Flash (Google) — scoring / gating / cleanup:        │
+// │      analyzeHookStrength, polishProposal, injectPortfolioLinks, and       │
+// │      the verifyOutput specificity gate.                                   │
+// │                                                                          │
+// │  challenger → Mistral — utility generation:                              │
+// │      generateMilestones, generateAiHookStrategy, craftCtaLine,           │
+// │      generateProfileSections.                                            │
+// │                                                                          │
+// │  (researchClientAndJob, adviseProposalStrategy and enhanceProposal use    │
+// │   the unpinned structured() full waterfall — no fixed role.)             │
+// └──────────────────────────────────────────────────────────────────────────┘
 export const PROVIDER_ROLES = {
-  writer: "anthropic",     // Claude  — proposal body, scout email, strategy doc, contest brief
-  analyzer: "google",      // Gemini  — job analysis, entity extraction, website scoring
-  verifier: "google",      // Gemini  — specificity gate, hook scoring, template matching, polish
-  challenger: "mistral",   // Mistral — milestones, profile sections, conversion replies, hook analysis
+  writer: "anthropic",     // Claude Sonnet — craftHookLine, generateProposal, strategy doc, applyProposalEdit, conversion replies, contest brief, scout outreach, intelligence Engines 3 & 4
+  analyzer: "google",      // Gemini  — analyzeJob (fallback), analyzeClientWebsite, intelligence Engines 1 & 2
+  verifier: "google",      // Gemini  — analyzeHookStrength, polishProposal, injectPortfolioLinks, specificity gate
+  challenger: "mistral",   // Mistral — generateMilestones, generateAiHookStrategy, craftCtaLine, generateProfileSections
 } as const;
 
 export type ProviderRole = keyof typeof PROVIDER_ROLES;
@@ -34,7 +55,11 @@ function buildProviders(): ModelEntry[] {
       name: "Anthropic Claude",
       load: async () => {
         const { createAnthropic } = await import("@ai-sdk/anthropic");
-        return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })("claude-haiku-4-5");
+        // Sonnet 5 — the writer role produces all client-facing prose, so it runs on a
+        // model strong enough to exploit the specificity gate + founder-psychology prompting.
+        // The @ai-sdk/anthropic model string is passed straight to the Anthropic API; the
+        // Claude 5 family uses no date suffix.
+        return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })("claude-sonnet-5");
       },
     });
   }

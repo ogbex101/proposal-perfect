@@ -33,6 +33,10 @@ export const ClientIntelligenceSchema = z.object({
   riskTolerance: z.enum(["risk-averse", "cautious", "moderate", "risk-tolerant"]),
   decisionStyle: z.string(),
 
+  // Which voice to speak AS to this client (chosen from the same signals as above)
+  recommendedRegisterId: z.enum(["professional_expert", "consultant", "friendly_advisor", "peer"]),
+  registerReason: z.string(),
+
   // Raw extraction from job post (for downstream engines — they do NOT re-read the post)
   projectSummary: z.string(),
   industry: z.string(),
@@ -76,6 +80,14 @@ EXTRACT THE PERSON BEHIND THE POST:
 - Budget sensitivity: Are they optimizing for price, value, or outcome?
 - Risk tolerance: Are they afraid of making the wrong choice?
 - Decision style: Will they hire fast or overthink? Solo or committee?
+
+CHOOSE THE REGISTER — the voice a freelancer should speak AS to win THIS client.
+Base it on the SAME signals you just read (personality, writing/communication style, hiring maturity, emotional state, risk tolerance). Set recommendedRegisterId to exactly one of:
+- professional_expert — Precise, credential-driven, confident authority. For technical, sophisticated clients optimizing for certainty and competence over warmth.
+- consultant — Diagnostic, asks sharp questions, reframes the problem before proposing. For clients who distrust vendors and want a thinking partner.
+- friendly_advisor — Warm, plain-spoken, genuinely invested. For first-time hirers, founders, nonprofits, or anyone whose post reads anxious, overwhelmed, or personal.
+- peer — Direct, informal, an equal who has shipped similar things. For experienced, casual-toned clients who'd be put off by anything corporate.
+Set registerReason to one sentence tying the choice to specific evidence in the post.
 
 EXAMPLE INFERENCES:
 "This website sucks." → values directness over corporate language, frustrated with current state
@@ -275,6 +287,14 @@ export const ProposalBlueprintSchema = z.object({
   mappedStrategyId: z.string(),   // closest matching static strategy ID
   mappedCtaId: z.string(),        // closest matching static CTA ID
 
+  // Three genuinely different hook options for the UI's hook picker
+  alternativeHooks: z.array(z.object({
+    hookId: z.string(),       // must match a real HOOKS id
+    openingLine: z.string(),  // ready-to-use, specific to this job
+    score: z.number().int().min(1).max(100),
+    scoreReason: z.string(),
+  })).length(3),
+
   // Confidence
   confidence: z.object({
     strategy: z.number(),
@@ -312,10 +332,13 @@ CHOOSE BASED ON:
 - Business context and stakes
 - What has the highest probability of reply from this specific human
 
+WRITE IN THE CHOSEN REGISTER:
+The Client Intelligence report specifies a RECOMMENDED REGISTER (professional_expert, consultant, friendly_advisor, or peer). The openingLine and ctaLine you write MUST be in that exact voice — a peer opening sounds nothing like a professional_expert opening. Commit to the register; do not drift.
+
 THEN DESIGN ALL FOUR SECTIONS:
 
 Opening Strategy: What psychological state does the first paragraph need to create?
-Opening Line: Write the ACTUAL opening sentence(s) — specific, ready to paste. Never start with "I".
+Opening Line: Write the ACTUAL opening sentence(s) — specific, ready to paste, in the recommended register. Never start with "I".
 
 Proof Strategy: What type of proof does THIS client most need to see?
 Body Strategy: How does the middle section build from opening to close?
@@ -331,7 +354,15 @@ Also select the closest matching IDs from these static lists for UI compatibilit
 
 Hook IDs: pattern_interrupt, curiosity_gap, direct_question, warning, shared_frustration, unexpected_compliment, i_noticed, contradiction, future_pacing, humble_observation, learn_fast, consequence, problem_solution, founder
 Strategy IDs: curious_partner, authority_proof, outcome_mirror, risk_reversal, brief_bullet, storyteller, consultant, challenger, minimal_bidder, social_proof
-CTA IDs: soft_availability, direct_ask, conditional_offer, question_cta, urgency_cta, next_step_offer, value_first, social_proof_cta
+CTA IDs: soft_availability, specific_call, opinion_ask, discovery_question, assumption_check, timeline_ask, proof_offer, scope_offer, loom_offer, low_risk_next, constraint_reveal, urgency_frame, challenge_reframe, shared_risk, social_proof_angle, sprint_offer, direct_ask, curious_ask, conditional_offer, value_first
+
+THREE ALTERNATIVE HOOKS (alternativeHooks):
+Also produce exactly 3 genuinely DIFFERENT hook options the freelancer can choose between.
+- Each must use a DIFFERENT hookId from the Hook IDs list above — never repeat the same hookId.
+- Each openingLine must be a ready-to-paste opening sentence (or two) written specifically for THIS job — not a template, not the same idea reworded three times. Each should feel like a different genuine angle into this exact client's situation. Never start with "I".
+- Score each honestly 1–100 for how well it fits THIS client's psychology (85–100 = excellent fit, 70–84 = good, 50–69 = workable). Do not give three near-identical scores unless they're genuinely equal.
+- scoreReason: one sentence on why that score.
+- The strongest of the three should correspond to mappedHookId and openingLine above.
 
 QUALITY CHECK:
 ✓ Could this blueprint apply to a different client? If yes → rewrite.
@@ -366,6 +397,7 @@ PERSON PROFILE:
 - Budget Sensitivity: ${ci.budgetSensitivity}
 - Risk Tolerance: ${ci.riskTolerance}
 - Decision Style: ${ci.decisionStyle}
+- RECOMMENDED REGISTER (voice to speak AS): ${ci.recommendedRegisterId} — ${ci.registerReason}
 
 HIDDEN FRUSTRATIONS: ${ci.hiddenFrustrations.join(" | ")}
 HIDDEN EXPECTATIONS: ${ci.hiddenExpectations.join(" | ")}

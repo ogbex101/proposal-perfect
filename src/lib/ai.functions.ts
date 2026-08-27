@@ -6,6 +6,7 @@ import { CTAS, FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
 import { runProposalIntelligencePipeline, type ProposalIntelligenceObject } from "./proposal-intelligence";
 import { saveProposalMemoryInternal } from "./proposal-memory.functions";
+import { REGISTERS, resolveRegister } from "./prompts/shared/registers";
 
 // Load a user's custom red-flag phrases. Defaults always apply regardless;
 // this only adds the user's own phrases. Wrapped so a missing table never
@@ -28,6 +29,29 @@ function handleAiError(err: unknown): never {
   if (msg.includes("429")) throw new Error("Rate limit hit. Please wait a moment and try again.");
   if (msg.includes("402")) throw new Error("AI credits exhausted. Please add credits to continue.");
   throw new Error(msg);
+}
+
+/**
+ * Find an item by id in one of the static vocabularies (HOOKS / STRATEGIES / CTAS).
+ * If the id doesn't match — which almost always means the AI-chosen id has drifted
+ * out of sync with proposal-constants.ts — log a loud warning and fall back to the
+ * first entry, so a future ID mismatch is caught immediately instead of silently
+ * degrading proposal quality.
+ */
+function findOrWarn<T extends { id: string }>(
+  list: readonly T[],
+  id: string | undefined,
+  vocab: string,
+): T {
+  const found = id ? list.find((item) => item.id === id) : undefined;
+  if (!found) {
+    console.warn(
+      `[proposal-vocab] ${vocab} id "${id ?? "(none)"}" not found — falling back to "${list[0].id}". ` +
+        `This means Engine 4 / the UI produced an id that isn't in proposal-constants.ts. Fix the vocabulary drift.`,
+    );
+    return list[0];
+  }
+  return found;
 }
 
 /**
@@ -144,18 +168,20 @@ export const analyzeJob = createServerFn({ method: "POST" })
 
       // Map intelligence output back to the existing JobAnalysis shape for UI compatibility.
       // The full intelligence object is also returned for use in generateProposal.
-      const hookSuggestions = (bp as any).alternativeStrategies?.slice(0, 3).map((s: string, i: number) => {
-        const h = HOOKS[i % HOOKS.length];
+      // Engine 4 produces 3 genuinely different hook options in bp.alternativeHooks —
+      // read them directly and resolve each hookId to its static HOOKS name for the UI.
+      const hookSuggestions = (bp.alternativeHooks ?? []).map((alt) => {
+        const h = findOrWarn(HOOKS, alt.hookId, "HOOKS");
         return {
           hookId: h.id,
           hookName: h.name,
-          openingLine: bp.openingLine,
-          score: Math.max(60, 90 - i * 8),
-          scoreReason: s,
+          openingLine: alt.openingLine,
+          score: alt.score,
+          scoreReason: alt.scoreReason,
         };
-      }) ?? [];
+      });
       if (hookSuggestions.length === 0) {
-        const mapped = HOOKS.find((h) => h.id === bp.mappedHookId) ?? HOOKS[0];
+        const mapped = findOrWarn(HOOKS, bp.mappedHookId, "HOOKS");
         hookSuggestions.push({
           hookId: mapped.id,
           hookName: mapped.name,
@@ -165,7 +191,7 @@ export const analyzeJob = createServerFn({ method: "POST" })
         });
       }
 
-      const mappedCta = CTAS.find((c) => c.id === bp.mappedCtaId) ?? CTAS[0];
+      const mappedCta = findOrWarn(CTAS, bp.mappedCtaId, "CTAS");
       const ctaSuggestions = [{
         ctaId: mappedCta.id,
         ctaName: mappedCta.name,
@@ -521,7 +547,7 @@ export const craftHookLine = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      const hook = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0];
+      const hook = findOrWarn(HOOKS, data.hookId, "HOOKS");
       const a = data.analysis as JobAnalysis | null;
       const context = a
         ? `Pain point: ${a.painPoint}\nHidden needs: ${a.hiddenNeeds}\nRecommended approach: ${a.recommendedApproach}\nEntities: ${(a.extractedEntities ?? []).join(", ")}`
@@ -576,7 +602,7 @@ export const craftCtaLine = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      const cta = CTAS.find((c) => c.id === data.ctaId) ?? CTAS[0];
+      const cta = findOrWarn(CTAS, data.ctaId, "CTAS");
       const a = data.analysis as JobAnalysis | null;
       const context = a ? `Pain point: ${a.painPoint}\nHidden needs: ${a.hiddenNeeds}` : "";
       return await structuredWith(
@@ -689,17 +715,17 @@ export const generateProposal = createServerFn({ method: "POST" })
         ? `PRE-CRAFTED OPENING — use this EXACTLY as your first paragraph: "${data.craftedHookParagraph}"`
         : data.customHookText
         ? `AI-Generated Custom Hook — ${data.customHookText}`
-        : (() => { const h = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0]; return `${h.name} — ${h.description}`; })();
+        : (() => { const h = findOrWarn(HOOKS, data.hookId, "HOOKS"); return `${h.name} — ${h.description}`; })();
       const strategyLabel = data.customStrategyText
         ? `AI-Generated Custom Strategy — ${data.customStrategyText}`
-        : (() => { const s = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0]; return `${s.name} — ${s.description}`; })();
-      const cta = CTAS.find((c) => c.id === data.ctaId) ?? CTAS[0];
+        : (() => { const s = findOrWarn(STRATEGIES, data.strategyId, "STRATEGIES"); return `${s.name} — ${s.description}`; })();
+      const cta = findOrWarn(CTAS, data.ctaId, "CTAS");
       const craftedCtaValid = data.craftedCtaLine?.trimEnd().endsWith("?");
       const ctaLabel = data.craftedCtaLine && craftedCtaValid
         ? `PRE-CRAFTED CLOSING — use this EXACTLY as your final sentence(s): "${data.craftedCtaLine}"`
         : `${cta.name} — ${cta.description}`;
-      const hook = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0];
-      const strategy = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0];
+      const hook = findOrWarn(HOOKS, data.hookId, "HOOKS");
+      const strategy = findOrWarn(STRATEGIES, data.strategyId, "STRATEGIES");
       const length = LENGTHS.find((l) => l.id === data.length) ?? LENGTHS[1];
 
       const portfolioBlock = data.portfolioItems.length
@@ -779,6 +805,14 @@ PROPOSAL BLUEPRINT:
         return `\n- TONE: Be ${assertStyle}. Write in a ${formalStyle} style.`;
       })();
 
+      // REGISTER — who you're speaking AS (distinct from the tone dials above).
+      // Chosen by Engine 1 from the job post; falls back to friendly advisor if the
+      // intelligence pipeline didn't run for this generation.
+      const registerInstruction = (() => {
+        const reg = resolveRegister(intelligence?.clientIntelligence.recommendedRegisterId);
+        return `\n- REGISTER: Write as a ${reg.name}. ${reg.description} Commit to this voice from the first word to the last — do not slide into a different register mid-proposal.`;
+      })();
+
       // Claude handles proposal writing — best prose quality
       const result = await structuredWith(
         "writer",
@@ -797,6 +831,7 @@ Before returning the proposal, verify each of these. If any fail, regenerate:
 ✓ The writing sounds like a senior consultant — not an AI generating templates
 ✓ No generic marketing phrases appear anywhere
 ✓ The CTA ends with a relevant question mark
+✓ Does the writing consistently sound like the assigned register throughout, not sliding into a different voice mid-proposal?
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FOUNDER PSYCHOLOGY — HOW FOUNDERS ACTUALLY READ PROPOSALS
@@ -860,7 +895,7 @@ Modern · Clean · User-friendly · Visually appealing · Professional · Sleek 
 Replace every generic phrase with a concrete, business-specific observation.
 
 Hard rules:
-- No greeting. No "Hi". Start directly with the hook.${languageInstruction}${toneInstruction}
+- No greeting. No "Hi". Start directly with the hook.${languageInstruction}${toneInstruction}${registerInstruction}
 - NO BULLET POINTS. NO HYPHENS. NO DASHES as list markers. Write in clean flowing prose only. If listing items, embed them naturally in sentences ("I'll handle X, Y, and Z" not "- X\n- Y\n- Z"). The proposal must look like a confident personal message, not a formatted document.
 - HUMAN EMPATHY WITHOUT GENERIC LANGUAGE: Show you understand by naming specifics — their industry friction, the real reason this project is urgent, the hidden risk they're taking by not solving it now. Do not use any phrase that sounds like emotional performance ("I understand your frustration", "I know how stressful this is"). Instead, demonstrate understanding through precision.
 - CONFIDENCE WITHOUT ARROGANCE: Write like someone who has solved this exact type of problem before and is not anxious about it. Calm. Certain. But not boastful. The confidence comes from the quality of the insight, not from self-promotion.
@@ -958,8 +993,8 @@ Hard rules:
 - NO BULLET POINTS. NO HYPHENS. NO DASHES as list markers. Write in clean flowing prose only.
 - DO NOT parrot or restate the job post. Echo the client's stated needs at most ~30%. The other ~70% must be YOUR original interpretation, deeper insight, and value they did NOT explicitly ask for.
 - Forbidden phrases (NEVER use): ${FORBIDDEN_PHRASES.map((p) => `"${p}"`).join(", ")}
-- Use the assigned HOOK: ${data.customHookText ? `AI-Generated Custom Hook — ${data.customHookText}` : (() => { const h = HOOKS.find((h) => h.id === data.hookId) ?? HOOKS[0]; return `${h.name} — ${h.description}`; })()}
-- Use the assigned STRATEGY: ${data.customStrategyText ? `AI-Generated Custom Strategy — ${data.customStrategyText}` : (() => { const s = STRATEGIES.find((s) => s.id === data.strategyId) ?? STRATEGIES[0]; return `${s.name} — ${s.description}`; })()}
+- Use the assigned HOOK: ${data.customHookText ? `AI-Generated Custom Hook — ${data.customHookText}` : (() => { const h = findOrWarn(HOOKS, data.hookId, "HOOKS"); return `${h.name} — ${h.description}`; })()}
+- Use the assigned STRATEGY: ${data.customStrategyText ? `AI-Generated Custom Strategy — ${data.customStrategyText}` : (() => { const s = findOrWarn(STRATEGIES, data.strategyId, "STRATEGIES"); return `${s.name} — ${s.description}`; })()}
 - GROUNDING (non-negotiable): Reference AT LEAST 3 of these entities naturally: ${(data.extractedEntities ?? []).join(", ")}
 - SPECIFICITY FAILURE — previous draft scored ${verification.specificity}/10, ${verification.entityUsage} entity refs. Complaint: "${verification.complaint}". Anchor EVERY paragraph to a specific job post detail.
 - CTA HARD REQUIREMENT: Final paragraph MUST end with a question ending in "?". Never end with "I'd love to hear your thoughts", "Looking forward to hearing from you", "Let me know", "Happy to discuss", or any deliverable statement. Good examples: "Would you rather evolve the existing brand or take it in a new direction?" / "Is improving trust your biggest priority, or is generating more enquiries the immediate goal?"
@@ -1244,6 +1279,45 @@ const STAGE_CRITERIA = [
   "Client is ready to move forward — next step is contract or hire",
 ];
 
+// The 5 reply modes keep the same labels at every stage, but what each mode should
+// SOUND like changes with the conversation stage. A warm "As a Friend" reply is right
+// at Stage 2 (pure relationship-building, no ask); at Stage 4 it must still feel warm
+// but be far more direct and closing-oriented. Indexed by stage-1.
+const STAGE_MODE_TONE: Record<string, string>[] = [
+  // Stage 1 — Understand the problem
+  {
+    "Founder-to-Founder": "peer curiosity — ask the one sharp question that surfaces the real problem, no pitching yet",
+    "As a Friend": "warm and low-pressure — make them feel heard, zero ask, just genuine interest in what's going on",
+    "Show Knowledge": "demonstrate you already grasp their domain by naming a likely root cause, then ask to confirm",
+    "Strong Understanding": "reflect their situation back so precisely they feel understood, then invite them to elaborate",
+    "Sharp & Brief": "one tight clarifying question that cuts to the actual problem — nothing else",
+  },
+  // Stage 2 — Build relationship
+  {
+    "Founder-to-Founder": "swap a quick relevant war-story as an equal — builds trust, still no hard ask",
+    "As a Friend": "purely relationship-building, genuinely warm, no ask at all — just deepen rapport",
+    "Show Knowledge": "share one useful insight for free to prove expertise without selling",
+    "Strong Understanding": "validate their concern with empathy and precision, make them feel safe",
+    "Sharp & Brief": "a short, human, warm line that keeps momentum without pressure",
+  },
+  // Stage 3 — Gradually convert
+  {
+    "Founder-to-Founder": "peer-level, start framing scope and approach as a shared plan you'd both commit to",
+    "As a Friend": "warm but now gently steering toward next steps — friendly nudge, not a hard close",
+    "Show Knowledge": "translate expertise into a concrete approach for their scope/timeline, building the case to hire",
+    "Strong Understanding": "connect their stated priorities to a specific plan that de-risks the decision",
+    "Sharp & Brief": "one crisp line that moves scope/timeline/budget forward",
+  },
+  // Stage 4 — Close the deal
+  {
+    "Founder-to-Founder": "direct peer close — assume the deal, propose the concrete next step to start",
+    "As a Friend": "still warm, but clearly closing-oriented and direct about the next step — no vague friendliness",
+    "Show Knowledge": "reinforce why you're the low-risk choice, then ask for the go-ahead directly",
+    "Strong Understanding": "acknowledge their final hesitation precisely, resolve it, and ask to move forward",
+    "Sharp & Brief": "one confident closing line with a clear, specific call to action",
+  },
+];
+
 export const generateConversionResponses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: {
@@ -1255,6 +1329,7 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
     stage?: number;
     contextDump?: string;
     currentExtracted?: Record<string, unknown>;
+    registerId?: string;
   }) =>
     z.object({
       clientMessage: z.string().min(5).max(5000),
@@ -1265,6 +1340,7 @@ export const generateConversionResponses = createServerFn({ method: "POST" })
       stage: z.number().int().min(1).max(4).optional(),
       contextDump: z.string().max(10000).optional(),
       currentExtracted: z.record(z.unknown()).optional(),
+      registerId: z.string().optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -1307,13 +1383,38 @@ Based on the FULL conversation history, assess: has Stage ${stage}'s criteria be
 - reason: 1 sentence explaining your assessment
 - Also extract from the conversation: deliverables mentioned, client pain points, scope of work, timeline discussed (leave fields empty if not yet mentioned)`;
 
+      // Stage-specific tone for each of the 5 alternative modes (labels stay fixed).
+      const modeTone = STAGE_MODE_TONE[stage - 1] ?? STAGE_MODE_TONE[0];
+      const stageModeGuidanceBlock = `STAGE-SPECIFIC TONE for the 5 alternatives (you are at Stage ${stage} — "${stageLabel}"). Keep the mode LABELS exactly as given, but tune each mode's voice to this stage:
+- "Founder-to-Founder": ${modeTone["Founder-to-Founder"]}
+- "As a Friend": ${modeTone["As a Friend"]}
+- "Show Knowledge": ${modeTone["Show Knowledge"]}
+- "Strong Understanding": ${modeTone["Strong Understanding"]}
+- "Sharp & Brief": ${modeTone["Sharp & Brief"]}
+A mode that is right at one stage can be wrong at another — a warm no-ask "As a Friend" reply fits Stage 2 but must become direct and closing-oriented at Stage 4.`;
+
+      // REGISTER — who the best reply speaks AS. Use the register originally chosen for
+      // this client if provided; otherwise instruct the model to infer it from the thread.
+      const knownRegister = data.registerId ? resolveRegister(data.registerId) : null;
+      const registerBlock = `REGISTER (who the BEST reply speaks AS):
+${knownRegister
+  ? `This client was profiled as: ${knownRegister.name} — ${knownRegister.description} The bestReply MUST lean into this register.`
+  : `No register was passed — infer the right one from the conversation thread and the client's tone, then write the bestReply in it. Options: ${REGISTERS.map((r) => r.name).join(", ")}.`}
+The 5 alternatives are a deliberate REGISTER SPREAD — each explores a different voice so the user can pick the one that fits:
+- "Show Knowledge" → Professional Expert register
+- "Strong Understanding" → Strategic Consultant register
+- "As a Friend" → Friendly Advisor register
+- "Founder-to-Founder" → Peer register
+- "Sharp & Brief" → the stage-appropriate wildcard (whichever register closes fastest at this stage)
+Each alternative should genuinely sound like its register — not five variations of the same voice.`;
+
       const result = await structuredWith("writer",
         ConversionSchema,
         `You are a rapid-response conversion coach for freelancers. The client is waiting. Read the FULL conversation history carefully so you can continue the thread naturally — do not restart or summarize what was already said. Generate:
 
 1. The single BEST reply — the one most likely to move the conversation toward a hire RIGHT NOW, serving Stage ${stage} goal: "${stageLabel}".
 2. A brief reason (1-2 sentences) explaining why this reply wins given the full context.
-3. 5 alternative replies, each with a distinct approach.
+3. 5 alternative replies, each with a distinct approach — each tuned to the current stage per the STAGE-SPECIFIC TONE guidance below.
 4. A stage assessment (stageAssessment object).
 
 CRITICAL RULES (the client must NEVER suspect AI):
@@ -1333,16 +1434,20 @@ CRITICAL RULES (the client must NEVER suspect AI):
 
 ${stageBlock}
 
+${stageModeGuidanceBlock}
+
+${registerBlock}
+
 Return a JSON object:
 {
   "bestReply": "<the single best reply to send>",
   "bestReplyReason": "<1-2 sentence explanation of why this approach wins>",
   "alternatives": [
-    { "mode": "Founder-to-Founder", "reply": "<strategic, peer-to-peer>" },
-    { "mode": "As a Friend", "reply": "<warm, genuine, casual>" },
-    { "mode": "Show Knowledge", "reply": "<demonstrates domain expertise>" },
-    { "mode": "Strong Understanding", "reply": "<leads with empathy and precision>" },
-    { "mode": "Sharp & Brief", "reply": "<1-2 sentences, for busy clients>" }
+    { "mode": "Founder-to-Founder", "reply": "<peer-to-peer, tuned to this stage>" },
+    { "mode": "As a Friend", "reply": "<warm, genuine, casual — tuned to this stage>" },
+    { "mode": "Show Knowledge", "reply": "<demonstrates domain expertise, tuned to this stage>" },
+    { "mode": "Strong Understanding", "reply": "<empathy and precision, tuned to this stage>" },
+    { "mode": "Sharp & Brief", "reply": "<1-2 sentences, tuned to this stage>" }
   ],
   "stageAssessment": {
     "canAdvance": true/false,

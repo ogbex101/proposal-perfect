@@ -73,6 +73,8 @@ export const HOOKS = [
 
 export type HookId = (typeof HOOKS)[number]["id"];
 
+// Engine 4 (proposal-intelligence.ts) chooses mappedStrategyId from this exact list.
+// These IDs are the single source of truth — ENGINE_4_SYSTEM must mirror them character-for-character.
 export const STRATEGIES = [
   {
     id: "curious_partner",
@@ -80,39 +82,49 @@ export const STRATEGIES = [
     description: "Frame the entire proposal as ongoing discovery — ask more questions than you make claims. Position yourself as a thinking partner invested in the outcome, not a vendor pitching hours.",
   },
   {
-    id: "advice_first",
-    name: "Lead with Value",
-    description: "Open with one piece of expert advice the client can use immediately, before pitching anything. The advice IS the pitch — if it's genuinely good, they hire you because they want more of this thinking.",
+    id: "authority_proof",
+    name: "Authority & Proof",
+    description: "Lead with the specific domain credential, result, or track record that makes you the obvious low-risk choice. For clients optimizing for certainty and competence over warmth.",
   },
   {
-    id: "direct_question",
-    name: "Single Sharp Question",
-    description: "Build the entire proposal around one piercing clarifying question that reframes the job. Everything the client reads flows from the answer to that one question.",
+    id: "outcome_mirror",
+    name: "Outcome Mirror",
+    description: "Reflect the finished result back to the client vividly before discussing any of the work — mirror the post-project world they're actually buying. For clients driven by the outcome, not the process.",
   },
   {
-    id: "pattern_interrupt",
-    name: "Break the Template",
-    description: "Make this proposal structurally different from every other pitch they'll read — shorter, bolder, more opinionated. The unconventional format itself signals unusual confidence.",
+    id: "risk_reversal",
+    name: "Risk Reversal",
+    description: "Acknowledge and neutralize the client's primary fear before proposing anything. For clients who've been burned before.",
   },
   {
-    id: "narrow_down_first",
-    name: "Scope Discipline",
-    description: "Visibly narrow the scope in the proposal — show what you'd cut, phase, or defer and why. Signals senior-level thinking and builds far more trust than promising to do everything.",
+    id: "brief_bullet",
+    name: "Brief & Bulleted",
+    description: "Strip everything to the essential signal — short, scannable, structurally different from the wall-of-text pitches they'll skim past. For busy clients who reward clarity and confidence.",
   },
   {
-    id: "future_pacing",
-    name: "Outcome First",
-    description: "Walk them through the post-project world in vivid terms before talking about the work. Make the outcome so concrete that the proposal itself becomes almost a formality.",
+    id: "storyteller",
+    name: "Storyteller",
+    description: "Use a short, parallel client story to make the outcome feel real and already-proven. For clients who trust demonstrated experience over claims.",
   },
   {
-    id: "humble_observation",
-    name: "Technical Credibility",
-    description: "Lead with a precise technical or strategic observation that only someone who has done this exact work would make. No boasting — just the understated confidence of demonstrated expertise.",
+    id: "consultant",
+    name: "Strategic Consultant",
+    description: "Diagnose before prescribing — reframe the real problem and show your thinking before proposing a solution. For clients who distrust vendors and want a thinking partner, not an order-taker.",
   },
   {
-    id: "stack_realist",
-    name: "Stack Realist",
-    description: "Name the specific technical or practical realities of their project they've likely underestimated — timeline, integration complexity, hidden edge cases. Be the person who tells them the truth.",
+    id: "challenger",
+    name: "Respectful Challenger",
+    description: "Respectfully challenge the assumption behind how they framed the job, then propose a sharper path. For sophisticated clients who respect intellectual courage.",
+  },
+  {
+    id: "minimal_bidder",
+    name: "Minimal & Direct",
+    description: "One tight problem→solution statement with zero fluff and maximum signal density. For clients who've read fifty proposals today and just want the truth fast.",
+  },
+  {
+    id: "social_proof",
+    name: "Social Proof",
+    description: "Anchor the whole proposal in comparable results you've delivered for similar clients. For clients who need to see it's worked before they'll commit.",
   },
 ] as const;
 
@@ -218,6 +230,16 @@ export const CTAS = [
     id: "curious_ask",
     name: "Why Now Question",
     description: "Ask what triggered the decision to tackle this now: 'What made this the right time to finally move on this?' Builds genuine rapport and surfaces context you can use in your reply.",
+  },
+  {
+    id: "conditional_offer",
+    name: "Conditional Offer",
+    description: "Make the next step conditional on a fact you want confirmed: 'If your Stripe integration is already live, I can have the checkout flow rebuilt in a week — is it live yet?' The condition itself is a qualifying question.",
+  },
+  {
+    id: "value_first",
+    name: "Value-First Close",
+    description: "Hand over one genuinely useful, specific insight or quick idea in the close — then ask a light question: 'One quick idea: [specific tip]. Would it help if I mapped out how that'd work for your setup?' The free value earns the reply.",
   },
 ] as const;
 
