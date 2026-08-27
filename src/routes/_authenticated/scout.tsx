@@ -164,6 +164,68 @@ function TagList({ label, items, color }: { label: string; items: string[]; colo
   );
 }
 
+const SECTION_DECISION_COLOR: Record<string, string> = {
+  Preserve: "border-teal/30 bg-teal/10 text-teal",
+  Improve: "border-gold/30 bg-gold/10 text-gold",
+  Modernize: "border-blue-400/30 bg-blue-400/10 text-blue-300",
+  Replace: "border-orange-400/30 bg-orange-400/10 text-orange-300",
+  Redesign: "border-red-400/30 bg-red-400/10 text-red-300",
+};
+
+function OutreachEmailPanel({ outreach }: { outreach: OutreachEngineType }) {
+  const [activeStyle, setActiveStyle] = useState<"Friendly" | "Consultative" | "Founder-to-Founder">("Friendly");
+
+  const emails = outreach.emails?.length === 3 ? outreach.emails : [
+    { style: "Friendly" as const, subjectLine: outreach.subjectLines[0] ?? "", body: outreach.emailBody, cta: outreach.cta },
+    { style: "Consultative" as const, subjectLine: outreach.subjectLines[1] ?? "", body: outreach.emailBody, cta: outreach.cta },
+    { style: "Founder-to-Founder" as const, subjectLine: outreach.subjectLines[2] ?? "", body: outreach.emailBody, cta: outreach.cta },
+  ];
+
+  const active = emails.find((e) => e.style === activeStyle) ?? emails[0];
+  const fullEmailText = active ? `Subject: ${active.subjectLine}\n\n${active.body}\n\n${active.cta}` : "";
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Outreach Emails</p>
+        {active && <CopyButton text={fullEmailText} label="Copy Email" />}
+      </div>
+      <div className="flex gap-1 mb-4 rounded-lg border border-border/60 bg-sidebar/60 p-1 w-fit">
+        {(["Friendly", "Consultative", "Founder-to-Founder"] as const).map((style) => (
+          <button
+            key={style}
+            onClick={() => setActiveStyle(style)}
+            className={cn(
+              "px-3 py-1 rounded-md text-xs font-medium transition-all",
+              activeStyle === style ? "bg-teal text-background" : "text-muted-foreground hover:text-white",
+            )}
+          >
+            {style}
+          </button>
+        ))}
+      </div>
+      {active && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-mono text-muted-foreground shrink-0">Subject:</span>
+            <span className="text-sm font-medium text-white flex-1">{active.subjectLine}</span>
+            <CopyButton text={active.subjectLine} />
+          </div>
+          <div className="border-t border-white/10 pt-4">
+            <pre className="whitespace-pre-wrap text-sm text-foreground/80 leading-relaxed font-sans">{active.body}</pre>
+          </div>
+          {active.cta && (
+            <div className="border-t border-gold/20 pt-4">
+              <p className="text-[10px] font-mono text-gold/60 mb-1">CTA (Question)</p>
+              <p className="text-sm text-gold/90 italic">{active.cta}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Daily scout counter (localStorage) ──────────────────────────────────────
 type ScoutDayStats = { date: string; generated: number; submitted: number };
 function scoutTodayKey() { return new Date().toISOString().slice(0, 10); }
@@ -807,59 +869,220 @@ function ScoutMode() {
       {result && (
         <div id="scout-results" className="space-y-4 mt-6">
 
-          {/* ── Qualification Score ── */}
-          {result.qualification && (
-            <CropCard className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <BarChart2 className="h-4 w-4 text-gold" />
-                  <Eyebrow>Opportunity Qualification</Eyebrow>
+          {/* ── Project Dashboard Header ── */}
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-transparent p-6">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-1">Project Dashboard</p>
+                <h2 className="text-2xl font-bold text-white truncate">{result.businessIntelligence?.industry ?? "Website Analysis"}</h2>
+                {result.businessIntelligence?.positioning && (
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{result.businessIntelligence.positioning}</p>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[10px] font-mono text-muted-foreground">Score</span>
+                  <span className={cn("text-3xl font-bold font-mono leading-none",
+                    result.qualification.prospectScore >= 70 ? "text-teal" :
+                    result.qualification.prospectScore >= 50 ? "text-gold" : "text-red-400"
+                  )}>{result.qualification.prospectScore}</span>
+                  <span className="text-muted-foreground text-sm">/100</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-bold font-mono",
+                <div className="flex flex-wrap justify-end gap-2">
+                  <span className={cn("rounded-full border px-2.5 py-1 text-[10px] font-bold",
                     result.qualification.outreachPriority === "A" ? "border-teal/40 bg-teal/10 text-teal" :
                     result.qualification.outreachPriority === "B" ? "border-gold/40 bg-gold/10 text-gold" :
                     "border-white/20 bg-white/5 text-muted-foreground"
-                  )}>
-                    Priority {result.qualification.outreachPriority}
-                  </span>
-                  <span className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-semibold",
-                    result.qualification.redesignImpact === "High" ? "border-teal/40 bg-teal/10 text-teal" :
-                    result.qualification.redesignImpact === "Medium" ? "border-gold/40 bg-gold/10 text-gold" :
-                    "border-white/20 bg-white/5 text-muted-foreground"
-                  )}>
-                    {result.qualification.redesignImpact} Impact
+                  )}>Priority {result.qualification.outreachPriority}</span>
+                  {result.creativeDirection && (
+                    <span className="rounded-full border border-purple-400/30 bg-purple-400/10 px-2.5 py-1 text-[10px] font-bold text-purple-300">
+                      {result.creativeDirection.redesignPhilosophy}
+                    </span>
+                  )}
+                  <span className="rounded-full border border-white/20 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-muted-foreground">
+                    {result.qualification.primaryOpportunity}
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-4 mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">Prospect Score</span>
-                    <span className="text-sm font-bold font-mono text-foreground">{result.qualification.prospectScore}/100</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className={cn("h-full rounded-full transition-all", result.qualification.prospectScore >= 70 ? "bg-teal" : result.qualification.prospectScore >= 45 ? "bg-gold" : "bg-destructive/60")}
-                      style={{ width: `${result.qualification.prospectScore}%` }}
-                    />
-                  </div>
+            </div>
+            {/* Status checkmarks */}
+            <div className="flex flex-wrap gap-x-4 gap-y-2 border-t border-white/10 pt-4">
+              <div className="flex items-center gap-1.5 text-xs text-teal">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Analysis Complete
+              </div>
+              <div className={cn("flex items-center gap-1.5 text-xs", result.lovablePrompt ? "text-teal" : "text-muted-foreground")}>
+                {result.lovablePrompt ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />} Creative Brief Ready
+              </div>
+              <div className={cn("flex items-center gap-1.5 text-xs", result.outreach ? "text-teal" : "text-muted-foreground")}>
+                {result.outreach ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />} Founder Outreach Ready
+              </div>
+              {result.agencyReview && (
+                <div className={cn("flex items-center gap-1.5 text-xs", result.agencyReview.overallApproval ? "text-teal" : "text-gold")}>
+                  {result.agencyReview.overallApproval ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                  Agency Review {result.agencyReview.overallApproval ? "Approved" : "Flagged"}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── The One Thing ── */}
+          {result.decisionEngine?.singleBiggestImpactChange && (
+            <div className="rounded-xl border border-gold/20 bg-gold/5 p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <Lightbulb className="h-4 w-4 text-gold" />
+                <p className="text-[10px] font-mono uppercase tracking-wider text-gold/60">The One Thing — biggest business impact</p>
+              </div>
+              <p className="text-base font-medium text-white leading-relaxed">"{result.decisionEngine.singleBiggestImpactChange}"</p>
+            </div>
+          )}
+
+          {/* ══ PRIMARY OUTPUT 1 — Creative Brief ══ */}
+          {result.lovablePrompt && (
+            <CropCard className="overflow-hidden">
+              <div className="flex items-center gap-3 p-5 border-b border-border/40">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-400/10 text-purple-400">
+                  <FileCode className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-white">Creative Brief</p>
+                  <p className="text-xs text-muted-foreground">Production-ready direction · Paste directly into Lovable</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <ConfidenceBadge score={result.lovablePrompt.confidenceScore} />
+                  <CopyButton text={result.lovablePrompt.creativeBrief} label="Copy Brief" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div className="rounded-lg bg-white/[0.03] border border-white/10 p-3">
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Website Quality</p>
-                  <p className="text-sm font-medium text-foreground">{result.qualification.currentWebsiteQuality}</p>
-                </div>
-                <div className="rounded-lg bg-white/[0.03] border border-white/10 p-3">
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Primary Opportunity</p>
-                  <p className="text-sm font-medium text-foreground">{result.qualification.primaryOpportunity}</p>
-                </div>
+              <div className="p-5">
+                <pre className="whitespace-pre-wrap text-sm text-foreground/85 leading-relaxed font-sans max-h-[32rem] overflow-y-auto">{result.lovablePrompt.creativeBrief}</pre>
               </div>
-              <p className="text-sm text-foreground/80 leading-relaxed">{result.qualification.reasoning}</p>
             </CropCard>
+          )}
+
+          {/* ══ PRIMARY OUTPUT 2 — Founder Outreach Package ══ */}
+          {result.outreach && (
+            <CropCard className="overflow-hidden">
+              <div className="flex items-center gap-3 p-5 border-b border-border/40">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-teal">
+                  <Mail className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-white">Founder Outreach Package</p>
+                  <p className="text-xs text-muted-foreground">3 emails · 3 subject lines · Each sounds genuinely human</p>
+                </div>
+                <ConfidenceBadge score={result.outreach.confidenceScore} />
+              </div>
+              <div className="p-5 space-y-5">
+                {/* Subject Lines */}
+                <div>
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-3">Subject Lines</p>
+                  <div className="space-y-2">
+                    {result.outreach.subjectLines.map((line, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="shrink-0 rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-[9px] font-mono text-muted-foreground">
+                            {["Curiosity", "Vision", "Personal"][i] ?? `#${i + 1}`}
+                          </span>
+                          <span className="text-sm text-foreground/90 truncate">{line}</span>
+                        </div>
+                        <CopyButton text={line} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Opening Hooks */}
+                {result.outreach.hooks?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Opening Hooks</p>
+                    <div className="space-y-1.5">
+                      {result.outreach.hooks.map((h, i) => (
+                        <div key={i} className="flex items-start gap-2 rounded-lg bg-white/[0.03] border border-white/10 px-3 py-2">
+                          <span className="text-[10px] font-mono text-muted-foreground w-4 mt-0.5">{i + 1}.</span>
+                          <span className="text-sm text-foreground/90 flex-1 leading-relaxed">{h}</span>
+                          <CopyButton text={h} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Email style tabs */}
+                <OutreachEmailPanel outreach={result.outreach} />
+                {/* Spam avoidance */}
+                {result.outreach.spamAvoidanceTips?.length > 0 && (
+                  <TagList label="Spam Avoidance Tips" items={result.outreach.spamAvoidanceTips} color="cyan" />
+                )}
+              </div>
+            </CropCard>
+          )}
+
+          {/* ══ Decision Engine ══ */}
+          {result.decisionEngine && (
+            <CollapsibleSection
+              icon={<Target className="h-4 w-4 text-gold" />}
+              title="Decision Engine"
+              badge={<ConfidenceBadge score={result.decisionEngine.confidenceScore} />}
+              defaultOpen
+            >
+              <div className="space-y-4">
+                {result.decisionEngine.sectionDecisions?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-3">Section-by-Section Decisions</p>
+                    <div className="space-y-2">
+                      {result.decisionEngine.sectionDecisions.map((d, i) => (
+                        <div key={i} className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3">
+                          <span className="font-semibold text-sm text-white sm:w-28 shrink-0">{d.section}</span>
+                          <span className={cn("self-start shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-bold", SECTION_DECISION_COLOR[d.recommendation] ?? "border-white/20 bg-white/5 text-muted-foreground")}>
+                            {d.recommendation}
+                          </span>
+                          <p className="text-sm text-muted-foreground leading-relaxed flex-1">{d.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <InsightBlock label="Biggest ROI" text={result.decisionEngine.biggestROI} highlight />
+                  <InsightBlock label="Lowest Effort, Highest Impact" text={result.decisionEngine.lowestEffortHighestImpact} />
+                </div>
+                <InsightBlock label="Redesign Strategy" text={result.decisionEngine.redesignStrategy} />
+                <TagList label="What Should Change" items={result.decisionEngine.whatShouldChange} color="orange" />
+                <TagList label="What Should Never Change" items={result.decisionEngine.whatShouldNeverChange} color="teal" />
+                <TagList label="Changes Client Would Approve" items={result.decisionEngine.changesClientWouldApprove} color="gold" />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* ══ DEEP ANALYSIS (inspect if you want) ══ */}
+          <div className="flex items-center gap-3 pt-2">
+            <div className="h-px flex-1 bg-white/10" />
+            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground">Deep Analysis</span>
+            <div className="h-px flex-1 bg-white/10" />
+          </div>
+
+          {/* ── Opportunity Qualification ── */}
+          {result.qualification && (
+            <CollapsibleSection
+              icon={<BarChart2 className="h-4 w-4 text-gold" />}
+              title="Opportunity Qualification"
+              badge={<ConfidenceBadge score={result.qualification.confidenceScore} />}
+              defaultOpen={false}
+            >
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-white/[0.03] border border-white/10 p-3">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Website Quality</p>
+                    <p className="text-sm font-medium text-foreground">{result.qualification.currentWebsiteQuality}</p>
+                  </div>
+                  <div className="rounded-lg bg-white/[0.03] border border-white/10 p-3">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Redesign Impact</p>
+                    <p className="text-sm font-medium text-foreground">{result.qualification.redesignImpact}</p>
+                  </div>
+                </div>
+                <InsightBlock label="Reasoning" text={result.qualification.reasoning} />
+                {result.qualification.assumptions?.length > 0 && (
+                  <TagList label="Assumptions" items={result.qualification.assumptions} color="gold" />
+                )}
+              </div>
+            </CollapsibleSection>
           )}
 
           {/* ── Business Intelligence ── */}
@@ -1003,107 +1226,6 @@ function ScoutMode() {
                 <TagList label="Opportunities" items={result.competitiveIntelligence.opportunities} color="teal" />
               </div>
             </CollapsibleSection>
-          )}
-
-          {/* ── Decision Engine ── */}
-          {result.decisionEngine && (
-            <CollapsibleSection
-              icon={<Target className="h-4 w-4 text-gold" />}
-              title="Redesign Decision"
-              badge={<ConfidenceBadge score={result.decisionEngine.confidenceScore} />}
-              defaultOpen
-            >
-              <div className="space-y-3">
-                <InsightBlock label="Redesign Strategy" text={result.decisionEngine.redesignStrategy} highlight />
-                <InsightBlock label="Biggest ROI" text={result.decisionEngine.biggestROI} />
-                <InsightBlock label="Lowest Effort / Highest Impact" text={result.decisionEngine.lowestEffortHighestImpact} />
-                <TagList label="What Should Change" items={result.decisionEngine.whatShouldChange} color="teal" />
-                <TagList label="What Should Never Change" items={result.decisionEngine.whatShouldNeverChange} color="red" />
-                <TagList label="Changes Client Would Approve" items={result.decisionEngine.changesClientWouldApprove} color="gold" />
-              </div>
-            </CollapsibleSection>
-          )}
-
-          {/* ── Lovable Creative Brief ── */}
-          {result.lovablePrompt && (
-            <Section
-              icon={<Lightbulb className="h-4 w-4 text-yellow-400" />}
-              title="Lovable Creative Brief"
-              badge={
-                <CopyButton text={result.lovablePrompt.creativeBrief} label="Copy brief" />
-              }
-            >
-              <pre className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90 font-sans">{result.lovablePrompt.creativeBrief}</pre>
-            </Section>
-          )}
-
-          {/* ── Outreach Email ── */}
-          {result.outreach && (
-            <Section
-              icon={<Mail className="h-4 w-4 text-teal" />}
-              title="Outreach Email"
-              badge={<CopyButton text={result.outreach.emailBody} label="Copy email" />}
-            >
-              <div className="space-y-4">
-                {/* Subject Lines */}
-                <div>
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Subject Lines</p>
-                  <div className="space-y-1.5">
-                    {result.outreach.subjectLines.map((s, i) => (
-                      <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] border border-white/10 px-3 py-2">
-                        <span className="text-[10px] font-mono text-muted-foreground w-4">{i + 1}.</span>
-                        <span className="text-sm text-foreground flex-1">{s}</span>
-                        <CopyButton text={s} label="Copy" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Opening Hooks */}
-                <div>
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Opening Hooks</p>
-                  <div className="space-y-1.5">
-                    {result.outreach.hooks.map((h, i) => (
-                      <div key={i} className="flex items-start gap-2 rounded-lg bg-white/[0.03] border border-white/10 px-3 py-2">
-                        <span className="text-[10px] font-mono text-muted-foreground w-4 mt-0.5">{i + 1}.</span>
-                        <span className="text-sm text-foreground/90 flex-1 leading-relaxed">{h}</span>
-                        <CopyButton text={h} label="Copy" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Email Body */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Email Body</p>
-                    <span className="text-[10px] text-muted-foreground">{result.outreach.emailBody.split(/\s+/).length} words</span>
-                  </div>
-                  <div className="rounded-lg bg-white/[0.03] border border-white/10 p-4">
-                    <pre className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90 font-sans">{result.outreach.emailBody}</pre>
-                  </div>
-                </div>
-
-                {/* CTA */}
-                <div className="rounded-lg border border-teal/20 bg-teal/5 p-3 flex items-start gap-2">
-                  <MessageSquarePlus className="h-4 w-4 text-teal mt-0.5 shrink-0" />
-                  <p className="text-sm text-teal/90 leading-relaxed">{result.outreach.cta}</p>
-                </div>
-
-                {/* Copy full */}
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  onClick={async () => {
-                    const full = `Subject: ${result.outreach!.subjectLines[0]}\n\n${result.outreach!.emailBody}`;
-                    await copyText(full);
-                    toast.success("Full email copied!");
-                  }}
-                >
-                  <Copy className="mr-2 h-4 w-4" /> Copy full email
-                </Button>
-              </div>
-            </Section>
           )}
 
           {/* ── Agency Review ── */}
