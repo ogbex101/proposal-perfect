@@ -141,7 +141,16 @@ export type CompetitiveIntelType = z.infer<typeof CompetitiveIntelSchema>;
 
 // ─── Engine 7 — Decision Engine ──────────────────────────────────────────────
 
+const SectionDecisionSchema = z.object({
+  section: z.string(),
+  recommendation: z.enum(["Preserve", "Improve", "Modernize", "Replace", "Redesign"]),
+  reason: z.string(),
+});
+export type SectionDecisionType = z.infer<typeof SectionDecisionSchema>;
+
 const DecisionEngineSchema = z.object({
+  singleBiggestImpactChange: z.string(),
+  sectionDecisions: z.array(SectionDecisionSchema).default([]),
   whatShouldChange: z.array(z.string()),
   whatShouldNeverChange: z.array(z.string()),
   biggestROI: z.string(),
@@ -164,11 +173,20 @@ export type LovableBriefType = z.infer<typeof LovableBriefSchema>;
 
 // ─── Engine 9 — Outreach Engine ──────────────────────────────────────────────
 
+const OutreachEmailSchema = z.object({
+  style: z.enum(["Friendly", "Consultative", "Founder-to-Founder"]),
+  subjectLine: z.string(),
+  body: z.string(),
+  cta: z.string(),
+});
+export type OutreachEmailType = z.infer<typeof OutreachEmailSchema>;
+
 const OutreachEngineSchema = z.object({
   subjectLines: z.array(z.string()).length(3),
   hooks: z.array(z.string()).length(3),
   emailBody: z.string(),
   cta: z.string(),
+  emails: z.array(OutreachEmailSchema).default([]),
   spamAvoidanceTips: z.array(z.string()),
   reasoning: z.string(),
   confidenceScore: z.number(),
@@ -327,6 +345,7 @@ COMPETITIVE INTELLIGENCE
 function formatDecisionEngine(d: DecisionEngineType): string {
   return `
 DECISION ENGINE
+  Single Biggest Impact Change: ${d.singleBiggestImpactChange}
   What Should Change: ${d.whatShouldChange.join(", ")}
   What Should Never Change: ${d.whatShouldNeverChange.join(", ")}
   Biggest ROI: ${d.biggestROI}
@@ -547,13 +566,26 @@ Based on the business intelligence, UX psychology analysis, and reverse-engineer
 
         decisionEngine = await generateObjectWithProvider("writer", {
           system:
-            "This is the most important engine. Before recommending anything, ask: What would the client actually approve? What changes have the highest business ROI? What should be left exactly as it is? Never recommend change for its own sake. Every change must have a business justification tied to the core business insight.",
+            "This is the most important engine. Before recommending anything, force yourself to answer one question: 'If I could only change ONE thing on this website that would create the biggest business impact, what would it be?' That answer goes in singleBiggestImpactChange. Then evaluate every major section individually. Never recommend change for its own sake — respect good work. Every change must have a business justification tied to the core business insight.",
           prompt: `Make the final strategic decisions for this website redesign.
 
 BUSINESS INTELLIGENCE:
 ${biSummary}${uxBlock}${creativeBlock}${motionBlock}${dsBlock}${compBlock}
 
-Synthesize all prior analysis into a decision framework. Determine exactly what should change, what should never change, what delivers the biggest ROI, and what is lowest effort for highest impact. Build a priority matrix that balances business impact, client approval likelihood, implementation effort, and conversion potential. The redesign strategy must be a single clear paragraph that any designer or developer could execute from. Every decision must tie back to the core business insight: "${businessIntelligence.coreBusinessInsight}"`,
+STEP 1 — Answer this question first:
+"If I could only change ONE thing on this website that would create the biggest business impact, what would it be?"
+Store that answer in singleBiggestImpactChange.
+
+STEP 2 — Evaluate every major section individually (Hero, Navigation, About/Story, Services/Products, Testimonials/Social Proof, CTA Sections, Footer, and any others visible):
+For each section decide:
+- Preserve: This works well. Do not touch it.
+- Improve: Good foundation, needs enhancement.
+- Modernize: Outdated execution, keep the essence.
+- Replace: Not working. Needs a completely different approach.
+- Redesign: Fundamentally broken. Start fresh.
+Never default to Redesign if Preserve or Improve would serve the business better. Respect good work.
+
+STEP 3 — Build the complete decision framework: what should change, what should never change, biggest ROI, lowest effort for highest impact. The redesign strategy must be a single clear paragraph any designer could execute from. Every decision must tie back to: "${businessIntelligence.coreBusinessInsight}"`,
           schema: DecisionEngineSchema,
         });
       } catch {
@@ -599,13 +631,41 @@ Write a creative brief that could be handed directly to a world-class design tea
 
         outreach = await generateObjectWithProvider("writer", {
           system:
-            "This engine NEVER receives the website directly. It only uses the Business Intelligence, Decision Engine output, and Creative Strategy. Rules: Never compliment. Never advise. Never sell. Never sound like AI. Never sound like a freelancer. Every sentence must be unique to this company. The first sentence must contain the Core Business Insight. The last sentence MUST ALWAYS be a thoughtful business question. Never end with a statement. Sound like a senior creative partner who noticed something specific about their business.",
-          prompt: `Write a cold outreach email for this prospect.
+            "You are a senior creative director writing personally to a founder. You have done serious homework. You are NOT selling anything — you are starting a real conversation. Rules you must follow without exception: Never say 'The biggest issue is...' or 'The analysis shows...' or 'This website has...' or 'Your website could...'. Never compliment generically. Never sound like a freelancer or AI. Write like you spent time looking through their site and one thing genuinely stood out. Every sentence must feel specific to THIS company. The CTA must always be a question, never a statement. Think: 'I spent some time looking through your website.' 'One thing kept standing out.' 'It made me wonder...' 'I put together something.' Write naturally. Write humanly.",
+          prompt: `Write a complete cold outreach package for this prospect.
 
-BUSINESS INTELLIGENCE:
-${biSummary}${decisionBlock}${briefBlock}
+COMPANY: ${businessIntelligence.industry} — ${businessIntelligence.positioning}
+CORE INSIGHT (the one thing that stood out): ${businessIntelligence.coreBusinessInsight}
+CREATIVE DIRECTION: ${creativeDirection ? creativeDirection.designObjective : "Website redesign to improve business performance"}
+REDESIGN PHILOSOPHY: ${creativeDirection ? creativeDirection.redesignPhilosophy : "Modernized"}
+${mockupLink ? `MOCKUP URL: ${mockupLink}` : ""}
 
-Write a cold outreach email that sounds like it came from a senior creative partner who has done serious homework. The first sentence must organically contain this core business insight: "${businessIntelligence.coreBusinessInsight}". Write 3 distinct subject lines (each under 50 characters, no clickbait), 3 opening hooks (each a single sentence that earns attention without complimenting or advising), and a full email body (150–250 words). The last sentence of the email body must be a thoughtful business question — never a statement. Include a clear, low-friction CTA. Add spam-avoidance tips specific to this outreach's content.`,
+Generate the following:
+
+1. THREE SUBJECT LINES — each under 50 characters, each using a different angle:
+   - Curiosity angle: makes them wonder what you noticed
+   - Vision angle: paints a picture of what could be
+   - Personal angle: feels like it's from someone they might know
+
+2. THREE OPENING HOOKS — each a single sentence:
+   One that creates curiosity. One that is bold. One that is warm.
+   None should compliment. None should advise. Each must earn attention.
+
+3. ONE EMAIL BODY (150-200 words, the primary version):
+   The first sentence must contain the core insight naturally.
+   The last sentence must be a thoughtful business question.
+   No generic phrases. No AI tells.
+
+4. ONE CTA — a single question (not a statement). Something that makes them genuinely curious about the answer.
+
+5. THREE COMPLETE EMAILS in the emails array:
+   - Friendly style: warm, like a smart colleague sending a casual note, 100-160 words
+   - Consultative style: thoughtful peer-to-peer business conversation, 120-180 words
+   - Founder-to-Founder style: direct, personal, builder talking to builder, 80-140 words
+   Each needs its own subjectLine, body, and cta (question).
+   ${mockupLink ? `Each email should naturally reference and link to the mockup: ${mockupLink}` : "Each email should mention you can quickly put together a mockup."}
+
+6. SPAM AVOIDANCE TIPS specific to this outreach's content (not generic tips).`,
           schema: OutreachEngineSchema,
         });
       } catch {
