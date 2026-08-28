@@ -23,6 +23,7 @@ import { Route as AuthenticatedScoutRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedSavedRouteImport } from './routes/_authenticated/saved'
 import { Route as AuthenticatedResearchRouteImport } from './routes/_authenticated/research'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
+import { Route as AuthenticatedJournalRouteImport } from './routes/_authenticated/journal'
 import { Route as AuthenticatedPortfolioRouteImport } from './routes/_authenticated/portfolio'
 import { Route as AuthenticatedNewRouteImport } from './routes/_authenticated/new'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
@@ -100,6 +101,11 @@ const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedJournalRoute = AuthenticatedJournalRouteImport.update({
+  id: '/journal',
+  path: '/journal',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedPortfolioRoute = AuthenticatedPortfolioRouteImport.update({
   id: '/portfolio',
   path: '/portfolio',
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/new': typeof AuthenticatedNewRoute
   '/portfolio': typeof AuthenticatedPortfolioRoute
   '/reports': typeof AuthenticatedReportsRoute
+  '/journal': typeof AuthenticatedJournalRoute
   '/research': typeof AuthenticatedResearchRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/scout': typeof AuthenticatedScoutRoute
@@ -170,6 +177,7 @@ export interface FileRoutesByTo {
   '/new': typeof AuthenticatedNewRoute
   '/portfolio': typeof AuthenticatedPortfolioRoute
   '/reports': typeof AuthenticatedReportsRoute
+  '/journal': typeof AuthenticatedJournalRoute
   '/research': typeof AuthenticatedResearchRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/scout': typeof AuthenticatedScoutRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   '/_authenticated/new': typeof AuthenticatedNewRoute
   '/_authenticated/portfolio': typeof AuthenticatedPortfolioRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
+  '/_authenticated/journal': typeof AuthenticatedJournalRoute
   '/_authenticated/research': typeof AuthenticatedResearchRoute
   '/_authenticated/saved': typeof AuthenticatedSavedRoute
   '/_authenticated/scout': typeof AuthenticatedScoutRoute
@@ -385,6 +394,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/journal': {
+      id: '/_authenticated/journal'
+      path: '/journal'
+      fullPath: '/journal'
+      preLoaderRoute: typeof AuthenticatedJournalRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/portfolio': {
       id: '/_authenticated/portfolio'
       path: '/portfolio'
@@ -446,6 +462,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedNewRoute: typeof AuthenticatedNewRoute
   AuthenticatedPortfolioRoute: typeof AuthenticatedPortfolioRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
+  AuthenticatedJournalRoute: typeof AuthenticatedJournalRoute
   AuthenticatedResearchRoute: typeof AuthenticatedResearchRoute
   AuthenticatedSavedRoute: typeof AuthenticatedSavedRoute
   AuthenticatedScoutRoute: typeof AuthenticatedScoutRoute
@@ -462,6 +479,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedNewRoute: AuthenticatedNewRoute,
   AuthenticatedPortfolioRoute: AuthenticatedPortfolioRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
+  AuthenticatedJournalRoute: AuthenticatedJournalRoute,
   AuthenticatedResearchRoute: AuthenticatedResearchRoute,
   AuthenticatedSavedRoute: AuthenticatedSavedRoute,
   AuthenticatedScoutRoute: AuthenticatedScoutRoute,

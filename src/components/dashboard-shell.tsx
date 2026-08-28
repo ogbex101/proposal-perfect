@@ -18,6 +18,7 @@ import {
   Radar,
   MapPin,
   BarChart2,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -44,6 +45,7 @@ const NAV: NavItem[] = [
   { to: "/tracking", label: "Tracking", icon: MapPin },
   { to: "/reports", label: "Reports", icon: BarChart2 },
   { to: "/contest", label: "Contest Entry", icon: Trophy },
+  { to: "/journal", label: "System Journal", icon: BookOpen },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/admin", label: "Admin Panel", icon: ShieldCheck, adminOnly: true },
 ];
