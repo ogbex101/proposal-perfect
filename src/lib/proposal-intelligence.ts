@@ -16,6 +16,7 @@
 
 import { z } from "zod";
 import { generateObjectWithProvider } from "./ai-gateway.server";
+import { formatGoldenKeysForPrompt } from "./prompts/shared/golden-keys";
 
 // ─── Engine 1 — Client Intelligence ──────────────────────────────────────────
 
@@ -295,6 +296,15 @@ export const ProposalBlueprintSchema = z.object({
     scoreReason: z.string(),
   })).length(3),
 
+  // Golden Key — an optional framing sentence that sets intent/tone (Fix 12).
+  // Only used when it genuinely strengthens the proposal — never by default.
+  goldenKey: z.object({
+    use: z.boolean(),                                         // whether to use one at all
+    keyId: z.string().nullable(),                            // a GOLDEN_KEYS id, or null
+    placement: z.enum(["opening", "closing"]).nullable(),   // where it goes, or null
+    reason: z.string(),                                      // why use / why not
+  }),
+
   // Confidence
   confidence: z.object({
     strategy: z.number(),
@@ -355,6 +365,18 @@ Also select the closest matching IDs from these static lists for UI compatibilit
 Hook IDs: pattern_interrupt, curiosity_gap, direct_question, warning, shared_frustration, unexpected_compliment, i_noticed, contradiction, future_pacing, humble_observation, learn_fast, consequence, problem_solution, founder
 Strategy IDs: curious_partner, authority_proof, outcome_mirror, risk_reversal, brief_bullet, storyteller, consultant, challenger, minimal_bidder, social_proof
 CTA IDs: soft_availability, specific_call, opinion_ask, discovery_question, assumption_check, timeline_ask, proof_offer, scope_offer, loom_offer, low_risk_next, constraint_reveal, urgency_frame, challenge_reframe, shared_risk, social_proof_angle, sprint_offer, direct_ask, curious_ask, conditional_offer, value_first
+
+GOLDEN KEY DECISION (goldenKey):
+A "Golden Key" is a framing sentence that sets the intent or tone of the proposal, rather than proving competence the way the hook does. There are two patterns: intent_frame ("by the end of this you'll be able to see…") and contrast_frame ("here's what I won't do… here's what I will").
+
+Decide, honestly:
+(a) use — Should this specific proposal use a Golden Key at all? Many proposals are stronger WITHOUT one: if the hook already carries the opening with force, an intent-frame just adds length. Only use one when it genuinely strengthens the proposal (e.g. the client is anxious/skeptical and needs the frame set, or a contrast-frame would disarm a specific fear). Default to use=false unless you can state a concrete reason it helps.
+(b) keyId — If use=true, pick the ONE key id from the library below that best fits BOTH the recommended register (from the Client Intelligence report) AND the emotional tenor of this job. If use=false, set keyId=null.
+(c) placement — "opening" (a frame BEFORE the hook) or "closing" (a line before the CTA). null if unused.
+(d) reason — One sentence: why this key (and placement), or why none is right here.
+
+GOLDEN KEY LIBRARY:
+${formatGoldenKeysForPrompt()}
 
 THREE ALTERNATIVE HOOKS (alternativeHooks):
 Also produce exactly 3 genuinely DIFFERENT hook options the freelancer can choose between.

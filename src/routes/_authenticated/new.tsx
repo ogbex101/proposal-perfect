@@ -11,6 +11,8 @@ import {
   Save,
   AlertTriangle,
   X,
+  Languages,
+  Key,
   Wand2,
   Plus,
   Trash2,
@@ -38,9 +40,10 @@ import {
 import { cn } from "@/lib/utils";
 
 import { HOOKS, STRATEGIES, CTAS, LENGTHS, type LengthId } from "@/lib/proposal-constants";
+import { goldenKeyById } from "@/lib/prompts/shared/golden-keys";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
-import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, craftHookLine, craftCtaLine, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
+import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, craftHookLine, craftCtaLine, translateToEnglish, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
 import { VoiceEditPrompt } from "@/components/VoiceEditPrompt";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
@@ -1204,6 +1207,7 @@ function NewProposal() {
             injecting={injectMutation.isPending}
             onPolish={() => polishMutation.mutate(undefined)}
             polishing={polishMutation.isPending}
+            detectedLanguage={analysis?.detectedLanguage ?? null}
           />
         </div>
       )}
@@ -1394,11 +1398,37 @@ function AnalysisPanel({ analysis }: { analysis: JobAnalysis }) {
           <SuggestionCard label="Suggested hook" name={hook?.name ?? prettyId(analysis.suggestedHookId)} reason={analysis.hookReason} />
           <SuggestionCard label="Suggested strategy" name={strat?.name ?? prettyId(analysis.suggestedStrategyId)} reason={analysis.strategyReason} />
         </div>
+        {/* Fix 12 — Golden Key decision card */}
+        <GoldenKeyCard goldenKey={(analysis as any)?.intelligence?.proposalBlueprint?.goldenKey} />
         <p className="annotation !text-muted-foreground">
           Suggestions applied below — override the dropdowns any time.
         </p>
       </div>
     </CropCard>
+  );
+}
+
+function GoldenKeyCard({ goldenKey }: { goldenKey?: { use: boolean; keyId: string | null; placement: string | null; reason: string } }) {
+  if (!goldenKey) return null;
+  const key = goldenKey.use ? goldenKeyById(goldenKey.keyId ?? undefined) : undefined;
+  return (
+    <div className="rounded-md border border-teal/25 bg-teal/[0.05] p-3">
+      <div className="flex items-center gap-2">
+        <Key className="h-3.5 w-3.5 text-teal" />
+        <p className="annotation !text-teal">Golden Key</p>
+        <span className={cn("ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium",
+          goldenKey.use ? "bg-teal/15 text-teal" : "bg-white/5 text-muted-foreground")}>
+          {goldenKey.use ? `Used · ${goldenKey.placement ?? "?"}` : "Not used"}
+        </span>
+      </div>
+      {key && (
+        <p className="mt-2 text-sm italic text-white/90 leading-relaxed">"{key.text}"</p>
+      )}
+      {key && (
+        <p className="mt-1 text-[10px] text-teal/60">{key.pattern} · {key.register}</p>
+      )}
+      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{goldenKey.reason}</p>
+    </div>
   );
 }
 
@@ -1425,6 +1455,7 @@ function SuggestionCard({ label, name, reason }: { label: string; name: string; 
 function OutputPanel({
   content, setContent, explanation, showExplain, setShowExplain,
   title, onSave, saving, onSaveTemplate, savingTemplate, chosenProfile, onGoHistory, injecting, onPolish, polishing,
+  detectedLanguage,
 }: {
   content: string; setContent: (v: string) => void;
   explanation: { hook: string; strategy: string; question: string } | null;
@@ -1433,8 +1464,21 @@ function OutputPanel({
   onSaveTemplate: () => void; savingTemplate: boolean;
   chosenProfile?: { label: string } | null; onGoHistory: () => void;
   injecting?: boolean; onPolish?: () => void; polishing?: boolean;
+  detectedLanguage?: string | null;
 }) {
   const [editMode, setEditMode] = useState(false);
+
+  // Fix 11 — English review preview for non-English proposals (never replaces the real text).
+  const isNonEnglish = !!detectedLanguage && !/english/i.test(detectedLanguage);
+  const [showEnglish, setShowEnglish] = useState(false);
+  const [englishText, setEnglishText] = useState<string | null>(null);
+  const translateMutation = useMutation({
+    mutationFn: () => translateToEnglish({ data: { text: content, sourceLanguage: detectedLanguage ?? undefined } }),
+    onSuccess: (res) => { setEnglishText(res!.text); setShowEnglish(true); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Translation failed"),
+  });
+  // Invalidate a stale translation if the proposal text changes.
+  useEffect(() => { setEnglishText(null); setShowEnglish(false); }, [content]);
 
   // Parse proposal into paragraphs, strip horizontal rules
   const paragraphs = content
@@ -1454,6 +1498,20 @@ function OutputPanel({
             <span className="rounded-full bg-teal/15 px-2 py-0.5 text-[10px] font-medium text-teal">{chosenProfile.label}</span>
           )}
           <span className="font-mono text-[10px] text-muted-foreground">{content.length} chars</span>
+          {isNonEnglish && (
+            <button
+              onClick={() => {
+                if (englishText) { setShowEnglish((v) => !v); }
+                else { translateMutation.mutate(); }
+              }}
+              disabled={translateMutation.isPending}
+              className={cn("flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                showEnglish ? "border-blue-400/40 bg-blue-400/10 text-blue-300" : "border-border text-muted-foreground hover:text-white")}
+            >
+              {translateMutation.isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Languages className="h-3 w-3" />}
+              {showEnglish ? "Hide English" : "Preview in English"}
+            </button>
+          )}
           <button
             onClick={() => setEditMode((v) => !v)}
             className={cn("rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors",
@@ -1463,6 +1521,22 @@ function OutputPanel({
           </button>
         </div>
       </div>
+
+      {/* Fix 11 — English translation preview (review only; NOT the submittable text) */}
+      {isNonEnglish && showEnglish && englishText && (
+        <div className="mb-4 rounded-xl border border-blue-400/30 bg-blue-400/[0.06] px-5 py-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Languages className="h-3.5 w-3.5 text-blue-300" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-blue-300">English preview — for review only</span>
+          </div>
+          <p className="mb-3 text-[11px] text-blue-200/70">
+            The {detectedLanguage} proposal above is what will be submitted. This translation is only to help you sanity-check the content.
+          </p>
+          {englishText.split(/\n{2,}/).map((p, i) => (
+            <p key={i} className="mb-3 text-[13px] leading-[1.8] text-foreground/80 last:mb-0">{p.replace(/\n/g, " ").trim()}</p>
+          ))}
+        </div>
+      )}
 
       {editMode ? (
         <Textarea

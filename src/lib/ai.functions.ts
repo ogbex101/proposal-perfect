@@ -7,6 +7,7 @@ import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
 import { runProposalIntelligencePipeline, type ProposalIntelligenceObject } from "./proposal-intelligence";
 import { saveProposalMemoryInternal } from "./proposal-memory.functions";
 import { REGISTERS, resolveRegister } from "./prompts/shared/registers";
+import { goldenKeyById } from "./prompts/shared/golden-keys";
 
 // Load a user's custom red-flag phrases. Defaults always apply regardless;
 // this only adds the user's own phrases. Wrapped so a missing table never
@@ -791,7 +792,13 @@ PROPOSAL BLUEPRINT:
 - OPENING LINE (use this verbatim or as your first sentence): "${intelligence.proposalBlueprint.openingLine}"
 - CTA LINE (use this verbatim as your final sentence — it ends with "?"): "${intelligence.proposalBlueprint.ctaLine}"
 - Mandates (MUST follow all of these): ${intelligence.proposalBlueprint.proposalMandates?.join(" | ")}
-- Forbidden approaches (DO NOT use any of these): ${intelligence.proposalBlueprint.forbiddenApproaches?.join(" | ")}
+- Forbidden approaches (DO NOT use any of these): ${intelligence.proposalBlueprint.forbiddenApproaches?.join(" | ")}${(() => {
+  const gk = (intelligence.proposalBlueprint as any).goldenKey;
+  if (!gk?.use || !gk.keyId) return "";
+  const key = goldenKeyById(gk.keyId);
+  if (!key) return "";
+  return `\n- GOLDEN KEY (${gk.placement === "closing" ? "place as a closing line right before the CTA" : "place as an opening frame before the hook"}): weave this framing sentence in naturally, adapting wording to fit the flow — "${key.text}"`;
+})()}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
         : "";
       const strategyBlock = data.strategyDocument
@@ -2542,6 +2549,31 @@ export const rewriteText = createServerFn({ method: "POST" })
         prompt: `${guidance[data.action]}\n\nPassage:\n"""\n${data.text}\n"""\n\n${data.context ? `Surrounding proposal context (for tone awareness only — do not repeat):\n"""\n${data.context.slice(0, 4000)}\n"""\n` : ""}Return only the rewritten passage.`,
       });
       return { text: text.trim().replace(/^["'`]+|["'`]+$/g, "") };
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
+// ---------- Translate to English (Fix 11 — review-only preview) ----------
+// A straightforward translation for sanity-checking a non-English proposal before
+// sending. Uses the verifier role (cheap) — translation doesn't need the top model.
+// This never replaces the real proposal; it's surfaced as a labeled preview only.
+export const translateToEnglish = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { text: string; sourceLanguage?: string }) =>
+    z.object({
+      text: z.string().min(1).max(8000),
+      sourceLanguage: z.string().max(60).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const src = data.sourceLanguage ? ` from ${data.sourceLanguage}` : "";
+      const text = await generateWithProvider("verifier", {
+        system: `You are a precise translator. Translate the freelance proposal${src} into natural, fluent English. Output ONLY the English translation — no preamble, no notes, no quotes, no markdown. Preserve meaning, tone, and paragraph breaks exactly. Do not add, remove, or invent any content — this is a faithful translation for review.`,
+        prompt: `Translate this into English:\n\n${data.text}`,
+      });
+      return { text: text.trim() };
     } catch (err) {
       handleAiError(err);
     }
