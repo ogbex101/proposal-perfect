@@ -326,3 +326,68 @@ COMPLAINT: If specificity < 7, write one concrete sentence about what's missing.
     return null;
   }
 }
+
+// ─── Fabrication guard (fact-check pass) ────────────────────────────────────────
+
+/**
+ * Runs after generation. Uses Gemini Flash (verifier) to list every specific number,
+ * percentage, statistic, dollar figure, or named case study/client result in the text,
+ * and flags any that are NOT traceable to the supplied source materials (job post,
+ * portfolio, user facts). This is the hard backstop for the "no fabricated metrics"
+ * rule — prompting alone gets overridden under pressure from "be specific".
+ *
+ * Returns null if the verifier is unavailable — never blocks generation.
+ */
+export async function verifyFactualClaims(params: {
+  proposal: string;
+  sources: string;
+}): Promise<{
+  flagged: Array<{ claim: string; reason: string }>;
+  allTraceable: boolean;
+} | null> {
+  try {
+    const FactCheckSchema = z.object({
+      claims: z.array(
+        z.object({
+          claim: z.string(),
+          traceable: z.boolean(),
+          reason: z.string(),
+        }),
+      ),
+    });
+
+    const allProviders = buildProviders();
+    const verifier = allProviders.find((p) => p.name.toLowerCase().includes("google"));
+    if (!verifier) return null;
+
+    const model = await verifier.load();
+    const { object } = await generateObject({
+      model,
+      schema: FactCheckSchema,
+      system: `You are a fabrication auditor for freelance proposals. Your ONLY job is to catch invented facts.
+
+List every SPECIFIC factual claim in the proposal text that is checkable:
+- Numbers, percentages, statistics ("increased conversions 32%", "0.8% unsubscribe rate")
+- Dollar figures / revenue claims ("$40k MRR")
+- Named case studies, past projects, or named clients ("when I rebuilt Acme's Klaviyo flows")
+- Before/after results or timeframe outcomes ("jumped 22-28% in the first quarter")
+
+For EACH claim, decide: is it directly supported by the SOURCE MATERIALS provided?
+- traceable=true only if the exact fact (or an unambiguous paraphrase) appears in the sources.
+- traceable=false if the proposal invented it, embellished it, or attached a number/result the sources never stated.
+
+Do NOT flag: general expertise statements, descriptions of the client's own situation, method/approach descriptions, or qualitative language with no invented number or project. Only flag checkable claims that are NOT in the sources.
+
+If there are no checkable factual claims at all, return an empty claims array.`,
+      prompt: `SOURCE MATERIALS (everything the proposal is allowed to draw facts from):\n${params.sources.slice(0, 6000)}\n\n---\n\nPROPOSAL TEXT TO AUDIT:\n${params.proposal.slice(0, 6000)}`,
+    });
+
+    const flagged = object.claims
+      .filter((c) => !c.traceable)
+      .map((c) => ({ claim: c.claim, reason: c.reason }));
+
+    return { flagged, allTraceable: flagged.length === 0 };
+  } catch {
+    return null;
+  }
+}

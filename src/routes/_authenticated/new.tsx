@@ -10,6 +10,7 @@ import {
   FileText,
   Save,
   AlertTriangle,
+  X,
   Wand2,
   Plus,
   Trash2,
@@ -129,6 +130,8 @@ function NewProposal() {
     question: string;
   } | null>(null);
   const [showExplain, setShowExplain] = useState(true);
+  const [factCheck, setFactCheck] = useState<{ flagged: Array<{ claim: string; reason: string }>; allTraceable: boolean; remediated: boolean } | null>(null);
+  const [factCheckAck, setFactCheckAck] = useState(false);
 
   const [strategyDoc, setStrategyDoc] = useState<StrategyDocument | null>(null);
   const [showStrategy, setShowStrategy] = useState(false);
@@ -172,8 +175,23 @@ function NewProposal() {
     return parts.join("\n");
   }, [method, jobText, clientName, projectType, budget, keyReq, painPoints]);
 
+  // Fix 8 — abort in-flight analysis. The controller is stored so a Cancel button can
+  // abort it; a run token lets us ignore a stale response that resolves after cancel.
+  const analyzeAbortRef = useRef<AbortController | null>(null);
+  const analyzeRunRef = useRef(0);
+
   const analyzeMutation = useMutation({
-    mutationFn: () => analyzeJob({ data: { jobDescription: effectiveJob } }),
+    mutationFn: () => {
+      analyzeAbortRef.current?.abort();
+      const controller = new AbortController();
+      analyzeAbortRef.current = controller;
+      const runId = ++analyzeRunRef.current;
+      return analyzeJob({ data: { jobDescription: effectiveJob }, signal: controller.signal })
+        .then((result) => {
+          if (runId !== analyzeRunRef.current) throw new Error("__cancelled__");
+          return result;
+        });
+    },
     onSuccess: (result) => {
       setAnalysis({ ...result, hookSuggestions: result.hookSuggestions ?? [], detectedNiche: result.detectedNiche ?? "", suggestedLength: result.suggestedLength ?? "robust" } as JobAnalysis);
       const h = HOOKS.find((x) => x.id === result.suggestedHookId);
@@ -214,8 +232,25 @@ function NewProposal() {
         toast.info(`Strategy doc skipped — ${result.strategyWorthyReason || "simple job, not needed"}`);
       }
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Analysis failed"),
+    onError: (e) => {
+      const msg = e instanceof Error ? e.message : "Analysis failed";
+      if (msg === "__cancelled__" || msg.toLowerCase().includes("abort")) return; // user-cancelled
+      toast.error(msg);
+    },
   });
+
+  // Fix 8 — abort the in-flight analysis and fully reset analysis state so a new job
+  // post can be pasted and analyzed immediately without a broken half-loaded UI.
+  function cancelAnalysis() {
+    analyzeRunRef.current++; // invalidate any in-flight response
+    analyzeAbortRef.current?.abort();
+    analyzeAbortRef.current = null;
+    analyzeMutation.reset();
+    setAnalysis(null);
+    setExplanation(null);
+    setFactCheck(null);
+    toast.info("Analysis cancelled");
+  }
 
   const milestoneMutation = useMutation({
     mutationFn: () => generateMilestones({ data: { jobDescription: effectiveJob, budget: budget || undefined } }),
@@ -291,6 +326,8 @@ function NewProposal() {
       setContent(proposalResult!.content);
       setAiGeneratedContent(proposalResult!.content);
       setExplanation(proposalResult!.explanation);
+      setFactCheck((proposalResult as any)?.factCheck ?? null);
+      setFactCheckAck(false);
       setShowExplain(true);
       setProposalSubmitted(false);
       // Set strategy state from the data returned
@@ -499,6 +536,12 @@ function NewProposal() {
 
   function markSubmitted() {
     if (proposalSubmitted) return;
+    // Fabrication guard (Fix 7): block marking-ready while unverifiable claims are
+    // unacknowledged, so a fabricated stat can't slip out unreviewed.
+    if (factCheck && factCheck.flagged.length > 0 && !factCheckAck) {
+      toast.error("Review the flagged unverifiable claims and check the confirmation box first.");
+      return;
+    }
     setProposalSubmitted(true);
     const fresh = readDayStats();
     const updated = { ...fresh, submitted: fresh.submitted + 1 };
@@ -653,21 +696,34 @@ function NewProposal() {
               </div>
             )}
 
-            <Button
-              onClick={() => analyzeMutation.mutate()}
-              disabled={!canAnalyze || analyzeMutation.isPending}
-              className="mt-4 w-full bg-teal/15 text-teal hover:bg-teal/25"
-            >
-              {analyzeMutation.isPending ? (
-                <>
+            {analyzeMutation.isPending ? (
+              <div className="mt-4 flex gap-2">
+                <Button disabled className="flex-1 bg-teal/15 text-teal">
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Reading the brief…
-                </>
-              ) : (
-                <>
-                  <ScanLine className="mr-1.5 h-4 w-4" /> Analyze job
-                </>
-              )}
-            </Button>
+                </Button>
+                <Button
+                  onClick={cancelAnalysis}
+                  variant="outline"
+                  className="border-red-400/40 text-red-300 hover:bg-red-400/10"
+                >
+                  <X className="mr-1.5 h-4 w-4" /> Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button
+                onClick={() => {
+                  // Fix 8 — clear the previous result fully before starting a fresh analysis
+                  setAnalysis(null);
+                  setExplanation(null);
+                  setFactCheck(null);
+                  analyzeMutation.mutate();
+                }}
+                disabled={!canAnalyze}
+                className="mt-4 w-full bg-teal/15 text-teal hover:bg-teal/25"
+              >
+                <ScanLine className="mr-1.5 h-4 w-4" /> Analyze job
+              </Button>
+            )}
           </CropCard>
 
           {analysis && <AnalysisPanel analysis={analysis} />}
@@ -1023,6 +1079,36 @@ function NewProposal() {
       {/* ── Full-width output section ─────────────────────────────────────── */}
       {content && (
         <div className="mt-8 space-y-6">
+          {/* Fabrication guard warning (Fix 7): unverifiable claims left after auto-remediation */}
+          {factCheck && factCheck.flagged.length > 0 && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-5 py-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-300">
+                    Unverifiable claim{factCheck.flagged.length > 1 ? "s" : ""} detected — review before sending
+                  </p>
+                  <p className="mt-1 text-[12px] text-amber-200/80">
+                    {factCheck.remediated
+                      ? "The system auto-removed some fabricated facts, but these still couldn't be traced to your job post, portfolio, or inputs:"
+                      : "These specific claims could not be traced to your job post, portfolio, or inputs and may be fabricated:"}
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {factCheck.flagged.map((f, i) => (
+                      <li key={i} className="text-[12px] text-amber-100/90">
+                        <span className="font-medium">“{f.claim}”</span>
+                        <span className="text-amber-200/60"> — {f.reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="mt-3 flex items-center gap-2 text-[12px] text-amber-200 cursor-pointer">
+                    <input type="checkbox" checked={factCheckAck} onChange={(e) => setFactCheckAck(e.target.checked)} className="accent-amber-400" />
+                    I've reviewed these and confirm they're accurate (or I'll edit them out)
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Comparison: AI Generated vs Your Version */}
           {aiGeneratedContent && (
             <div>

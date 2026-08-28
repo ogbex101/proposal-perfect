@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateWithFallback, generateWithProvider, generateObjectWithFallback, generateObjectWithProvider, verifyOutput } from "./ai-gateway.server";
+import { generateWithFallback, generateWithProvider, generateObjectWithFallback, generateObjectWithProvider, verifyOutput, verifyFactualClaims } from "./ai-gateway.server";
 import { z } from "zod";
 import { CTAS, FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
@@ -583,6 +583,7 @@ RULES:
 - Reference at least one specific detail from the job post
 - Sounds like a senior consultant who has solved this exact problem before — calm, precise, not pitching
 - No generic marketing language (modern, clean, user-friendly, professional, stunning, beautiful)
+- NO FABRICATION: never invent a statistic, percentage, past project, case study, or named client result that isn't in the job post or context. Prove expertise by naming the mechanism of their problem, not by manufacturing numbers or projects.
 
 Return JSON: { "hookParagraph": "<the opening paragraph — 2-4 sentences, ready to paste>" }`,
         `Job post:\n${data.jobDescription}\n\n${context}`,
@@ -632,6 +633,7 @@ The question must:
 - Invite a genuine reply, not a yes/no
 - Sound natural and conversational — not formal or salesy
 - Reference a specific detail from the job post (their timeline, tool, goal, constraint, or audience)
+- NO FABRICATION: never reference an invented statistic, past project, or client result. Only real details from the job post.
 
 Return JSON: { "ctaLine": "<1-2 sentences, MUST end with a question mark>" }`,
         `Job post:\n${data.jobDescription}\n\n${context}`,
@@ -648,6 +650,13 @@ const ProposalSchema = z.object({
     question: z.string(),
   }),
 });
+
+// Result of the post-generation fabrication guard, attached to the returned proposal.
+export type ProposalFactCheck = {
+  flagged: Array<{ claim: string; reason: string }>;
+  allTraceable: boolean;
+  remediated: boolean; // true if an auto-rewrite removed fabricated claims
+};
 
 export const generateProposal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -832,6 +841,26 @@ Before returning the proposal, verify each of these. If any fail, regenerate:
 ✓ No generic marketing phrases appear anywhere
 ✓ The CTA ends with a relevant question mark
 ✓ Does the writing consistently sound like the assigned register throughout, not sliding into a different voice mid-proposal?
+✓ ZERO fabricated facts — every number, percentage, dollar figure, case study, and named client result traces to the supplied job post, portfolio content, or user input
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NO FABRICATION — ABSOLUTE HARD RULE (overrides "be specific")
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+You may NEVER invent facts. This rule outranks every instruction to "be specific" or "use real numbers."
+STRICTLY FORBIDDEN unless the exact fact appears in the supplied job post, portfolio content, or user input:
+- Any statistic, percentage, or metric ("increased conversions 32%", "cut churn to 0.8%")
+- Any dollar figure or revenue claim ("added $40k MRR")
+- Any case study, past project, or named client ("when I rebuilt Acme's Klaviyo flows...")
+- Any before/after number or timeframe result ("within the first quarter revenue jumped 22-28%")
+If you don't have a real number, do NOT manufacture one. Prove expertise through concrete, evocative UNDERSTANDING of their situation — not invented results.
+
+❌ FORBIDDEN (invented — there is no source for these numbers or this project):
+"When I rebuilt the abandoned-cart flows for a similar Shopify brand, revenue from those flows jumped 22-28% within the first quarter and unsubscribe rates dropped below 0.8%."
+
+✅ REQUIRED (specific about THEIR situation, invents nothing):
+"Abandoned-cart flows are usually where the fastest recovery hides — most stores have the trigger firing but never tune the timing or the second and third touches, which is exactly where the money leaks."
+
+Concrete language proving expertise is encouraged. Invented numbers are not the same thing as real specificity — and a client who asks to see a fabricated case study will find nothing there. When in doubt, describe the mechanism, not a manufactured result.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FOUNDER PSYCHOLOGY — HOW FOUNDERS ACTUALLY READ PROPOSALS
@@ -986,6 +1015,8 @@ STRATEGY = REASONING: Explain the thought process — messaging hierarchy, infor
 
 EVIDENCE-BASED ONLY: Every claim must reference something specific from the job post — tool, platform, timeline, deliverable, audience, or pain point they actually mentioned.
 
+NO FABRICATION (hard rule, outranks "be specific"): NEVER invent a statistic, percentage, dollar figure, case study, past project, or named client result that isn't in the supplied job post, portfolio, or user input. No manufactured "I increased X by 30%" or "when I rebuilt Acme's flows". Prove expertise by describing the mechanism of their problem, not by inventing results. A fabricated case study a client could ask to see is a disqualifying error.
+
 BANNED LANGUAGE: Modern · Clean · User-friendly · Visually appealing · Professional · Sleek · Stunning · Beautiful · Cutting-edge · Seamless · Leverage · Streamline · Optimize · Enhance the user experience · Deliver value · Holistic · Best practices · Robust · Dynamic · Innovative
 
 Hard rules:
@@ -1068,7 +1099,58 @@ Return a JSON object with this exact shape:
         .join("\n")
         .replace(/\n{3,}/g, "\n\n")
         .trim();
-      const finalProposal = { ...finalResult, content: scrubRedFlags(cleanContent, customFlags) };
+      let finalContent = scrubRedFlags(cleanContent, customFlags);
+
+      // ── FABRICATION GUARD (Fix 7) ─────────────────────────────────────────
+      // Backstop for the "no fabricated metrics" rule. Everything the proposal is
+      // allowed to draw facts from becomes the source set. Any specific number,
+      // percentage, case study, or named client result NOT traceable to a source is
+      // flagged; if flags exist we attempt ONE auto-remediation rewrite that strips
+      // them, then re-check. Whatever remains is returned so the UI can warn the user.
+      const factSources = [
+        `JOB POST:\n${data.jobDescription}`,
+        data.portfolioItems.length
+          ? `PORTFOLIO CONTENT:\n${data.portfolioItems.map((p) => `- ${p.title}: ${p.description} (${p.url})`).join("\n")}`
+          : "",
+        data.strategyDocument ? `STRATEGY DOCUMENT:\n${data.strategyDocument}` : "",
+        data.milestones?.length ? `MILESTONES:\n${data.milestones.map((m) => `- ${m.title}: ${m.description}`).join("\n")}` : "",
+        data.customHookText ? `USER HOOK:\n${data.customHookText}` : "",
+        data.customStrategyText ? `USER STRATEGY:\n${data.customStrategyText}` : "",
+      ].filter(Boolean).join("\n\n");
+
+      let factCheck: ProposalFactCheck = { flagged: [], allTraceable: true, remediated: false };
+      const firstCheck = await verifyFactualClaims({ proposal: finalContent, sources: factSources });
+      if (firstCheck && firstCheck.flagged.length > 0) {
+        // Attempt a single automatic remediation: rewrite removing ONLY the fabricated claims.
+        try {
+          const fixed = await structuredWith(
+            "writer",
+            z.object({ content: z.string() }),
+            `You are removing FABRICATED facts from a freelance proposal. The following specific claims were flagged as NOT traceable to any source material and must be fixed:
+${firstCheck.flagged.map((f) => `- "${f.claim}" — ${f.reason}`).join("\n")}
+
+For EACH flagged claim: remove the invented number/statistic/case study/client result, OR replace it with the nearest TRUE general statement that keeps the sentence strong without inventing anything. Do not add any new facts. Change NOTHING else about the proposal — same voice, same structure, same length, same everything except the fabricated claims. Return the full corrected proposal.
+
+Return JSON: { "content": "<full corrected proposal text>" }`,
+            `SOURCE MATERIALS (the only facts allowed):\n${factSources.slice(0, 5000)}\n\n---\n\nPROPOSAL TO CORRECT:\n${finalContent}`,
+          );
+          if (fixed.content && fixed.content.length > 100) {
+            finalContent = scrubRedFlags(fixed.content, customFlags);
+            const recheck = await verifyFactualClaims({ proposal: finalContent, sources: factSources });
+            factCheck = {
+              flagged: recheck?.flagged ?? [],
+              allTraceable: recheck ? recheck.allTraceable : false,
+              remediated: true,
+            };
+          } else {
+            factCheck = { flagged: firstCheck.flagged, allTraceable: false, remediated: false };
+          }
+        } catch {
+          factCheck = { flagged: firstCheck.flagged, allTraceable: false, remediated: false };
+        }
+      }
+
+      const finalProposal = { ...finalResult, content: finalContent, factCheck };
 
       // Auto-save to proposal memory (non-fatal)
       if (intelligence) {
