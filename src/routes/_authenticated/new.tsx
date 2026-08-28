@@ -132,6 +132,8 @@ function NewProposal() {
   const [showExplain, setShowExplain] = useState(true);
   const [factCheck, setFactCheck] = useState<{ flagged: Array<{ claim: string; reason: string }>; allTraceable: boolean; remediated: boolean } | null>(null);
   const [factCheckAck, setFactCheckAck] = useState(false);
+  // Fix 9 — record why portfolios were auto-matched so the UI can show it.
+  const [autoMatchInfo, setAutoMatchInfo] = useState<{ titles: string[]; skills: string[] } | null>(null);
 
   const [strategyDoc, setStrategyDoc] = useState<StrategyDocument | null>(null);
   const [showStrategy, setShowStrategy] = useState(false);
@@ -200,26 +202,33 @@ function NewProposal() {
       if (h) setHookId(h.id);
       if (s) setStrategyId(s.id);
       if (c) setCtaId(c.id);
-      // Auto-select niche-matched portfolio items
-      const niche = (result.detectedNiche ?? "").toLowerCase();
-      const isEmailMarketing = /email|newsletter|campaign|mailchimp|convertkit|drip|klaviyo|digital.?market|virtual.?assist|va |social.?media|content.?market|copywrite|copywriting/.test(niche + " " + effectiveJob.toLowerCase());
-      const isVideoEditing = /video.?edit|reel|tiktok|youtube|short.?form|footage|motion.?graphic|animation|ai.?video/.test(niche + " " + effectiveJob.toLowerCase());
-      const isWebDev = /web.?dev|full.?stack|frontend|backend|react|next\.?js|wordpress|shopify|webflow|landing.?page|website|web.?design|saas|app.?dev/.test(niche + " " + effectiveJob.toLowerCase());
-
+      // Fix 9 — tag-driven auto-match. Build a set of detected skill terms from the
+      // detected niche + extracted entities + job text, then score each portfolio by
+      // how many of its niche_tags appear in that term blob. Records the matched skills
+      // so the UI can show "Auto-matched X, based on detected skills: ...".
+      const norm = (s: string) => s.toLowerCase().replace(/[-_/]+/g, " ").trim();
+      const detectedBlob = norm(
+        (result.detectedNiche ?? "") + " " + ((result as any).extractedEntities ?? []).join(" ") + " " + effectiveJob,
+      );
       if (selectedPortfolio.length === 0) {
-        const nicheMatched = portfolio.filter((p: any) => {
-          const tags: string[] = (p as any).niche_tags ?? [];
-          if (isEmailMarketing && ((p as any).niche === "email-marketing" || tags.some((t: string) => ["email-marketing", "digital-marketing", "virtual-assistant", "content-writing", "copywriting", "social-media"].includes(t)))) return true;
-          if (isVideoEditing && ((p as any).niche === "video-editing" || tags.some((t: string) => ["video-editing", "ai-video", "reels", "youtube", "content-creation"].includes(t)))) return true;
-          if (isWebDev && ((p as any).niche === "web-development" || tags.some((t: string) => ["web-development", "full-stack", "react", "nextjs", "web-design", "landing-page"].includes(t)))) return true;
-          return false;
-        }).slice(0, 3).map((p: any) => p.id);
+        const matchedSkills = new Set<string>();
+        const scored = portfolio
+          .map((p: any) => {
+            const tags: string[] = [...((p as any).niche_tags ?? []), (p as any).niche].filter(Boolean);
+            const hits = tags.filter((t: string) => t && detectedBlob.includes(norm(t)));
+            hits.forEach((h: string) => matchedSkills.add(h));
+            return { id: p.id, title: p.title, score: hits.length };
+          })
+          .filter((x) => x.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3);
 
-        if (nicheMatched.length > 0) {
-          setSelectedPortfolio(nicheMatched);
-          toast.success(`Auto-selected ${nicheMatched.length} portfolio${nicheMatched.length > 1 ? "s" : ""} for this job`);
+        if (scored.length > 0) {
+          setSelectedPortfolio(scored.map((s) => s.id));
+          setAutoMatchInfo({ titles: scored.map((s) => s.title), skills: [...matchedSkills] });
+          toast.success(`Auto-matched ${scored.length} portfolio${scored.length > 1 ? "s" : ""} for this job`);
         } else {
-          // Fall back to primary items
+          setAutoMatchInfo(null);
           const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
           if (primaries.length) setSelectedPortfolio(primaries);
         }
@@ -249,6 +258,7 @@ function NewProposal() {
     setAnalysis(null);
     setExplanation(null);
     setFactCheck(null);
+    setAutoMatchInfo(null);
     toast.info("Analysis cancelled");
   }
 
@@ -716,6 +726,7 @@ function NewProposal() {
                   setAnalysis(null);
                   setExplanation(null);
                   setFactCheck(null);
+                  setAutoMatchInfo(null);
                   analyzeMutation.mutate();
                 }}
                 disabled={!canAnalyze}
@@ -968,6 +979,8 @@ function NewProposal() {
                 currentLink={portfolioLink}
                 onLinkChange={setPortfolioLink}
                 autoGenerate={!!analysis && !portfolioLink}
+                detectedNiche={analysis?.detectedNiche ?? null}
+                detectedSkills={(analysis as any)?.extractedEntities ?? []}
               />
 
               {/* Portfolio selection */}
@@ -975,6 +988,16 @@ function NewProposal() {
                 <Label className="annotation mb-2 block !text-muted-foreground">
                   Additional portfolio links · up to 3
                 </Label>
+                {/* Fix 9 — auto-match indicator (overridable: user can toggle items below) */}
+                {autoMatchInfo && autoMatchInfo.titles.length > 0 && (
+                  <div className="mb-2 rounded-lg border border-teal/30 bg-teal/5 px-3 py-2 text-xs text-teal">
+                    <span className="font-semibold">Auto-matched:</span> {autoMatchInfo.titles.join(", ")}
+                    {autoMatchInfo.skills.length > 0 && (
+                      <span className="text-teal/70"> · based on detected skills: {autoMatchInfo.skills.join(", ")}</span>
+                    )}
+                    <span className="block text-teal/50 mt-0.5">Toggle any item below to override.</span>
+                  </div>
+                )}
                 {portfolio.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
                     No portfolio items yet. Add them under Portfolio to weave links into proposals.

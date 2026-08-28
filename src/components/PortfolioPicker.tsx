@@ -24,11 +24,11 @@ import {
   listGeneratedPortfolios,
   saveGeneratedPortfolio,
 } from "@/lib/portfolio-generate.functions";
-import { listPortfolio } from "@/lib/portfolio.functions";
+import { listPortfolio, curateRealPortfolio } from "@/lib/portfolio.functions";
 import type { PortfolioData } from "@/lib/portfolio-types";
 import { cn } from "@/lib/utils";
 
-type Mode = "link" | "saved" | "generate";
+type Mode = "link" | "saved" | "generate" | "curate";
 
 interface PortfolioPickerProps {
   jobDescription: string;
@@ -36,6 +36,8 @@ interface PortfolioPickerProps {
   currentLink: string | null;
   onLinkChange: (url: string | null) => void;
   autoGenerate?: boolean;
+  detectedNiche?: string | null;
+  detectedSkills?: string[];
 }
 
 function portfolioUrl(slug: string): string {
@@ -43,8 +45,14 @@ function portfolioUrl(slug: string): string {
   return `${origin}/p/${slug}`;
 }
 
-export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onLinkChange, autoGenerate }: PortfolioPickerProps) {
+export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onLinkChange, autoGenerate, detectedNiche, detectedSkills }: PortfolioPickerProps) {
   const [mode, setMode] = useState<Mode>("link");
+  const [curation, setCuration] = useState<{ framing: string; ordered: Array<{ id: string; title: string; url: string; description: string; matchedTags?: string[] }>; note: string | null } | null>(null);
+  const curateMutation = useMutation({
+    mutationFn: () => curateRealPortfolio({ data: { jobDescription, detectedNiche: detectedNiche ?? undefined, detectedSkills } }),
+    onSuccess: (res) => setCuration(res as any),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Curation failed"),
+  });
   const [linkValue, setLinkValue] = useState(currentLink ?? "");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const linkInputRef = useRef<HTMLInputElement>(null);
@@ -136,11 +144,12 @@ export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onL
       <Label className="annotation block !text-muted-foreground">Portfolio for this job</Label>
 
       {/* Option selector */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         {(
           [
             { id: "link", label: "Paste link", icon: Link2 },
             { id: "saved", label: "Saved", icon: FolderOpen },
+            { id: "curate", label: "Curate real", icon: Check },
             { id: "generate", label: "Generate AI", icon: Sparkles },
           ] as const
         ).map((opt) => {
@@ -265,6 +274,58 @@ export function PortfolioPicker({ jobDescription, subProfileId, currentLink, onL
             <p className="text-xs text-muted-foreground">
               Analyzing the job, writing each section, and generating project images. This can take up to a minute.
             </p>
+          )}
+        </div>
+      )}
+
+      {/* Option 4 — curate REAL portfolio (Fix 10, no fabrication) */}
+      {mode === "curate" && (
+        <div className="space-y-2">
+          <p className="text-[11px] text-muted-foreground">
+            Orders your real, tagged portfolio entries by relevance to this job and writes an honest framing paragraph. Invents nothing.
+          </p>
+          <Button
+            type="button"
+            onClick={() => curateMutation.mutate()}
+            disabled={curateMutation.isPending || jobDescription.trim().length < 20}
+            className="w-full"
+          >
+            {curateMutation.isPending ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Curating your real work…</>
+            ) : (
+              <><Check className="mr-2 h-4 w-4" /> Curate my real portfolio for this job</>
+            )}
+          </Button>
+          {curation?.note && (
+            <div className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-2 text-xs text-gold">{curation.note}</div>
+          )}
+          {curation && curation.ordered.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-teal/20 bg-teal/[0.04] p-3">
+              {curation.framing && (
+                <p className="text-xs italic text-foreground/80 leading-relaxed">"{curation.framing}"</p>
+              )}
+              <div className="space-y-1.5">
+                {curation.ordered.map((o, i) => (
+                  <div key={o.id} className="flex items-start gap-2 text-xs">
+                    <span className="font-mono text-teal/60">{i + 1}.</span>
+                    <div className="min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => { onLinkChange(o.url); toast.success(`Attached "${o.title}"`); }}
+                        className="font-medium text-white hover:text-teal text-left"
+                      >
+                        {o.title}
+                      </button>
+                      {o.matchedTags && o.matchedTags.length > 0 && (
+                        <span className="ml-2 text-teal/50">· {o.matchedTags.join(", ")}</span>
+                      )}
+                      <span className="block truncate text-muted-foreground">{o.url}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-teal/50">These are your real entries — click a title to attach it. Nothing here is invented.</p>
+            </div>
           )}
         </div>
       )}

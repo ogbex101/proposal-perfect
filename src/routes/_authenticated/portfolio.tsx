@@ -11,6 +11,7 @@ import {
   Loader2,
   Pin,
   Tag,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -67,6 +68,7 @@ type Draft = {
   description: string;
   is_primary: boolean;
   is_favorite: boolean;
+  niche_tags: string[];
 };
 
 const EMPTY: Draft = {
@@ -75,7 +77,15 @@ const EMPTY: Draft = {
   description: "",
   is_primary: false,
   is_favorite: false,
+  niche_tags: [],
 };
+
+// Common skill/niche tags offered as quick-add chips. Users can also type any freeform tag.
+const SUGGESTED_TAGS = [
+  "Email Marketing", "Klaviyo", "AI Video", "Motion Graphics", "Social Media Management",
+  "VA/Admin", "Lead Generation", "Web Development", "Full-Stack", "React", "Landing Page",
+  "Copywriting", "Content Writing", "SEO", "Shopify", "Webflow", "Automation", "UI Design",
+];
 
 function PortfolioPage() {
   const qc = useQueryClient();
@@ -86,6 +96,19 @@ function PortfolioPage() {
   const items = (data ?? []) as Item[];
 
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [tagInput, setTagInput] = useState("");
+
+  function addTag(raw: string) {
+    const tag = raw.trim();
+    if (!tag || !draft) return;
+    if (draft.niche_tags.some((t) => t.toLowerCase() === tag.toLowerCase())) return;
+    setDraft({ ...draft, niche_tags: [...draft.niche_tags, tag] });
+    setTagInput("");
+  }
+  function removeTag(tag: string) {
+    if (!draft) return;
+    setDraft({ ...draft, niche_tags: draft.niche_tags.filter((t) => t !== tag) });
+  }
   const [toDelete, setToDelete] = useState<Item | null>(null);
 
   const seed = useMutation({
@@ -230,6 +253,14 @@ function PortfolioPage() {
                 </p>
               )}
 
+              {((item as any).niche_tags ?? []).length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {((item as any).niche_tags as string[]).slice(0, 6).map((t) => (
+                    <span key={t} className="rounded-full border border-teal/20 bg-teal/5 px-2 py-0.5 text-[10px] text-teal/90">{t}</span>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-4 flex items-center gap-1.5 border-t border-line/60 pt-3">
                 <Button
                   variant="ghost"
@@ -257,6 +288,7 @@ function PortfolioPage() {
                       description: item.description,
                       is_primary: item.is_primary,
                       is_favorite: item.is_favorite,
+                      niche_tags: (item as any).niche_tags ?? [],
                     })
                   }
                 >
@@ -316,6 +348,40 @@ function PortfolioPage() {
                   placeholder="A two-sided marketplace built with Next.js, Supabase, and Stripe Connect…"
                 />
               </div>
+              {/* Fix 9 — niche/skill tags for auto-matching to jobs */}
+              <div className="space-y-1.5">
+                <Label>Skill / niche tags</Label>
+                <p className="text-[11px] text-muted-foreground">Used to auto-match this portfolio to jobs. Add your own or pick from suggestions.</p>
+                {draft.niche_tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {draft.niche_tags.map((t) => (
+                      <span key={t} className="inline-flex items-center gap-1 rounded-full border border-teal/30 bg-teal/10 px-2.5 py-0.5 text-xs text-teal">
+                        {t}
+                        <button onClick={() => removeTag(t)} className="hover:text-white" aria-label={`Remove ${t}`}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Input
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
+                    placeholder="Type a tag and press Enter (e.g. Klaviyo)"
+                  />
+                  <Button variant="outline" onClick={() => addTag(tagInput)} disabled={!tagInput.trim()}>Add</Button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {SUGGESTED_TAGS.filter((s) => !draft.niche_tags.some((t) => t.toLowerCase() === s.toLowerCase())).slice(0, 12).map((s) => (
+                    <button key={s} onClick={() => addTag(s)} className="rounded-full border border-line/60 bg-white/5 px-2.5 py-0.5 text-xs text-muted-foreground hover:border-teal/40 hover:text-teal">
+                      + {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <input
