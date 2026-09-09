@@ -436,7 +436,16 @@ function NewProposal() {
 
   const voiceEditMutation = useMutation({
     mutationFn: (instruction: string) =>
-      applyProposalEdit({ data: { proposalText: content, instruction } }),
+      applyProposalEdit({
+        data: {
+          proposalText: content,
+          instruction,
+          // Fix 4 — give the editor the structural blueprint so it can locate and
+          // correctly re-style specific paragraphs (hook/CTA). Undefined on fallback runs.
+          blueprint: (analysis as any)?.intelligence?.proposalBlueprint,
+          registerId: (analysis as any)?.intelligence?.clientIntelligence?.recommendedRegisterId,
+        },
+      }),
     onSuccess: (res) => {
       if (res?.text) {
         setContent(res.text);

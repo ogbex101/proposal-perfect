@@ -4,7 +4,7 @@ import { generateWithFallback, generateWithProvider, generateObjectWithFallback,
 import { z } from "zod";
 import { CTAS, FORBIDDEN_PHRASES, HOOKS, LENGTHS, STRATEGIES } from "./proposal-constants";
 import { redFlagPromptBlock, scrubRedFlags } from "./red-flags";
-import { runProposalIntelligencePipeline, type ProposalIntelligenceObject } from "./proposal-intelligence";
+import { runProposalIntelligencePipeline, type ProposalIntelligenceObject, type ProposalBlueprint } from "./proposal-intelligence";
 import { saveProposalMemoryInternal } from "./proposal-memory.functions";
 import { REGISTERS, resolveRegister } from "./prompts/shared/registers";
 import { goldenKeyById } from "./prompts/shared/golden-keys";
@@ -1375,24 +1375,51 @@ Return a JSON object with this exact shape:
 // ---------- AI Proposal Editor ----------
 export const applyProposalEdit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { proposalText: string; instruction: string }) =>
+  .inputValidator((d: { proposalText: string; instruction: string; blueprint?: unknown; registerId?: string }) =>
     z.object({
       proposalText: z.string().min(10).max(10000),
       instruction: z.string().min(3).max(500),
+      // Optional ProposalBlueprint from the original generation — gives the editor a
+      // structural map (which paragraph is the hook/CTA, which patterns were used) so
+      // instructions like "rewrite the hook using curiosity" target the right paragraph.
+      blueprint: z.any().optional(),
+      registerId: z.string().optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
     try {
       const customFlags = await loadCustomFlags(context);
+      const bp = data.blueprint as ProposalBlueprint | undefined;
+
+      // Structural context block — only when a blueprint is available (Fix 4).
+      let structuralContext = "";
+      if (bp && (bp.mappedHookId || bp.openingLine || bp.ctaLine)) {
+        const reg = data.registerId ? resolveRegister(data.registerId) : null;
+        const hookLib = HOOKS.map((h) => `  - ${h.id}: ${h.name} — ${h.description}`).join("\n");
+        structuralContext = `
+STRUCTURAL CONTEXT (for your reference — the proposal was built from this blueprint):
+- The HOOK is the opening paragraph. It uses pattern: ${bp.mappedHookId || "(unspecified)"}${bp.openingLine ? `\n  Its text begins near: "${bp.openingLine.slice(0, 120)}"` : ""}
+- Strategy pattern: ${bp.mappedStrategyId || "(unspecified)"}
+- The CTA is the final paragraph (a question). CTA pattern: ${bp.mappedCtaId || "(unspecified)"}${bp.ctaLine ? `\n  Its text is near: "${bp.ctaLine.slice(0, 120)}"` : ""}${reg ? `\n- Register (voice): ${reg.name} — ${reg.description}` : ""}
+
+When the instruction names a structural element ("the hook", "the opening", "the CTA", "the closing"), use the text hints above to LOCATE that exact paragraph rather than guessing by position, and rewrite only that paragraph.
+
+HOOK PATTERN LIBRARY (use the matching definition when an instruction asks to change hook style, e.g. "use curiosity" → curiosity_gap):
+${hookLib}
+`;
+      }
+
       const text = await generateWithProvider("writer", {
         system: `You are a professional proposal editor. The user gives you a freelance proposal and an instruction to improve it. Apply the instruction surgically — change ONLY what is asked. Preserve the overall structure and voice unless instructed otherwise. Return ONLY the revised proposal text with no commentary, no preamble, no "Here is the revised..." prefix. Just the proposal text itself.
-
+${structuralContext}
 Rules:
 - Never add greeting lines ("Hi", "Hello", "Dear")
 - Never add generic openers
 - Preserve line breaks and paragraph structure
 - If asked to shorten, cut filler but keep every specific point
 - If asked to change tone, apply it throughout consistently
+- When asked to change a specific paragraph's style (e.g. the hook), change ONLY that paragraph and make it genuinely follow the named pattern — not just a tone tweak
+- NO FABRICATION: never introduce a statistic, percentage, case study, or named client result that isn't already in the proposal or the instruction
 - Return the complete revised proposal, not just the changed part`,
         prompt: `INSTRUCTION: ${data.instruction}\n\nCURRENT PROPOSAL:\n${data.proposalText}`,
       });
