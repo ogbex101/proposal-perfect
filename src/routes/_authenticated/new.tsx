@@ -56,6 +56,18 @@ import { InlineRewriteToolbar } from "@/components/InlineRewriteToolbar";
 import { getDraft, saveDraft, clearDraft } from "@/lib/proposal-drafts.functions";
 type FreelancerProfile = { id: string; label: string };
 import { saveItem } from "@/lib/saved.functions";
+import { computeFingerprint, describeFingerprint } from "@/lib/proposal-structure";
+import { recordStructure, dismissStructurePrompt, markStructureSaved } from "@/lib/proposal-structures.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { copyText, downloadTxt, downloadPdf, copyMarkdown } from "@/lib/export";
 import { saveStrategyDoc } from "@/lib/strategy.functions";
 import { generateAndSavePortfolioSamples, detectDigitalSkillsCategory } from "@/lib/portfolio-samples.functions";
@@ -507,6 +519,7 @@ function NewProposal() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["proposals"] });
       toast.success("Saved to history");
+      void checkStructure();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save"),
   });
@@ -526,6 +539,70 @@ function NewProposal() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save template"),
   });
+
+  // ── Recurring-structure detection ────────────────────────────────────────
+  const [structPrompt, setStructPrompt] = useState<
+    { fingerprint: string; occurrence: number; label: string } | null
+  >(null);
+  const [savingStructure, setSavingStructure] = useState(false);
+
+  async function checkStructure() {
+    if (!content.trim()) return;
+    try {
+      const gk = (analysis as any)?.intelligence?.proposalBlueprint?.goldenKey as
+        | { use?: boolean; keyId?: string | null }
+        | undefined;
+      const key = gk?.use ? goldenKeyById(gk.keyId ?? undefined) : undefined;
+      const fp = computeFingerprint(content, gk ? { use: gk.use, pattern: key?.pattern ?? null, keyId: gk.keyId } : null);
+      const res = await recordStructure({
+        data: { fingerprint: fp.key, blocks: fp.blocks, goldenKeyPattern: fp.goldenKeyPattern },
+      });
+      if (res.shouldPrompt) {
+        setStructPrompt({ fingerprint: fp.key, occurrence: res.occurrences, label: describeFingerprint(fp) });
+      }
+    } catch {
+      // structure tracking is best-effort; never block saving
+    }
+  }
+
+  async function declineStructure() {
+    const p = structPrompt;
+    setStructPrompt(null);
+    if (!p) return;
+    try {
+      await dismissStructurePrompt({ data: { fingerprint: p.fingerprint, occurrence: p.occurrence } });
+    } catch {}
+  }
+
+  async function saveStructureAsTemplate() {
+    const p = structPrompt;
+    if (!p) return;
+    setSavingStructure(true);
+    try {
+      await saveItem({
+        data: {
+          kind: "proposal",
+          ref_id: null,
+          snapshot: {
+            title: effectiveJob.split("\n")[0].slice(0, 70) || "Saved structure",
+            content,
+            structure: p.label,
+            hookId,
+            strategyId,
+            length,
+          },
+        },
+      });
+      await markStructureSaved({ data: { fingerprint: p.fingerprint } });
+      queryClient.invalidateQueries({ queryKey: ["saved"] });
+      toast.success("Structure saved as a template");
+      setStructPrompt(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save template");
+    } finally {
+      setSavingStructure(false);
+    }
+  }
 
   const canAnalyze = effectiveJob.length >= 20;
   const canGenerate = effectiveJob.length >= 10;
@@ -1334,6 +1411,24 @@ function NewProposal() {
           <InlineRewriteToolbar fullText={content} onReplace={applyRewrite} enabled={!!content} />
         </>
       )}
+
+      <AlertDialog open={!!structPrompt} onOpenChange={(v) => { if (!v) void declineStructure(); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>This looks like a new proposal structure</AlertDialogTitle>
+            <AlertDialogDescription>
+              You've written this same shape {structPrompt?.occurrence ?? 2} times now
+              {structPrompt ? ` (${structPrompt.label})` : ""}. Want to save it as a template?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => void declineStructure()}>Not now</AlertDialogCancel>
+            <AlertDialogAction disabled={savingStructure} onClick={(e) => { e.preventDefault(); void saveStructureAsTemplate(); }}>
+              {savingStructure ? "Saving…" : "Save as template"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

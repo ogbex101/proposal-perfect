@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { FileText, Sparkles } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { listSaved } from "@/lib/saved.functions";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,14 +27,47 @@ interface Props {
   onApply: (body: string) => void;
 }
 
+const MINE = "My templates";
+
 export function ProposalTemplatePicker({ onApply }: Props) {
   const [open, setOpen] = useState(false);
   const [niche, setNiche] = useState<string>(NICHES[0] ?? "");
   const [selected, setSelected] = useState<ProposalTemplate | null>(null);
 
+  const savedQuery = useQuery({
+    queryKey: ["saved"],
+    queryFn: () => listSaved(),
+    enabled: open,
+  });
+
+  const mine: ProposalTemplate[] = useMemo(() => {
+    const rows = (savedQuery.data ?? []) as Array<{
+      id: string;
+      kind: string;
+      snapshot: { title?: string; content?: string; structure?: string } | null;
+    }>;
+    return rows
+      .filter((r) => r.kind === "proposal" && typeof r.snapshot?.content === "string")
+      .map((r) => ({
+        id: r.id,
+        niche: MINE,
+        name: r.snapshot?.title || "Saved structure",
+        description: r.snapshot?.structure ?? "Saved from one of your proposals.",
+        sections: {
+          intro: r.snapshot!.content as string,
+          value: "",
+          pricing: "",
+          cta: "",
+          closing: "",
+        },
+      }));
+  }, [savedQuery.data]);
+
+  const tabs = useMemo(() => [MINE, ...NICHES], []);
+
   const filtered = useMemo(
-    () => PROPOSAL_TEMPLATES.filter((t) => t.niche === niche),
-    [niche],
+    () => (niche === MINE ? mine : PROPOSAL_TEMPLATES.filter((t) => t.niche === niche)),
+    [niche, mine],
   );
 
   function apply(t: ProposalTemplate) {
@@ -68,7 +103,7 @@ export function ProposalTemplatePicker({ onApply }: Props) {
 
             {/* Niche tabs */}
             <div className="flex flex-wrap gap-1.5 border-b border-border/40 pb-3">
-              {NICHES.map((n) => (
+              {tabs.map((n) => (
                 <button
                   key={n}
                   type="button"
@@ -89,6 +124,13 @@ export function ProposalTemplatePicker({ onApply }: Props) {
               {/* Template list */}
               <ScrollArea className="max-h-[420px] pr-2">
                 <div className="space-y-1.5">
+                  {filtered.length === 0 && (
+                    <p className="py-6 text-center text-[11px] text-muted-foreground">
+                      {niche === MINE
+                        ? "No saved templates yet — when a structure you write recurs, we'll offer to save it here."
+                        : "Nothing here yet."}
+                    </p>
+                  )}
                   {filtered.map((t) => (
                     <button
                       key={t.id}
@@ -133,7 +175,7 @@ export function ProposalTemplatePicker({ onApply }: Props) {
                           ["Pricing", selected.sections.pricing],
                           ["CTA", selected.sections.cta],
                           ["Closing", selected.sections.closing],
-                        ] as const).map(([label, body]) => (
+                        ] as const).filter(([, body]) => body).map(([label, body]) => (
                           <div key={label}>
                             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-teal">
                               {label}
