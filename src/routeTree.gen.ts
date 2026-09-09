@@ -23,9 +23,9 @@ import { Route as AuthenticatedScoutRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedSavedRouteImport } from './routes/_authenticated/saved'
 import { Route as AuthenticatedResearchRouteImport } from './routes/_authenticated/research'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
-import { Route as AuthenticatedJournalRouteImport } from './routes/_authenticated/journal'
 import { Route as AuthenticatedPortfolioRouteImport } from './routes/_authenticated/portfolio'
 import { Route as AuthenticatedNewRouteImport } from './routes/_authenticated/new'
+import { Route as AuthenticatedJournalRouteImport } from './routes/_authenticated/journal'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedConversionRouteImport } from './routes/_authenticated/conversion'
@@ -101,11 +101,6 @@ const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedJournalRoute = AuthenticatedJournalRouteImport.update({
-  id: '/journal',
-  path: '/journal',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedPortfolioRoute = AuthenticatedPortfolioRouteImport.update({
   id: '/portfolio',
   path: '/portfolio',
@@ -114,6 +109,11 @@ const AuthenticatedPortfolioRoute = AuthenticatedPortfolioRouteImport.update({
 const AuthenticatedNewRoute = AuthenticatedNewRouteImport.update({
   id: '/new',
   path: '/new',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedJournalRoute = AuthenticatedJournalRouteImport.update({
+  id: '/journal',
+  path: '/journal',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
@@ -151,10 +151,10 @@ export interface FileRoutesByFullPath {
   '/conversion': typeof AuthenticatedConversionRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/journal': typeof AuthenticatedJournalRoute
   '/new': typeof AuthenticatedNewRoute
   '/portfolio': typeof AuthenticatedPortfolioRoute
   '/reports': typeof AuthenticatedReportsRoute
-  '/journal': typeof AuthenticatedJournalRoute
   '/research': typeof AuthenticatedResearchRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/scout': typeof AuthenticatedScoutRoute
@@ -174,10 +174,10 @@ export interface FileRoutesByTo {
   '/conversion': typeof AuthenticatedConversionRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/journal': typeof AuthenticatedJournalRoute
   '/new': typeof AuthenticatedNewRoute
   '/portfolio': typeof AuthenticatedPortfolioRoute
   '/reports': typeof AuthenticatedReportsRoute
-  '/journal': typeof AuthenticatedJournalRoute
   '/research': typeof AuthenticatedResearchRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/scout': typeof AuthenticatedScoutRoute
@@ -199,10 +199,10 @@ export interface FileRoutesById {
   '/_authenticated/conversion': typeof AuthenticatedConversionRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
+  '/_authenticated/journal': typeof AuthenticatedJournalRoute
   '/_authenticated/new': typeof AuthenticatedNewRoute
   '/_authenticated/portfolio': typeof AuthenticatedPortfolioRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
-  '/_authenticated/journal': typeof AuthenticatedJournalRoute
   '/_authenticated/research': typeof AuthenticatedResearchRoute
   '/_authenticated/saved': typeof AuthenticatedSavedRoute
   '/_authenticated/scout': typeof AuthenticatedScoutRoute
@@ -224,6 +224,7 @@ export interface FileRouteTypes {
     | '/conversion'
     | '/dashboard'
     | '/history'
+    | '/journal'
     | '/new'
     | '/portfolio'
     | '/reports'
@@ -246,6 +247,7 @@ export interface FileRouteTypes {
     | '/conversion'
     | '/dashboard'
     | '/history'
+    | '/journal'
     | '/new'
     | '/portfolio'
     | '/reports'
@@ -269,6 +271,7 @@ export interface FileRouteTypes {
     | '/_authenticated/conversion'
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
+    | '/_authenticated/journal'
     | '/_authenticated/new'
     | '/_authenticated/portfolio'
     | '/_authenticated/reports'
@@ -394,13 +397,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/journal': {
-      id: '/_authenticated/journal'
-      path: '/journal'
-      fullPath: '/journal'
-      preLoaderRoute: typeof AuthenticatedJournalRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/portfolio': {
       id: '/_authenticated/portfolio'
       path: '/portfolio'
@@ -413,6 +409,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/new'
       preLoaderRoute: typeof AuthenticatedNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/journal': {
+      id: '/_authenticated/journal'
+      path: '/journal'
+      fullPath: '/journal'
+      preLoaderRoute: typeof AuthenticatedJournalRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/history': {
@@ -459,10 +462,10 @@ interface AuthenticatedRouteChildren {
   AuthenticatedConversionRoute: typeof AuthenticatedConversionRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
+  AuthenticatedJournalRoute: typeof AuthenticatedJournalRoute
   AuthenticatedNewRoute: typeof AuthenticatedNewRoute
   AuthenticatedPortfolioRoute: typeof AuthenticatedPortfolioRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
-  AuthenticatedJournalRoute: typeof AuthenticatedJournalRoute
   AuthenticatedResearchRoute: typeof AuthenticatedResearchRoute
   AuthenticatedSavedRoute: typeof AuthenticatedSavedRoute
   AuthenticatedScoutRoute: typeof AuthenticatedScoutRoute
@@ -476,10 +479,10 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedConversionRoute: AuthenticatedConversionRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
+  AuthenticatedJournalRoute: AuthenticatedJournalRoute,
   AuthenticatedNewRoute: AuthenticatedNewRoute,
   AuthenticatedPortfolioRoute: AuthenticatedPortfolioRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
-  AuthenticatedJournalRoute: AuthenticatedJournalRoute,
   AuthenticatedResearchRoute: AuthenticatedResearchRoute,
   AuthenticatedSavedRoute: AuthenticatedSavedRoute,
   AuthenticatedScoutRoute: AuthenticatedScoutRoute,
@@ -504,3 +507,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
