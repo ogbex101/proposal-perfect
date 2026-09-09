@@ -236,7 +236,11 @@ function NewProposal() {
           if (primaries.length) setSelectedPortfolio(primaries);
         }
       }
-      toast.success("Job analyzed");
+      if ((result as any).usedFallbackEngine) {
+        toast.warning("Using simplified analysis — full intelligence engine unavailable. Hook/strategy quality may differ and the Golden Key won't appear.", { duration: 7000 });
+      } else {
+        toast.success("Job analyzed");
+      }
       // Auto-start strategy generation only if job is worth it
       if (!strategyDoc && !strategyMutation.isPending && result.strategyWorthy !== false) {
         setTimeout(() => strategyMutation.mutate(), 500);
@@ -1370,6 +1374,12 @@ function AnalysisPanel({ analysis }: { analysis: JobAnalysis }) {
   return (
     <CropCard className="p-5 bp-rise">
       <Eyebrow index="A">Job analysis</Eyebrow>
+      {(analysis as any).usedFallbackEngine && (
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>Simplified analysis — the full intelligence engine was unavailable for this run. Hook/strategy/CTA quality may be weaker and the Golden Key card won't appear. Re-run to try the full engine again.</span>
+        </div>
+      )}
       <div className="mt-4 space-y-4">
         <Block title="Summary">{analysis.summary}</Block>
         <Block title="Client pain point">{analysis.painPoint}</Block>

@@ -172,6 +172,10 @@ const AnalysisSchema = z.object({
   extractedEntities: z.array(z.string()).default([]),
   strategyWorthy: z.boolean().default(true),
   strategyWorthyReason: z.string().default(""),
+  // True when the 4-engine intelligence pipeline failed and this analysis came from
+  // the legacy single-engine fallback (no `intelligence`, weaker hook/strategy/CTA,
+  // no Golden Key). The UI surfaces this so the user knows why quality may differ.
+  usedFallbackEngine: z.boolean().default(false),
 });
 export type JobAnalysis = z.infer<typeof AnalysisSchema>;
 
@@ -252,17 +256,24 @@ export const analyzeJob = createServerFn({ method: "POST" })
         strategyWorthyReason: intelligence.requiresHumanReview
           ? `Confidence ${intelligence.overallConfidence.toFixed(0)}% — human review recommended`
           : `Confidence ${intelligence.overallConfidence.toFixed(0)}% — high-quality analysis`,
+        usedFallbackEngine: false,
         intelligence,
       };
 
       return analysis;
     } catch (err) {
+      // The 4-engine intelligence pipeline threw. Log the REAL error in full before
+      // falling back, so we can diagnose which engine/schema is failing (Fix 0 step 4).
+      console.error(
+        "[analyzeJob] intelligence pipeline failed — falling back to legacy single-engine analysis. Original error:",
+        err instanceof Error ? `${err.name}: ${err.message}\n${err.stack ?? ""}` : err,
+      );
       // Fall back to legacy single-engine analysis if pipeline fails
       try {
         const hookList = HOOKS.map((h) => `- ${h.id}: ${h.name} — ${h.description}`).join("\n");
         const strategyList = STRATEGIES.map((s) => `- ${s.id}: ${s.name} — ${s.description}`).join("\n");
         const ctaList = CTAS.map((c) => `- ${c.id}: ${c.name} — ${c.description}`).join("\n");
-        return await structuredWith(
+        const legacy = await structuredWith(
           "analyzer",
           AnalysisSchema,
         `You are an expert freelance proposal strategist who has won hundreds of proposals. Your analysis is what separates winning proposals from generic ones. You must read between the lines.
@@ -372,6 +383,9 @@ Return a JSON object with these exact keys:
 IMPORTANT for hookSuggestions / ctaSuggestions: The openingLine and closingLine must be specific, concrete sentences written for THIS job — not templates. Ready to paste directly. Score 85-100 = excellent fit, 70-84 = good fit, 50-69 = workable.${redFlagPromptBlock()}`,
           `Analyze this job post:\n\n${data.jobDescription}`,
         );
+        // Flag the fallback so the UI can tell the user quality will differ and the
+        // Golden Key card won't appear (no intelligence object on this path).
+        return { ...legacy, usedFallbackEngine: true };
       } catch (fallbackErr) {
         handleAiError(fallbackErr);
       }
