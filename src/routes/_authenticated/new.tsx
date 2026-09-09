@@ -1411,6 +1411,24 @@ function NewProposal() {
           <InlineRewriteToolbar fullText={content} onReplace={applyRewrite} enabled={!!content} />
         </>
       )}
+
+      <AlertDialog open={!!structPrompt} onOpenChange={(v) => { if (!v) void declineStructure(); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>This looks like a new proposal structure</AlertDialogTitle>
+            <AlertDialogDescription>
+              You've written this same shape {structPrompt?.occurrence ?? 2} times now
+              {structPrompt ? ` (${structPrompt.label})` : ""}. Want to save it as a template?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => void declineStructure()}>Not now</AlertDialogCancel>
+            <AlertDialogAction disabled={savingStructure} onClick={(e) => { e.preventDefault(); void saveStructureAsTemplate(); }}>
+              {savingStructure ? "Saving…" : "Save as template"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
