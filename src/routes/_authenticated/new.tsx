@@ -540,6 +540,70 @@ function NewProposal() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save template"),
   });
 
+  // ── Recurring-structure detection ────────────────────────────────────────
+  const [structPrompt, setStructPrompt] = useState<
+    { fingerprint: string; occurrence: number; label: string } | null
+  >(null);
+  const [savingStructure, setSavingStructure] = useState(false);
+
+  async function checkStructure() {
+    if (!content.trim()) return;
+    try {
+      const gk = (analysis as any)?.intelligence?.proposalBlueprint?.goldenKey as
+        | { use?: boolean; keyId?: string | null }
+        | undefined;
+      const key = gk?.use ? goldenKeyById(gk.keyId ?? undefined) : undefined;
+      const fp = computeFingerprint(content, gk ? { use: gk.use, pattern: key?.pattern ?? null, keyId: gk.keyId } : null);
+      const res = await recordStructure({
+        data: { fingerprint: fp.key, blocks: fp.blocks, goldenKeyPattern: fp.goldenKeyPattern },
+      });
+      if (res.shouldPrompt) {
+        setStructPrompt({ fingerprint: fp.key, occurrence: res.occurrences, label: describeFingerprint(fp) });
+      }
+    } catch {
+      // structure tracking is best-effort; never block saving
+    }
+  }
+
+  async function declineStructure() {
+    const p = structPrompt;
+    setStructPrompt(null);
+    if (!p) return;
+    try {
+      await dismissStructurePrompt({ data: { fingerprint: p.fingerprint, occurrence: p.occurrence } });
+    } catch {}
+  }
+
+  async function saveStructureAsTemplate() {
+    const p = structPrompt;
+    if (!p) return;
+    setSavingStructure(true);
+    try {
+      await saveItem({
+        data: {
+          kind: "proposal",
+          ref_id: null,
+          snapshot: {
+            title: effectiveJob.split("\n")[0].slice(0, 70) || "Saved structure",
+            content,
+            structure: p.label,
+            hookId,
+            strategyId,
+            length,
+          },
+        },
+      });
+      await markStructureSaved({ data: { fingerprint: p.fingerprint } });
+      queryClient.invalidateQueries({ queryKey: ["saved"] });
+      toast.success("Structure saved as a template");
+      setStructPrompt(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save template");
+    } finally {
+      setSavingStructure(false);
+    }
+  }
+
   const canAnalyze = effectiveJob.length >= 20;
   const canGenerate = effectiveJob.length >= 10;
 
