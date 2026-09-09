@@ -553,6 +553,45 @@ export type Database = {
         }
         Relationships: []
       }
+      proposal_structures: {
+        Row: {
+          blocks: string[]
+          created_at: string
+          fingerprint: string
+          golden_key_pattern: string | null
+          id: string
+          occurrences: number
+          prompted_at_occurrence: number
+          saved_as_template: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          blocks?: string[]
+          created_at?: string
+          fingerprint: string
+          golden_key_pattern?: string | null
+          id?: string
+          occurrences?: number
+          prompted_at_occurrence?: number
+          saved_as_template?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          blocks?: string[]
+          created_at?: string
+          fingerprint?: string
+          golden_key_pattern?: string | null
+          id?: string
+          occurrences?: number
+          prompted_at_occurrence?: number
+          saved_as_template?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       proposals: {
         Row: {
           budget: string | null
