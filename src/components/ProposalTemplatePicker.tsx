@@ -103,7 +103,7 @@ export function ProposalTemplatePicker({ onApply }: Props) {
 
             {/* Niche tabs */}
             <div className="flex flex-wrap gap-1.5 border-b border-border/40 pb-3">
-              {NICHES.map((n) => (
+              {tabs.map((n) => (
                 <button
                   key={n}
                   type="button"
