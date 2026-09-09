@@ -56,6 +56,18 @@ import { InlineRewriteToolbar } from "@/components/InlineRewriteToolbar";
 import { getDraft, saveDraft, clearDraft } from "@/lib/proposal-drafts.functions";
 type FreelancerProfile = { id: string; label: string };
 import { saveItem } from "@/lib/saved.functions";
+import { computeFingerprint, describeFingerprint } from "@/lib/proposal-structure";
+import { recordStructure, dismissStructurePrompt, markStructureSaved } from "@/lib/proposal-structures.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { copyText, downloadTxt, downloadPdf, copyMarkdown } from "@/lib/export";
 import { saveStrategyDoc } from "@/lib/strategy.functions";
 import { generateAndSavePortfolioSamples, detectDigitalSkillsCategory } from "@/lib/portfolio-samples.functions";
