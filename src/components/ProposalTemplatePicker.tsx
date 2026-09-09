@@ -168,7 +168,7 @@ export function ProposalTemplatePicker({ onApply }: Props) {
                           ["Pricing", selected.sections.pricing],
                           ["CTA", selected.sections.cta],
                           ["Closing", selected.sections.closing],
-                        ] as const).map(([label, body]) => (
+                        ] as const).filter(([, body]) => body).map(([label, body]) => (
                           <div key={label}>
                             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-teal">
                               {label}
