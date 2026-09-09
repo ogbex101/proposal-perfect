@@ -27,14 +27,47 @@ interface Props {
   onApply: (body: string) => void;
 }
 
+const MINE = "My templates";
+
 export function ProposalTemplatePicker({ onApply }: Props) {
   const [open, setOpen] = useState(false);
   const [niche, setNiche] = useState<string>(NICHES[0] ?? "");
   const [selected, setSelected] = useState<ProposalTemplate | null>(null);
 
+  const savedQuery = useQuery({
+    queryKey: ["saved"],
+    queryFn: () => listSaved(),
+    enabled: open,
+  });
+
+  const mine: ProposalTemplate[] = useMemo(() => {
+    const rows = (savedQuery.data ?? []) as Array<{
+      id: string;
+      kind: string;
+      snapshot: { title?: string; content?: string; structure?: string } | null;
+    }>;
+    return rows
+      .filter((r) => r.kind === "proposal" && typeof r.snapshot?.content === "string")
+      .map((r) => ({
+        id: r.id,
+        niche: MINE,
+        name: r.snapshot?.title || "Saved structure",
+        description: r.snapshot?.structure ?? "Saved from one of your proposals.",
+        sections: {
+          intro: r.snapshot!.content as string,
+          value: "",
+          pricing: "",
+          cta: "",
+          closing: "",
+        },
+      }));
+  }, [savedQuery.data]);
+
+  const tabs = useMemo(() => [MINE, ...NICHES], []);
+
   const filtered = useMemo(
-    () => PROPOSAL_TEMPLATES.filter((t) => t.niche === niche),
-    [niche],
+    () => (niche === MINE ? mine : PROPOSAL_TEMPLATES.filter((t) => t.niche === niche)),
+    [niche, mine],
   );
 
   function apply(t: ProposalTemplate) {
