@@ -61,6 +61,55 @@ sentences) are client-safe shared libraries.
 
 ## Chronological Log
 
+## 2026-09-09 — Round 3: Fixes -1, 0, 1, 2, 3, 4, 6 (Fix 5 verify-only)
+
+**Problem:** Eight root-caused issues, mostly around the "portfolio isn't being added"
+and "hooks feel generic / Golden Key never decides" complaints. Two turned out to be the
+biggest hidden causes: (a) the **brief** length tier was *designed* to exclude portfolio
+links ("Zero portfolio links") and even truncated them out — and brief was the
+auto-recommended default for Freelancer.com, the user's primary platform; (b) `analyzeJob`
+**silently fell back** to a weaker legacy single-engine path on any pipeline error,
+producing no `intelligence` (so the Golden Key card correctly renders nothing) with zero
+user indication — explaining inconsistent quality between runs.
+
+**Solution:**
+- **Fix -1:** brief tier now mandates the portfolio link right after the hook;
+  truncation is paragraph-aware (`urlSafeTrim`) — protects hook/portfolio/CTA, sheds body
+  paragraphs, never severs a URL. Freelancer.com default moved to `robust`.
+- **Fix 0:** `analyzeJob` catch now `console.error`s the full pipeline error; a
+  `usedFallbackEngine` flag is returned; UI shows a warning toast + persistent amber badge.
+  (Step 4 — diagnosing *why* it throws — needs real-usage error data now that logging is in.)
+- **Fix 1:** migration grants `SELECT` on `strategies` to `anon` so public `/s/{slug}`
+  links render (RLS already allowed it; the table GRANT didn't).
+- **Fix 2:** `curateRealPortfolio` matching is word-boundary aware (`\b`, new
+  `escapeRegExp` in utils.ts); "strong" now needs a multi-word tag hit OR ≥2 distinct
+  single-word hits; short single-tag coincidences (ai/ui/seo) fall through to the no-match note.
+- **Fix 3:** default portfolio image source → `lovable` (credit-backed, on-prompt);
+  concrete single-subject prompt; fallback order lovable → stock → pollinations.
+- **Fix 4:** `applyProposalEdit` optionally takes the blueprint + registerId, injecting
+  structural context + the HOOKS pattern library so structural edits ("rewrite the hook
+  using curiosity") hit the right paragraph and follow the named pattern.
+- **Fix 6:** three checklist additions — no restating the client's sentence, no hedging,
+  attached-consequence requirement.
+- **Fix 5:** no code — Golden Key card + hook suggestions were already correctly wired;
+  they were only invisible on the (now-flagged) fallback path.
+
+**Files changed:** `proposal-constants.ts`, `ai.functions.ts`, `portfolio.functions.ts`,
+`portfolio-generate.functions.ts`, `utils.ts`, `routes/_authenticated/new.tsx`, and new
+migrations `20260909000100_strategies_anon_select.sql`.
+
+**Depends on / connects to:** Fix -1 + Fix 0 were done first because they inflate/explain
+several other symptoms. Fix 5 depends on Fix 0's badge. Fix 4 consumes the same
+`intelligence.proposalBlueprint` the Golden Key + hook suggestions use.
+
+**Still open / not yet done:**
+- Live verification (portfolio-in-brief across 5 posts; forced-pipeline-failure badge;
+  blueprint-aware hook re-style; anon strategy link incognito) needs a running app + AI
+  keys + the anon migration applied — not possible in this environment (no provider keys).
+- Fix 0 step 4: collect real pipeline-failure logs before hardening a specific engine.
+- NEW FEATURE (auto-detect & save new proposal structures as templates): scoped only,
+  awaiting user confirmation on the definition of "meaningfully different" before build.
+
 ## 2026-06-26 — Round 2: Fixes 7–12 + this Build Log page
 
 **Problem:** Five gaps surfaced after Round 1, one of them serious. (1) A live test
