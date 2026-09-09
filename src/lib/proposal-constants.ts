@@ -131,7 +131,7 @@ export const STRATEGIES = [
 export type StrategyId = (typeof STRATEGIES)[number]["id"];
 
 export const LENGTHS = [
-  { id: "brief", name: "Brief", description: "Under 1500 chars. One paragraph, one question, one CTA. No portfolio.", target: 1200 },
+  { id: "brief", name: "Brief", description: "Under 1500 chars. Hook, one portfolio link right after it, a compressed body, one question, one CTA.", target: 1200 },
   { id: "robust", name: "Robust", description: "2000-3000 chars. Hook, portfolio, deliverables, advice, question, CTA.", target: 2500 },
   { id: "explanatory", name: "Explanatory", description: "3000-5000 chars. Detailed for technical or high-budget jobs.", target: 4000 },
 ] as const;

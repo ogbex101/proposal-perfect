@@ -56,6 +56,28 @@ function findOrWarn<T extends { id: string }>(
 }
 
 /**
+ * Trim text to at most `max` characters without ever cutting inside a URL.
+ * Prefers to cut at the last sentence end before the limit; if the natural cut
+ * point would land inside an http(s)/www token, it backs up to before that token.
+ */
+function urlSafeTrim(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let cut = text.slice(0, max);
+  // Prefer a sentence boundary.
+  const lastPunct = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
+  if (lastPunct > max * 0.4) cut = cut.slice(0, lastPunct + 1);
+  // If we cut inside a URL token, back up to just before that token starts.
+  const urlRe = /(https?:\/\/|www\.)\S*$/i;
+  const m = cut.match(urlRe);
+  if (m) {
+    // The trailing token is a (now truncated) URL — drop it entirely rather than
+    // emit a broken link.
+    cut = cut.slice(0, m.index).trimEnd();
+  }
+  return cut.trimEnd();
+}
+
+/**
  * Plain-text JSON approach: ask the model for raw JSON, strip any markdown
  * fences the model might add, then parse + validate against the Zod schema.
  * This works with every gateway/model — no SDK structured-output features needed.
@@ -978,7 +1000,7 @@ The question must be:
 - Something a consultant would ask, not a salesperson
 - An opener to a real conversation, not a formality
 - LENGTH ENFORCEMENT (this is a hard rule):
-  * brief: MAXIMUM 1500 characters total. This is for Freelancer.com where character limits are strict. Structure (in this order): Hook paragraph (3-4 sentences, each a distinct insight about THEIR specific problem — no filler, no transitions), one razor-sharp question that pivots from problem to solution, one confident CTA that gives a specific next step (e.g. timeline, a quick call, a scope doc — never "let me know"). Zero portfolio links. Zero milestones. Zero execution plan. These 1500 characters must hit harder than a 4000-character generic proposal.
+  * brief: MAXIMUM 1500 characters total. This is for crowded markets where character limits are strict. Structure (in this order): Hook paragraph (2-3 sentences, each a distinct insight about THEIR specific problem — no filler, no transitions)${data.portfolioItems.length > 0 ? " → ONE portfolio link IMMEDIATELY after the hook (mandatory — a single most-relevant link with one short sentence on why it fits THIS job)" : ""} → a tight body (1-2 sentences on the outcome) → one razor-sharp question that pivots from problem to solution, ending the proposal. Compress the body and deliverables to stay under 1500 chars — but the hook${data.portfolioItems.length > 0 ? " and the portfolio link are" : " is"} mandatory and must NOT be dropped to save space. Zero milestones. Zero execution plan. These 1500 characters must hit harder than a 4000-character generic proposal.
   * robust: 2000–3000 characters. Hook paragraph → portfolio paragraph (PARAGRAPH 2 — immediately after hook) → deliverables → one advice sentence → ${data.includePlan ? "execution plan → " : ""}question → CTA.
   * explanatory: 3000–5000 characters. All sections fully developed. Detailed execution plan. Full milestones if provided.
   You are writing a "${length.name}" proposal so the rules for "${length.id}" apply.
@@ -1079,23 +1101,55 @@ Return a JSON object with this exact shape:
       // ── End CTA Enforcer ───────────────────────────────────────────────────
       if (data.length === "brief") {
         const MAX = 1500;
-        let text = currentResult.content;
+        const text = currentResult.content;
         if (text.length > MAX) {
-          // Find the last question mark before MAX — keep the CTA after it
-          const cut = text.slice(0, MAX);
-          const lastQ = cut.lastIndexOf("?");
-          if (lastQ > 800) {
-            // Keep through the question, then find the first sentence end after it
-            const afterQ = text.slice(lastQ + 1).trimStart();
-            const firstEnd = afterQ.search(/[.!?]/);
-            text = firstEnd > -1 && (lastQ + firstEnd + 2) < MAX + 300
-              ? text.slice(0, lastQ + firstEnd + 3).trimEnd()
-              : cut.slice(0, lastQ + 1).trimEnd();
+          // Paragraph-aware truncation. The hook (first para), any portfolio paragraph
+          // (contains a URL), and the CTA (last para) are structurally mandatory and are
+          // NEVER dropped or cut mid-string. We shed BODY paragraphs (from the ones
+          // closest to the CTA backward) until we're under the cap.
+          const paras = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+          if (paras.length <= 1) {
+            // Single blob — fall back to a URL-safe sentence cut that never severs a link.
+            finalResult = { ...currentResult, content: urlSafeTrim(text, MAX) };
           } else {
-            const lastPunct = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
-            text = lastPunct > 800 ? cut.slice(0, lastPunct + 1).trimEnd() : cut.trimEnd();
+            const hasUrl = (p: string) => /https?:\/\/|www\./i.test(p);
+            const lastIdx = paras.length - 1;
+            const mandatory = new Set<number>([0, lastIdx]);
+            paras.forEach((p, i) => { if (hasUrl(p)) mandatory.add(i); });
+
+            // Candidate body paragraphs to drop, closest-to-CTA first.
+            const dropOrder = paras
+              .map((_, i) => i)
+              .filter((i) => !mandatory.has(i))
+              .sort((a, b) => b - a);
+
+            const dropped = new Set<number>();
+            const rebuild = () =>
+              paras.filter((_, i) => !dropped.has(i)).join("\n\n");
+
+            for (const idx of dropOrder) {
+              if (rebuild().length <= MAX) break;
+              dropped.add(idx);
+            }
+
+            let result = rebuild();
+            // If still over even with only mandatory paras kept, trim ONLY the longest
+            // non-URL kept paragraph, URL-safely — never touch the portfolio link.
+            if (result.length > MAX) {
+              const kept = paras.map((_, i) => i).filter((i) => !dropped.has(i));
+              const trimTarget = kept
+                .filter((i) => !hasUrl(paras[i]) && i !== lastIdx)
+                .sort((a, b) => paras[b].length - paras[a].length)[0];
+              if (trimTarget !== undefined) {
+                const overBy = result.length - MAX;
+                paras[trimTarget] = urlSafeTrim(paras[trimTarget], Math.max(40, paras[trimTarget].length - overBy - 1));
+                result = rebuild();
+              }
+            }
+            // Mandatory structure wins over the 1500 cap: if hook+portfolio+CTA alone
+            // still exceed it, we keep them intact rather than mutilate a link.
+            finalResult = { ...currentResult, content: result };
           }
-          finalResult = { ...currentResult, content: text };
         }
       }
       // Strip bullet lists, horizontal rules, and excessive blank lines
@@ -1801,7 +1855,7 @@ Instructions:
 1. Pick the single BEST hook and write a powerful opening line using it (specific to THIS job, not generic)
 2. Pick the single BEST strategy and explain exactly how to apply it to this job
 3. Rank ALL hooks and strategies by score (0-10) with a one-sentence reason for each
-4. Recommend proposal length: "brief" (Freelancer.com / crowded market), "robust" (standard Upwork), "explanatory" (complex technical / high-budget)
+4. Recommend proposal length: "robust" is the DEFAULT for almost all jobs (including Freelancer.com and crowded markets) because it places the portfolio link correctly right after the hook. Only recommend "brief" when the client explicitly asks for something very short or the platform imposes a hard tiny character limit. Use "explanatory" for complex technical / high-budget jobs.
 5. Give one "winning insight" — the non-obvious thing about this client or job that most freelancers will miss
 6. List 2-3 specific mistakes to avoid for this particular job
 
