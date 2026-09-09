@@ -519,6 +519,7 @@ function NewProposal() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["proposals"] });
       toast.success("Saved to history");
+      void checkStructure();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save"),
   });
