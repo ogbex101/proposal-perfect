@@ -885,6 +885,13 @@ Before returning the proposal, verify each of these. If any fail, regenerate:
 ✓ The CTA ends with a relevant question mark
 ✓ Does the writing consistently sound like the assigned register throughout, not sliding into a different voice mid-proposal?
 ✓ ZERO fabricated facts — every number, percentage, dollar figure, case study, and named client result traces to the supplied job post, portfolio content, or user input
+✓ The hook does NOT restate the client's own sentence back to them.
+  ❌ REJECTED — restates their own sentence with "you said" bolted on:
+     Client wrote: "We need help with X." → Hook: "You said you need help with X, and that's exactly..."
+     This is paraphrase, not insight. It proves you read the post, not that you thought about it.
+  ✅ REQUIRED — reveals something they didn't already state outright, drawn from a detail in their post they didn't explicitly connect themselves.
+✓ The hook states an actual position, not a hedge. Banned: "you might want to consider," "it could be worth thinking about," "one option might be." State the real position, even if the client could disagree with it.
+✓ The hook names a real consequence — what breaks, gets wasted, or fails silently if this specific insight is ignored — not just that the insight exists. "This matters" is weaker than "this is why X won't work in 30 days."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 NO FABRICATION — ABSOLUTE HARD RULE (overrides "be specific")
