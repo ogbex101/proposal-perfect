@@ -124,6 +124,13 @@ export function ProposalTemplatePicker({ onApply }: Props) {
               {/* Template list */}
               <ScrollArea className="max-h-[420px] pr-2">
                 <div className="space-y-1.5">
+                  {filtered.length === 0 && (
+                    <p className="py-6 text-center text-[11px] text-muted-foreground">
+                      {niche === MINE
+                        ? "No saved templates yet — when a structure you write recurs, we'll offer to save it here."
+                        : "Nothing here yet."}
+                    </p>
+                  )}
                   {filtered.map((t) => (
                     <button
                       key={t.id}
