@@ -84,34 +84,58 @@ async function fetchImageAsDataUrl(url: string): Promise<string> {
 
 type ImageSource = "pollinations" | "stock" | "lovable";
 function imageSource(): ImageSource {
-  const v = (process.env.PORTFOLIO_IMAGE_SOURCE ?? "pollinations").toLowerCase();
-  return v === "stock" || v === "lovable" ? v : "pollinations";
+  // Default to the Lovable-credit-backed generator — it produces materially more
+  // reliable, on-prompt results than the free unauthenticated Pollinations model,
+  // which frequently ignores detailed prompts. Override via PORTFOLIO_IMAGE_SOURCE
+  // ("stock" or "pollinations") for cost-conscious use.
+  const v = (process.env.PORTFOLIO_IMAGE_SOURCE ?? "lovable").toLowerCase();
+  return v === "stock" || v === "pollinations" ? v : "lovable";
 }
 
-// Produce a project image as a data URL — Pollinations AI primary, stock fallback.
+// A single concrete image prompt performs far better than "choose between A/B/C".
+function projectImagePrompt(keywords: string, niche?: string): string {
+  const subject = [keywords, niche].filter(Boolean).join(", ");
+  return `A professional, photorealistic photo of ${subject}. Modern, clean, high-quality, sharp focus. No text, no logos, no watermarks, no people's faces.`;
+}
+
+// Produce a project image as a data URL.
+// Order: Lovable-credit generator (default) → keyword stock photo → Pollinations.
+// A real stock photo tagged with the actual keyword is more reliably on-topic than
+// a free generative model ignoring a complex prompt, so it fronts Pollinations.
 async function freeProjectImage(keywords: string, seed: number, projectTitle?: string, niche?: string): Promise<string> {
-  if (imageSource() === "stock") {
-    return fetchImageAsDataUrl(stockImageUrl(keywords, seed));
+  const source = imageSource();
+
+  if (source === "stock") {
+    try { return await fetchImageAsDataUrl(stockImageUrl(keywords, seed)); }
+    catch { return await fetchImageAsDataUrl(`https://picsum.photos/seed/${seed}/800/600`); }
   }
 
-  const titleCtx = projectTitle ? `titled "${projectTitle}"` : "";
-  const nicheCtx = niche ? `in the ${niche} field` : "";
-  const prompt = `Stunning professional portfolio photograph for a freelance project ${titleCtx} ${nicheCtx}. Visual keywords: ${keywords}. The image must visually represent the specific subject matter of these keywords — not a generic office. Choose between: a photorealistic screen showing a polished UI or dashboard directly relevant to the keywords, OR a professional workspace with niche-specific tools or equipment, OR a high-quality product/deliverable mockup matching the keywords. Dark modern aesthetic, cinematic lighting, sharp focus, no people, no faces, no text overlays, no watermarks, no generic stock clichés. The visual MUST feel specific to "${keywords}". Award-winning editorial quality.`;
+  const prompt = projectImagePrompt(keywords, niche);
 
+  if (source === "lovable") {
+    try {
+      const { generateImagePrompted } = await import("./avatar-ai.server");
+      return await generateImagePrompted(prompt);
+    } catch {
+      // Lovable disabled/failed → prefer a real keyword stock photo over Pollinations.
+      try { return await fetchImageAsDataUrl(stockImageUrl(keywords, seed)); }
+      catch {
+        try { return await fetchImageAsDataUrl(pollinationsUrl(prompt, seed, 900, 600)); }
+        catch { return await fetchImageAsDataUrl(`https://picsum.photos/seed/${seed}/800/600`); }
+      }
+    }
+  }
+
+  // Explicit pollinations mode.
   try {
     return await fetchImageAsDataUrl(pollinationsUrl(prompt, seed, 900, 600));
   } catch {
-    // First fallback: simpler prompt
+    // First fallback: keyword stock image (more on-topic than a re-prompt).
     try {
-      const simplePrompt = `Professional workspace ${nicheCtx}, ${keywords}, modern, clean, high quality photo, no text`;
-      return await fetchImageAsDataUrl(pollinationsUrl(simplePrompt, seed + 1000, 800, 600));
+      return await fetchImageAsDataUrl(stockImageUrl(keywords, seed));
     } catch {
-      // Final fallback: stock keyword image
-      try {
-        return await fetchImageAsDataUrl(stockImageUrl(keywords, seed));
-      } catch {
-        return await fetchImageAsDataUrl(`https://picsum.photos/seed/${seed}/800/600`);
-      }
+      // Final fallback
+      return await fetchImageAsDataUrl(`https://picsum.photos/seed/${seed}/800/600`);
     }
   }
 }
@@ -238,7 +262,6 @@ export const generatePortfolio = createServerFn({ method: "POST" })
       .slice(0, 8)
       .join(" ");
 
-    const source = imageSource();
     const projects = await Promise.all(
        copy.projects.map(async (proj, i) => {
          const fallback = reference.projects[i];
@@ -253,16 +276,9 @@ export const generatePortfolio = createServerFn({ method: "POST" })
          const keywords = jobSpecificKeywords || fallback?.imageKeywords || proj.tags.join(" ");
         let imageUrl = stockImageUrl(keywords, i + 1); // external fallback
         try {
-          let dataUrl: string;
-           if (source === "lovable") {
-            const { generateImagePrompted } = await import("./avatar-ai.server");
-            dataUrl = await generateImagePrompted(
-              `Photorealistic portfolio image for a freelance project titled "${proj.title}". Context: ${copy.niche}. Keywords: ${keywords}. Modern, clean, professional UI or workspace. No text, no logos.`,
-            );
-          } else {
-            // Always generate AI image specific to this job — no template images
-            dataUrl = await freeProjectImage(keywords, i + 1, proj.title, copy.niche);
-          }
+          // freeProjectImage centralizes source selection + fallback ordering
+          // (lovable → stock → pollinations) and the concrete image prompt.
+          const dataUrl = await freeProjectImage(keywords, i + 1, proj.title, copy.niche);
           imageUrl = await uploadImage(context.supabase, `${folder}/project-${i + 1}.png`, dataUrl);
         } catch {
           // keep external stock fallback
