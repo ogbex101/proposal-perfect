@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { HOOKS, STRATEGIES, CTAS, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { goldenKeyById } from "@/lib/prompts/shared/golden-keys";
 import { resolveRegister } from "@/lib/prompts/shared/registers";
+import { scorePortfolioMatches } from "@/lib/portfolio-match";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
 import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, craftHookLine, craftCtaLine, translateToEnglish, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
@@ -234,32 +235,20 @@ function NewProposal() {
       if (h) setHookId(h.id);
       if (s) setStrategyId(s.id);
       if (c) setCtaId(c.id);
-      // Fix 9 — tag-driven auto-match. Build a set of detected skill terms from the
-      // detected niche + extracted entities + job text, then score each portfolio by
-      // how many of its niche_tags appear in that term blob. Records the matched skills
-      // so the UI can show "Auto-matched X, based on detected skills: ...".
-      const norm = (s: string) => s.toLowerCase().replace(/[-_/]+/g, " ").trim();
-      const detectedBlob = norm(
-        (result.detectedNiche ?? "") + " " + ((result as any).extractedEntities ?? []).join(" ") + " " + effectiveJob,
-      );
+      // Batch 3 — word-boundary, strong-match-only auto-match (shared logic). No more
+      // substring collisions ("react" in "reaction"); a lone weak single-word hit is
+      // rejected. Feeds both the Decision Panel and the auto-selection.
+      const detectedBlob =
+        (result.detectedNiche ?? "") + " " + ((result as any).extractedEntities ?? []).join(" ") + " " + effectiveJob;
       {
-        const matchedSkills = new Set<string>();
-        const scored = portfolio
-          .map((p: any) => {
-            const tags: string[] = [...((p as any).niche_tags ?? []), (p as any).niche].filter(Boolean);
-            const hits = tags.filter((t: string) => t && detectedBlob.includes(norm(t)));
-            hits.forEach((h: string) => matchedSkills.add(h));
-            return { id: p.id, title: p.title, tags: hits, score: hits.length };
-          })
-          .filter((x) => x.score > 0)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 3);
-
-        if (scored.length > 0) {
-          setMatchDetail({ kind: "match", items: scored });
-          if (selectedPortfolio.length === 0) setSelectedPortfolio(scored.map((s) => s.id));
-          setAutoMatchInfo({ titles: scored.map((s) => s.title), skills: [...matchedSkills] });
-          toast.success(`Auto-matched ${scored.length} portfolio${scored.length > 1 ? "s" : ""} for this job`);
+        const strong = scorePortfolioMatches(portfolio as any, detectedBlob).slice(0, 3);
+        if (strong.length > 0) {
+          const items = strong.map((s) => ({ id: s.id, title: s.title, tags: s.matchedTags, score: s.score }));
+          const skills = [...new Set(strong.flatMap((s) => s.matchedTags))];
+          setMatchDetail({ kind: "match", items });
+          if (selectedPortfolio.length === 0) setSelectedPortfolio(items.map((s) => s.id));
+          setAutoMatchInfo({ titles: items.map((s) => s.title), skills });
+          toast.success(`Auto-matched ${items.length} portfolio${items.length > 1 ? "s" : ""} for this job`);
         } else {
           setMatchDetail({ kind: "none" });
           setAutoMatchInfo(null);

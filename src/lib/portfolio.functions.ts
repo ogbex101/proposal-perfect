@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { escapeRegExp } from "./utils";
+import { scorePortfolioMatches } from "./portfolio-match";
 
 export const listPortfolio = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -80,48 +80,12 @@ export const curateRealPortfolio = createServerFn({ method: "POST" })
       return { framing: "", ordered: [], note: "You have no portfolio entries yet. Add real projects (with skill tags) under Portfolio, then curate them for a job." };
     }
 
-    // Score real entries by tag/niche overlap with the detected job needs.
-    // Word-boundary aware so "react" doesn't match "reaction"/"overreact", and
-    // multi-word tags ("ai video") must appear as a contiguous whole-word phrase.
-    const norm = (s: string) => s.toLowerCase().replace(/[-_/]+/g, " ").replace(/\s+/g, " ").trim();
-    const blob = norm((data.detectedNiche ?? "") + " " + (data.detectedSkills ?? []).join(" ") + " " + data.jobDescription);
-    const tagMatches = (tag: string): boolean => {
-      const t = norm(tag);
-      if (!t) return false;
-      // \b works at the word level for both single- and multi-word phrases once
-      // punctuation/hyphens are normalized to spaces.
-      return new RegExp(`\\b${escapeRegExp(t)}\\b`).test(blob);
-    };
-    const scored = items
-      .map((p) => {
-        const tags = [...(p.niche_tags ?? []), p.niche].filter(Boolean) as string[];
-        const hitTags = tags.filter(tagMatches);
-        const multiWordHits = hitTags.filter((t) => norm(t).includes(" "));
-        const singleWordHits = hitTags.filter((t) => !norm(t).includes(" "));
-        // Distinct single-word hits (dedupe by normalized form).
-        const distinctSingle = new Set(singleWordHits.map(norm));
-        return {
-          item: p,
-          score: hitTags.length,
-          matchedTags: hitTags,
-          multiWordHits: multiWordHits.length,
-          distinctSingle: distinctSingle.size,
-        };
-      })
-      .sort((a, b) => b.score - a.score);
+    // Score real entries by tag/niche overlap with the detected job needs, using the
+    // shared word-boundary, strong-match-only logic (Batch 3).
+    const blob = (data.detectedNiche ?? "") + " " + (data.detectedSkills ?? []).join(" ") + " " + data.jobDescription;
+    const strong = scorePortfolioMatches(items, blob);
 
-    // A "strong" match requires either a multi-word tag hit OR ≥2 distinct
-    // single-word tag hits. One generic single-word hit is not enough.
-    const strong = scored.filter((s) => s.multiWordHits >= 1 || s.distinctSingle >= 2);
-
-    // Sanity check: if the top item scored only 1 via a short (≤5 char) single-word
-    // tag like "ai"/"ui"/"seo", treat it as no-match — it's a coincidental hit.
-    const top = strong[0];
-    const topIsWeakCoincidence =
-      top && top.score === 1 && top.multiWordHits === 0 &&
-      top.matchedTags.every((t) => norm(t).replace(/\s/g, "").length <= 5);
-
-    if (strong.length === 0 || topIsWeakCoincidence) {
+    if (strong.length === 0) {
       return {
         framing: "",
         ordered: [],
@@ -129,14 +93,18 @@ export const curateRealPortfolio = createServerFn({ method: "POST" })
       };
     }
 
+    const byId = new Map(items.map((p) => [p.id, p]));
     // Order real entries by relevance; excerpt to the top few.
-    const ordered = strong.slice(0, 4).map((s) => ({
-      id: s.item.id,
-      title: s.item.title,
-      url: s.item.url,
-      description: s.item.description,
-      matchedTags: s.matchedTags,
-    }));
+    const ordered = strong.slice(0, 4).map((s) => {
+      const item = byId.get(s.id)!;
+      return {
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        description: item.description,
+        matchedTags: s.matchedTags,
+      };
+    });
 
     // Write an HONEST framing paragraph over the REAL entries. Hard fabrication guard.
     let framing = "";
