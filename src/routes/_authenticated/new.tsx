@@ -79,13 +79,6 @@ export const Route = createFileRoute("/_authenticated/new")({
   component: NewProposal,
 });
 
-function nichematch(item: { title: string; description: string }, niche: string): number {
-  if (!niche) return 0;
-  const haystack = `${item.title} ${item.description}`.toLowerCase();
-  const terms = niche.toLowerCase().split(/\s+/);
-  return terms.filter((t) => haystack.includes(t)).length;
-}
-
 type Milestone = { title: string; description: string; amount?: string };
 
 // ── Daily proposal counter (localStorage) ───────────────────────────────────
@@ -1168,8 +1161,9 @@ function NewProposal() {
                   </p>
                 ) : (
                   <>
-                  {/* No-match hint */}
-                  {analysis && portfolio.length > 0 && portfolio.every(p => nichematch(p, analysis.detectedNiche ?? "") === 0) && (
+                  {/* No-match hint — same scorePortfolioMatches result the Decision Panel uses (matchDetail),
+                      not a separate recompute, so this can never disagree with the panel. */}
+                  {analysis && portfolio.length > 0 && matchDetail?.kind === "none" && (
                     <div className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-2 text-xs text-gold mb-2">
                       No portfolio items match "<strong>{analysis.detectedNiche}</strong>".{" "}
                       Consider adding a portfolio piece for this niche in the{" "}
