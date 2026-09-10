@@ -318,7 +318,7 @@ function NewProposal() {
       const strategyResult = strategyDoc && strategySlug ? strategyDoc : null;
       const slug = strategyDoc && strategySlug ? strategySlug : null;
       const strategyLink = slug
-        ? `I've already mapped out a full project strategy — phases, risk factors, and success metrics — you can review it here: ${window.location.origin}/strategy/${slug}`
+        ? `I've already mapped out a full project strategy — phases, risk factors, and success metrics — you can review it here: ${window.location.origin}/s/${slug}`
         : undefined;
 
       // Step 2: Generate proposal with strategy link
