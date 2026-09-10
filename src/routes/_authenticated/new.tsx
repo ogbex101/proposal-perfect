@@ -575,9 +575,15 @@ function NewProposal() {
     { fingerprint: string; occurrence: number; label: string } | null
   >(null);
   const [savingStructure, setSavingStructure] = useState(false);
+  // Batch 6 — the recurring-structure check fires ONCE when the user finishes a
+  // proposal (copies OR saves). This ref remembers the exact text we already recorded
+  // so repeatedly copying/saving the same proposal never inflates the occurrence count.
+  const structCheckedRef = useRef<string>("");
 
   async function checkStructure() {
     if (!content.trim()) return;
+    if (structCheckedRef.current === content) return; // already recorded this exact proposal
+    structCheckedRef.current = content;
     try {
       const gk = (analysis as any)?.intelligence?.proposalBlueprint?.goldenKey as
         | { use?: boolean; keyId?: string | null }
@@ -1363,6 +1369,7 @@ function NewProposal() {
             onPolish={() => polishMutation.mutate(undefined)}
             polishing={polishMutation.isPending}
             detectedLanguage={analysis?.detectedLanguage ?? null}
+            onFinish={() => void checkStructure()}
           />
 
           {/* Batch 4 — pricing card: visually + structurally separate from the proposal
@@ -1815,7 +1822,7 @@ function SuggestionCard({ label, name, reason }: { label: string; name: string; 
 function OutputPanel({
   content, setContent, explanation, showExplain, setShowExplain,
   title, onSave, saving, onSaveTemplate, savingTemplate, chosenProfile, onGoHistory, injecting, onPolish, polishing,
-  detectedLanguage,
+  detectedLanguage, onFinish,
 }: {
   content: string; setContent: (v: string) => void;
   explanation: { hook: string; strategy: string; question: string } | null;
@@ -1825,6 +1832,8 @@ function OutputPanel({
   chosenProfile?: { label: string } | null; onGoHistory: () => void;
   injecting?: boolean; onPolish?: () => void; polishing?: boolean;
   detectedLanguage?: string | null;
+  // Batch 6 — fired when the user "finishes" a proposal by copying it (once per proposal).
+  onFinish?: () => void;
 }) {
   const [editMode, setEditMode] = useState(false);
 
@@ -1919,7 +1928,7 @@ function OutputPanel({
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onClick={() => copyText(content).then(() => toast.success("Copied to clipboard"))}>
+        <Button size="sm" variant="secondary" onClick={() => copyText(content).then(() => { toast.success("Copied to clipboard"); onFinish?.(); })}>
           <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
         </Button>
         <Button size="sm" variant="secondary" onClick={() => copyMarkdown(title, content).then(() => toast.success("Markdown copied"))}>
