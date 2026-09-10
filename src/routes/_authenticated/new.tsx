@@ -46,7 +46,7 @@ import { resolveRegister } from "@/lib/prompts/shared/registers";
 import { scorePortfolioMatches } from "@/lib/portfolio-match";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
-import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, craftHookLine, craftCtaLine, translateToEnglish, suggestPricing, type JobAnalysis, type StrategyDocument, type PricingSuggestion } from "@/lib/ai.functions";
+import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, craftHookLine, craftCtaLine, translateToEnglish, suggestPricing, flagStrategyCandidate, type JobAnalysis, type StrategyDocument, type PricingSuggestion } from "@/lib/ai.functions";
 import { VoiceEditPrompt } from "@/components/VoiceEditPrompt";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
@@ -262,12 +262,9 @@ function NewProposal() {
         }
       }
       toast.success("Job analyzed");
-      // Auto-start strategy generation only if job is worth it
-      if (!strategyDoc && !strategyMutation.isPending && result.strategyWorthy !== false) {
-        setTimeout(() => strategyMutation.mutate(), 500);
-      } else if (result.strategyWorthy === false) {
-        toast.info(`Strategy doc skipped — ${result.strategyWorthyReason || "simple job, not needed"}`);
-      }
+      // Batch 7 — the strategy document is no longer auto-generated. When the job scores
+      // complex/high-value (strategyWorthy), the Decision Panel offers to build one; the
+      // user opts in. Otherwise the flow goes straight to proposal generation.
     },
     onError: (e) => {
       const msg = e instanceof Error ? e.message : "Analysis failed";
@@ -307,27 +304,19 @@ function NewProposal() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      const isStrategyWorthy = (analysis as any)?.strategyWorthy !== false;
-
-      // Run hook crafting, CTA crafting, and strategy generation in parallel
-      const [hookResult, ctaResult, strategyData] = await Promise.all([
+      // Run hook + CTA crafting in parallel.
+      const [hookResult, ctaResult] = await Promise.all([
         // Claude crafts the opening hook paragraph
         craftHookLine({ data: { jobDescription: effectiveJob, analysis, hookId } }).catch(() => null),
         // Mistral crafts the closing CTA line
         craftCtaLine({ data: { jobDescription: effectiveJob, analysis, ctaId } }).catch(() => null),
-        // Strategy: reuse existing or generate new (only if job is strategy-worthy)
-        (async () => {
-          if (!isStrategyWorthy) return { strategyResult: null as StrategyDocument | null, slug: null as string | null };
-          if (strategyDoc && strategySlug) return { strategyResult: strategyDoc, slug: strategySlug };
-          const freshStrategy = await generateStrategyDocument({
-            data: { jobDescription: effectiveJob, analysis, budget: budget || undefined },
-          });
-          const saved = await saveStrategyDoc({ data: { doc: freshStrategy! } });
-          return { strategyResult: freshStrategy ?? null, slug: saved.slug };
-        })(),
       ]);
 
-      const { strategyResult, slug } = strategyData;
+      // Batch 7 — the strategy document is OPT-IN. It's woven into the proposal ONLY if
+      // the user already accepted the Decision Panel offer and built one. If they didn't,
+      // generation proceeds straight to the proposal with no strategy link.
+      const strategyResult = strategyDoc && strategySlug ? strategyDoc : null;
+      const slug = strategyDoc && strategySlug ? strategySlug : null;
       const strategyLink = slug
         ? `I've already mapped out a full project strategy — phases, risk factors, and success metrics — you can review it here: ${window.location.origin}/strategy/${slug}`
         : undefined;
@@ -391,6 +380,9 @@ function NewProposal() {
       suggestPricing({ data: { jobDescription: effectiveJob, budget: budget || undefined, detectedNiche: analysis?.detectedNiche || undefined } })
         .then((p) => setPricing(p))
         .catch(() => {});
+      // Batch 7 — fire-and-forget: quietly flag a new strategy pattern candidate if the
+      // job doesn't confidently match the existing library. Never blocks/slows this flow.
+      void flagStrategyCandidate({ data: { jobDescription: effectiveJob } }).catch(() => {});
       // auto-polish with fresh content passed directly (avoid stale closure)
       setTimeout(() => polishMutation.mutate(proposalResult!.content), 150);
     },
@@ -900,6 +892,14 @@ function NewProposal() {
               matchDetail={matchDetail}
               onGenerate={() => generateMutation.mutate()}
               generating={generateMutation.isPending}
+              strategyOffer={{
+                worthy: (analysis as any)?.strategyWorthy !== false,
+                reason: (analysis as any)?.strategyWorthyReason ?? "",
+                built: !!strategyDoc,
+                building: strategyMutation.isPending,
+                slug: strategySlug,
+                onBuild: () => strategyMutation.mutate(),
+              }}
             />
           )}
         </div>
@@ -1645,13 +1645,15 @@ function DecisionRow({ label, value, reason, accent }: { label: string; value: s
 }
 
 function DecisionPanel({
-  analysis, hookId, setHookId, strategyId, ctaId, matchDetail, onGenerate, generating,
+  analysis, hookId, setHookId, strategyId, ctaId, matchDetail, onGenerate, generating, strategyOffer,
 }: {
   analysis: JobAnalysis;
   hookId: string; setHookId: (id: string) => void;
   strategyId: string; ctaId: string;
   matchDetail: { kind: "match"; items: { id: string; title: string; tags: string[]; score: number }[] } | { kind: "none" } | null;
   onGenerate: () => void; generating: boolean;
+  // Batch 7 — optional strategy-document offer, driven by the same complexity signal.
+  strategyOffer?: { worthy: boolean; reason: string; built: boolean; building: boolean; slug: string | null; onBuild: () => void };
 }) {
   const intel = (analysis as any)?.intelligence;
   const ci = intel?.clientIntelligence;
@@ -1763,6 +1765,34 @@ function DecisionPanel({
           </div>
         )}
       </div>
+
+      {/* Batch 7 — strategy-document offer (only when the job scores complex/high-value) */}
+      {strategyOffer?.worthy && (
+        <div className="mt-4 rounded-lg border border-purple-400/30 bg-purple-400/[0.06] p-4">
+          {strategyOffer.built ? (
+            <div className="flex items-center gap-2 text-sm text-purple-300">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span className="flex-1">Strategy document ready{strategyOffer.slug ? " — shareable link generated below." : "."}</span>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-white">This job looks complex enough that a strategy document could strengthen your bid. Want to build one?</p>
+              {strategyOffer.reason && <p className="mt-1 text-xs text-muted-foreground">{strategyOffer.reason}</p>}
+              <div className="mt-3 flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={strategyOffer.onBuild}
+                  disabled={strategyOffer.building}
+                  className="bg-purple-400/20 text-purple-200 hover:bg-purple-400/30 border border-purple-400/30"
+                >
+                  {strategyOffer.building ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Building…</> : <><FileText className="mr-1.5 h-3.5 w-3.5" /> Build strategy document</>}
+                </Button>
+                <span className="self-center text-[11px] text-muted-foreground">Optional — you can generate the proposal without it.</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <Button
         onClick={onGenerate}

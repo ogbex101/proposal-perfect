@@ -324,6 +324,62 @@ Return JSON: { "currency": "$", "standardRate": { "amount": "...", "reason": "..
     }
   });
 
+// ---------- Batch 7 — background strategy-pattern candidate detection ----------
+// At generation time: if the job doesn't confidently match any existing STRATEGIES
+// pattern, draft a new candidate anchored to what the library can't handle and flag it.
+// Invisible when a confident match exists. Fire-and-forget — never blocks generation.
+const StrategyCandidateSchema = z.object({
+  confidentMatchExists: z.boolean(),
+  matchedStrategyId: z.string().nullable(),
+  candidate: z.object({
+    name: z.string(),
+    description: z.string(),
+    anchoredTo: z.string(), // the specific thing existing patterns couldn't handle
+  }).nullable(),
+});
+
+export const flagStrategyCandidate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { jobDescription: string }) =>
+    z.object({ jobDescription: z.string().min(10).max(15000) }).parse(d),
+  )
+  .handler(async ({ data, context }): Promise<{ flagged: boolean }> => {
+    try {
+      const { supabase, userId } = context as any;
+      const strategyList = STRATEGIES.map((s) => `- ${s.id}: ${s.name} — ${s.description}`).join("\n");
+      const result = await structuredWith(
+        "analyzer",
+        StrategyCandidateSchema,
+        `You maintain a library of proposal STRATEGY patterns. Given a job post, decide whether ANY existing pattern confidently fits it as the primary persuasion approach.
+
+EXISTING STRATEGY LIBRARY:
+${strategyList}
+
+Rules:
+- If an existing pattern confidently fits, set confidentMatchExists=true, matchedStrategyId to its id, candidate=null. Do NOT propose anything.
+- Only if NO existing pattern genuinely fits, set confidentMatchExists=false and propose ONE new candidate pattern. It MUST be anchored to a specific persuasion need this job has that the existing patterns cannot handle — describe that in anchoredTo. If your proposal would just be a reworded duplicate of an existing pattern, do NOT propose it: instead set confidentMatchExists=true and pick the closest existing id.
+- Be conservative. The library is already broad. Proposing a new pattern should be rare.
+
+Return JSON: { "confidentMatchExists": <bool>, "matchedStrategyId": "<id or null>", "candidate": { "name": "...", "description": "...", "anchoredTo": "..." } | null }`,
+        `Job post:\n${data.jobDescription.slice(0, 5000)}`,
+      );
+
+      if (result.confidentMatchExists || !result.candidate) return { flagged: false };
+
+      await (supabase as any).from("strategy_pattern_candidates").insert({
+        user_id: userId,
+        name: result.candidate.name,
+        description: result.candidate.description,
+        anchored_to: result.candidate.anchoredTo,
+        source_job_excerpt: data.jobDescription.slice(0, 500),
+      });
+      return { flagged: true };
+    } catch {
+      // Non-fatal, background only — never surface to the generation flow.
+      return { flagged: false };
+    }
+  });
+
 export const generateMilestones = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { jobDescription: string; budget?: string }) =>
