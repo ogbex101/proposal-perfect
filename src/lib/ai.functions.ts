@@ -1747,6 +1747,18 @@ Return JSON:
     }
   });
 
+// Proposals are prose-only: never emit bullet points, hyphen/number list markers,
+// or horizontal rules. Applied to every AI step that returns proposal text.
+function stripMarkers(t: string): string {
+  return t
+    .split("\n")
+    .filter((line) => !/^\s*([_\-*]{3,})\s*$/.test(line))
+    .map((line) => line.replace(/^\s*[-•*]\s+/, "").replace(/^\s*\d+[).]\s+/, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 // ---------- Proposal Polisher ----------
 export const polishProposal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1755,15 +1767,6 @@ export const polishProposal = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      const stripMarkers = (t: string) =>
-        t
-          .split("\n")
-          .filter((line) => !/^\s*([_\-*]{3,})\s*$/.test(line))
-          .map((line) => line.replace(/^\s*[-•*]\s+/, "").replace(/^\s*\d+[).]\s+/, ""))
-          .join("\n")
-          .replace(/\n{3,}/g, "\n\n")
-          .trim();
-
       const result = await structuredWith("verifier",
         z.object({ content: z.string() }),
         `You are a professional editor. Fix ONLY mechanical issues in this freelance proposal — do not change the meaning, phrasing, tone, or structure. Your task:
