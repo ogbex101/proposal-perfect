@@ -297,7 +297,19 @@ export const generatePortfolio = createServerFn({ method: "POST" })
     let heroImageUrl = "";
     try {
       const heroPrompt = `Cinematic wide-format hero background photograph for a ${copy.niche} professional's portfolio website. Abstract or atmospheric — tools of the trade, a beautifully lit workspace, a skyline or architectural detail relevant to the niche. No people, no faces, no overlaid text, no logos. Ultra high quality, editorial magazine style, 16:9 ratio, dark moody tone with teal or gold accent lighting.`;
-      const heroDataUrl = await fetchImageAsDataUrl(pollinationsUrl(heroPrompt, 999, 1200, 600));
+      // Batch 8 — hero uses the reliable default (lovable) with pollinations only as
+      // a last-resort fallback, matching the project-image source policy.
+      let heroDataUrl: string;
+      if (imageSource() === "lovable") {
+        try {
+          const { generateImagePrompted } = await import("./avatar-ai.server");
+          heroDataUrl = await generateImagePrompted(heroPrompt);
+        } catch {
+          heroDataUrl = await fetchImageAsDataUrl(pollinationsUrl(heroPrompt, 999, 1200, 600));
+        }
+      } else {
+        heroDataUrl = await fetchImageAsDataUrl(pollinationsUrl(heroPrompt, 999, 1200, 600));
+      }
       heroImageUrl = await uploadImage(context.supabase, `${folder}/hero-bg.png`, heroDataUrl);
     } catch {
       // no hero image — gradient background used as fallback

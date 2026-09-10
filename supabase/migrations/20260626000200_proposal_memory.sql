@@ -34,10 +34,12 @@ CREATE TABLE IF NOT EXISTS public.proposal_memory (
 
 ALTER TABLE public.proposal_memory ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users manage own memories" ON public.proposal_memory;
 CREATE POLICY "Users manage own memories" ON public.proposal_memory
   FOR ALL USING (auth.uid() = user_id);
 
 -- Admins can read all memories (for aggregate insights)
+DROP POLICY IF EXISTS "Admins read all memories" ON public.proposal_memory;
 CREATE POLICY "Admins read all memories" ON public.proposal_memory
   FOR SELECT USING (
     EXISTS (
