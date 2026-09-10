@@ -1755,6 +1755,15 @@ export const polishProposal = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
+      const stripMarkers = (t: string) =>
+        t
+          .split("\n")
+          .filter((line) => !/^\s*([_\-*]{3,})\s*$/.test(line))
+          .map((line) => line.replace(/^\s*[-•*]\s+/, "").replace(/^\s*\d+[).]\s+/, ""))
+          .join("\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+
       const result = await structuredWith("verifier",
         z.object({ content: z.string() }),
         `You are a professional editor. Fix ONLY mechanical issues in this freelance proposal — do not change the meaning, phrasing, tone, or structure. Your task:
@@ -1818,7 +1827,7 @@ FORMATTING (absolute): the portfolio paragraph must be flowing prose in complete
 Return JSON: { "content": "<the full updated proposal text>" }`,
         `CURRENT PROPOSAL:\n${data.proposal}`,
       );
-      return result;
+      return { ...result, content: stripMarkers(result.content) };
     } catch (err) {
       handleAiError(err);
     }
