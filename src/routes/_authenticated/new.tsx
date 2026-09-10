@@ -137,6 +137,7 @@ function NewProposal() {
   const [content, setContent] = useState("");
   // Batch 4 — pricing lives in its own state (never blended into the copyable proposal text).
   const [pricing, setPricing] = useState<PricingSuggestion | null>(null);
+  const [pricingError, setPricingError] = useState<string | null>(null);
   const [aiGeneratedContent, setAiGeneratedContent] = useState("");
   const [explanation, setExplanation] = useState<{
     hook: string;
@@ -283,6 +284,7 @@ function NewProposal() {
     setAutoMatchInfo(null);
     setMatchDetail(null);
     setPricing(null);
+    setPricingError(null);
     toast.info("Analysis cancelled");
   }
 
@@ -369,10 +371,13 @@ function NewProposal() {
       setDayStats(updated);
       toast.success("Proposal generated");
       // Batch 4 — pricing as a separate artifact (its own card, never in the copy text).
+      // A failure here must be visible: the card either shows real numbers or an
+      // explicit "pricing unavailable" state — it never just silently doesn't render.
       setPricing(null);
+      setPricingError(null);
       suggestPricing({ data: { jobDescription: effectiveJob, budget: budget || undefined, detectedNiche: analysis?.detectedNiche || undefined } })
         .then((p) => setPricing(p))
-        .catch(() => {});
+        .catch((e) => setPricingError(e instanceof Error ? e.message : "Pricing suggestion failed"));
       // Batch 7 — fire-and-forget: quietly flag a new strategy pattern candidate if the
       // job doesn't confidently match the existing library. Never blocks/slows this flow.
       void flagStrategyCandidate({ data: { jobDescription: effectiveJob } }).catch(() => {});
@@ -1387,6 +1392,17 @@ function NewProposal() {
                   <p className="mt-1 text-xs leading-relaxed text-gold/80">{pricing.winBidRate.reason}</p>
                 </div>
               </div>
+            </CropCard>
+          )}
+          {pricingError && !pricing && (
+            <CropCard className="p-5 border-destructive/30 bg-destructive/[0.04]">
+              <div className="flex items-center gap-2">
+                <BadgeDollarSign className="h-4 w-4 text-destructive" />
+                <Eyebrow>Pricing unavailable</Eyebrow>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Couldn't generate a pricing suggestion for this job: {pricingError}
+              </p>
             </CropCard>
           )}
         </div>

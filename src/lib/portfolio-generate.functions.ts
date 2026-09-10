@@ -107,7 +107,10 @@ async function freeProjectImage(keywords: string, seed: number, projectTitle?: s
 
   if (source === "stock") {
     try { return await fetchImageAsDataUrl(stockImageUrl(keywords, seed)); }
-    catch { return await fetchImageAsDataUrl(`https://picsum.photos/seed/${seed}/800/600`); }
+    catch (err) {
+      console.warn("[portfolio-image] stock source failed, falling back to picsum:", err);
+      return await fetchImageAsDataUrl(`https://picsum.photos/seed/${seed}/800/600`);
+    }
   }
 
   const prompt = projectImagePrompt(keywords, niche);
@@ -116,12 +119,17 @@ async function freeProjectImage(keywords: string, seed: number, projectTitle?: s
     try {
       const { generateImagePrompted } = await import("./avatar-ai.server");
       return await generateImagePrompted(prompt);
-    } catch {
+    } catch (err) {
       // Lovable disabled/failed → prefer a real keyword stock photo over Pollinations.
+      console.warn("[portfolio-image] lovable generator failed, falling back to stock:", err);
       try { return await fetchImageAsDataUrl(stockImageUrl(keywords, seed)); }
-      catch {
+      catch (err2) {
+        console.warn("[portfolio-image] stock fallback failed, falling back to pollinations:", err2);
         try { return await fetchImageAsDataUrl(pollinationsUrl(prompt, seed, 900, 600)); }
-        catch { return await fetchImageAsDataUrl(`https://picsum.photos/seed/${seed}/800/600`); }
+        catch (err3) {
+          console.warn("[portfolio-image] pollinations fallback failed, falling back to picsum:", err3);
+          return await fetchImageAsDataUrl(`https://picsum.photos/seed/${seed}/800/600`);
+        }
       }
     }
   }
@@ -129,12 +137,14 @@ async function freeProjectImage(keywords: string, seed: number, projectTitle?: s
   // Explicit pollinations mode.
   try {
     return await fetchImageAsDataUrl(pollinationsUrl(prompt, seed, 900, 600));
-  } catch {
+  } catch (err) {
     // First fallback: keyword stock image (more on-topic than a re-prompt).
+    console.warn("[portfolio-image] pollinations source failed, falling back to stock:", err);
     try {
       return await fetchImageAsDataUrl(stockImageUrl(keywords, seed));
-    } catch {
+    } catch (err2) {
       // Final fallback
+      console.warn("[portfolio-image] stock fallback failed, falling back to picsum:", err2);
       return await fetchImageAsDataUrl(`https://picsum.photos/seed/${seed}/800/600`);
     }
   }
@@ -248,7 +258,8 @@ export const generatePortfolio = createServerFn({ method: "POST" })
           headshot = await fetchImageAsDataUrl(pollinationsUrl(prompt, 7, 600, 600));
         }
         avatarUrl = await uploadImage(context.supabase, `${folder}/headshot.png`, headshot);
-      } catch {
+      } catch (err) {
+        console.warn("[portfolio-image] headshot generation failed, falling back to initial monogram:", err);
         avatarUrl = ""; // template falls back to an initial monogram
       }
     }
@@ -280,8 +291,8 @@ export const generatePortfolio = createServerFn({ method: "POST" })
           // (lovable → stock → pollinations) and the concrete image prompt.
           const dataUrl = await freeProjectImage(keywords, i + 1, proj.title, copy.niche);
           imageUrl = await uploadImage(context.supabase, `${folder}/project-${i + 1}.png`, dataUrl);
-        } catch {
-          // keep external stock fallback
+        } catch (err) {
+          console.warn(`[portfolio-image] project image ${i + 1} generation failed, keeping external stock fallback:`, err);
         }
         return {
            title: fallback?.title ?? proj.title,
@@ -304,15 +315,16 @@ export const generatePortfolio = createServerFn({ method: "POST" })
         try {
           const { generateImagePrompted } = await import("./avatar-ai.server");
           heroDataUrl = await generateImagePrompted(heroPrompt);
-        } catch {
+        } catch (err) {
+          console.warn("[portfolio-image] hero lovable generation failed, falling back to pollinations:", err);
           heroDataUrl = await fetchImageAsDataUrl(pollinationsUrl(heroPrompt, 999, 1200, 600));
         }
       } else {
         heroDataUrl = await fetchImageAsDataUrl(pollinationsUrl(heroPrompt, 999, 1200, 600));
       }
       heroImageUrl = await uploadImage(context.supabase, `${folder}/hero-bg.png`, heroDataUrl);
-    } catch {
-      // no hero image — gradient background used as fallback
+    } catch (err) {
+      console.warn("[portfolio-image] hero image generation failed entirely, falling back to gradient background:", err);
     }
 
     // 5. Assemble — factual fields straight from the profile.

@@ -73,6 +73,9 @@ export const generateNichePortfolioPiece = createServerFn({ method: "POST" })
     // 2) If no template exists for this niche, build one (the reusable shape + niche
     //    language) and save it for future generations.
     if (!templateGuidance) {
+      // No silent degrade: if the niche template itself can't be generated, every
+      // downstream slot would be populated from empty guidance, producing a generic
+      // piece dressed up as niche-specific. Fail loudly instead.
       try {
         templateGuidance = await generateObjectWithProvider("writer", {
           schema: TemplateGuidanceSchema,
@@ -84,20 +87,25 @@ export const generateNichePortfolioPiece = createServerFn({ method: "POST" })
 Write concise guidance for each part, specific to this niche's real practice.`,
           prompt: `Niche: ${nicheKey}\n\nDefine the four-part template guidance for this niche.`,
         });
-        // Save it (non-fatal).
-        try {
-          await (supabase as any).from("niche_portfolio_templates").upsert({
-            user_id: userId,
-            niche: nicheKey,
-            situation_guidance: templateGuidance.situationGuidance,
-            approach_guidance: templateGuidance.approachGuidance,
-            visual_direction: templateGuidance.visualDirection,
-            takeaway_guidance: templateGuidance.takeawayGuidance,
-          }, { onConflict: "user_id,niche" });
-          createdTemplate = true;
-        } catch { /* non-fatal: still return the piece */ }
-      } catch {
-        templateGuidance = { situationGuidance: "", approachGuidance: "", visualDirection: "", takeawayGuidance: "" };
+      } catch (err) {
+        throw new Error(
+          `Could not generate a niche-specific template for "${nicheKey}": ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      // Save it (non-fatal — the template guidance itself is still valid to use below;
+      // only future reuse from storage is lost).
+      try {
+        await (supabase as any).from("niche_portfolio_templates").upsert({
+          user_id: userId,
+          niche: nicheKey,
+          situation_guidance: templateGuidance.situationGuidance,
+          approach_guidance: templateGuidance.approachGuidance,
+          visual_direction: templateGuidance.visualDirection,
+          takeaway_guidance: templateGuidance.takeawayGuidance,
+        }, { onConflict: "user_id,niche" });
+        createdTemplate = true;
+      } catch (err) {
+        console.warn(`[niche-portfolio-template] failed to save template for "${nicheKey}", will regenerate next time:`, err);
       }
     }
 
