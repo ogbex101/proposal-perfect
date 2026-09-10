@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 
 import { HOOKS, STRATEGIES, CTAS, LENGTHS, type LengthId } from "@/lib/proposal-constants";
 import { goldenKeyById } from "@/lib/prompts/shared/golden-keys";
+import { resolveRegister } from "@/lib/prompts/shared/registers";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
 import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, craftHookLine, craftCtaLine, translateToEnglish, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
@@ -150,6 +151,11 @@ function NewProposal() {
   const [factCheckAck, setFactCheckAck] = useState(false);
   // Fix 9 — record why portfolios were auto-matched so the UI can show it.
   const [autoMatchInfo, setAutoMatchInfo] = useState<{ titles: string[]; skills: string[] } | null>(null);
+  // Batch 2 — portfolio match detail for the Decision Panel: which items matched, which
+  // tags, and a confidence label; or an explicit no-confident-match state.
+  const [matchDetail, setMatchDetail] = useState<
+    { kind: "match"; items: { id: string; title: string; tags: string[]; score: number }[] } | { kind: "none" } | null
+  >(null);
 
   const [strategyDoc, setStrategyDoc] = useState<StrategyDocument | null>(null);
   const [showStrategy, setShowStrategy] = useState(false);
@@ -236,27 +242,31 @@ function NewProposal() {
       const detectedBlob = norm(
         (result.detectedNiche ?? "") + " " + ((result as any).extractedEntities ?? []).join(" ") + " " + effectiveJob,
       );
-      if (selectedPortfolio.length === 0) {
+      {
         const matchedSkills = new Set<string>();
         const scored = portfolio
           .map((p: any) => {
             const tags: string[] = [...((p as any).niche_tags ?? []), (p as any).niche].filter(Boolean);
             const hits = tags.filter((t: string) => t && detectedBlob.includes(norm(t)));
             hits.forEach((h: string) => matchedSkills.add(h));
-            return { id: p.id, title: p.title, score: hits.length };
+            return { id: p.id, title: p.title, tags: hits, score: hits.length };
           })
           .filter((x) => x.score > 0)
           .sort((a, b) => b.score - a.score)
           .slice(0, 3);
 
         if (scored.length > 0) {
-          setSelectedPortfolio(scored.map((s) => s.id));
+          setMatchDetail({ kind: "match", items: scored });
+          if (selectedPortfolio.length === 0) setSelectedPortfolio(scored.map((s) => s.id));
           setAutoMatchInfo({ titles: scored.map((s) => s.title), skills: [...matchedSkills] });
           toast.success(`Auto-matched ${scored.length} portfolio${scored.length > 1 ? "s" : ""} for this job`);
         } else {
+          setMatchDetail({ kind: "none" });
           setAutoMatchInfo(null);
-          const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
-          if (primaries.length) setSelectedPortfolio(primaries);
+          if (selectedPortfolio.length === 0) {
+            const primaries = portfolio.filter((p) => p.is_primary).slice(0, 3).map((p) => p.id);
+            if (primaries.length) setSelectedPortfolio(primaries);
+          }
         }
       }
       toast.success("Job analyzed");
@@ -289,6 +299,7 @@ function NewProposal() {
     setExplanation(null);
     setFactCheck(null);
     setAutoMatchInfo(null);
+    setMatchDetail(null);
     toast.info("Analysis cancelled");
   }
 
@@ -832,6 +843,7 @@ function NewProposal() {
                   setExplanation(null);
                   setFactCheck(null);
                   setAutoMatchInfo(null);
+                  setMatchDetail(null);
                   analyzeMutation.mutate();
                 }}
                 disabled={!canAnalyze}
@@ -863,6 +875,18 @@ function NewProposal() {
             </CropCard>
           )}
           {analysis && <AnalysisPanel analysis={analysis} />}
+          {analysis && (
+            <DecisionPanel
+              analysis={analysis}
+              hookId={hookId}
+              setHookId={setHookId}
+              strategyId={strategyId}
+              ctaId={ctaId}
+              matchDetail={matchDetail}
+              onGenerate={() => generateMutation.mutate()}
+              generating={generateMutation.isPending}
+            />
+          )}
         </div>
 
         {/* RIGHT: configure + output */}
@@ -1560,6 +1584,147 @@ function AnalysisPanel({ analysis }: { analysis: JobAnalysis }) {
           Suggestions applied below — override the dropdowns any time.
         </p>
       </div>
+    </CropCard>
+  );
+}
+
+// ── Batch 2 — Decision Panel ────────────────────────────────────────────────
+// Renders after a successful analysis, before generation. Shows EVERY decision the
+// system made — niche+register, hook (+2 alternatives, swappable), strategy, CTA,
+// Golden Key (equal weight used or not), and the portfolio match — each with its
+// reason. Pure display of Batch-1 data (no network call). The Generate button uses
+// whatever hook/strategy/CTA is currently selected.
+function DecisionRow({ label, value, reason, accent }: { label: string; value: string; reason?: string; accent?: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+      <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn("mt-0.5 text-sm font-semibold", accent ?? "text-white")}>{value}</p>
+      {reason && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{reason}</p>}
+    </div>
+  );
+}
+
+function DecisionPanel({
+  analysis, hookId, setHookId, strategyId, ctaId, matchDetail, onGenerate, generating,
+}: {
+  analysis: JobAnalysis;
+  hookId: string; setHookId: (id: string) => void;
+  strategyId: string; ctaId: string;
+  matchDetail: { kind: "match"; items: { id: string; title: string; tags: string[]; score: number }[] } | { kind: "none" } | null;
+  onGenerate: () => void; generating: boolean;
+}) {
+  const intel = (analysis as any)?.intelligence;
+  const ci = intel?.clientIntelligence;
+  const bp = intel?.proposalBlueprint;
+  const reg = resolveRegister(ci?.recommendedRegisterId);
+  const strat = STRATEGIES.find((s) => s.id === strategyId);
+  const cta = CTAS.find((c) => c.id === ctaId);
+  const gk = bp?.goldenKey as { use: boolean; keyId: string | null; placement: string | null; reason: string } | undefined;
+  const gkKey = gk?.use ? goldenKeyById(gk.keyId ?? undefined) : undefined;
+
+  // Chosen hook first, then up to 2 alternatives — all from Engine 4's scored options.
+  const hooks = (analysis.hookSuggestions ?? []);
+  const chosen = hooks.find((h) => h.hookId === hookId) ?? hooks[0];
+  const alternatives = hooks.filter((h) => h.hookId !== chosen?.hookId).slice(0, 2);
+
+  const confidenceLabel = (score: number) => (score >= 3 ? "High" : score === 2 ? "Medium" : "Low");
+
+  return (
+    <CropCard className="p-5 bp-rise border-teal/20">
+      <div className="flex items-center gap-2">
+        <Eyebrow index="B">Decision panel</Eyebrow>
+        <span className="text-[11px] text-muted-foreground">Every choice, with its reasoning — swap the hook if you disagree</span>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <DecisionRow label="Detected niche" value={analysis.detectedNiche || "—"} reason={analysis.summary} />
+        <DecisionRow label="Register (voice)" value={reg.name} reason={ci?.registerReason || reg.description} accent="text-teal" />
+      </div>
+
+      {/* Hook + alternatives */}
+      <div className="mt-4">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Hook — chosen + alternatives</p>
+        <div className="space-y-2">
+          {chosen && (
+            <div className="rounded-lg border border-teal/40 bg-teal/10 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-teal">{chosen.hookName} · selected</span>
+                <span className="text-[10px] font-mono text-teal/70">{chosen.score}/100</span>
+              </div>
+              {chosen.openingLine && <p className="mt-1 text-xs italic text-foreground/80">"{chosen.openingLine}"</p>}
+              {chosen.scoreReason && <p className="mt-1 text-xs text-muted-foreground">{chosen.scoreReason}</p>}
+            </div>
+          )}
+          {alternatives.map((h) => (
+            <button
+              key={h.hookId}
+              onClick={() => setHookId(h.hookId)}
+              className="w-full text-left rounded-lg border border-white/10 bg-white/[0.02] p-3 hover:border-teal/40 transition-colors"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-white">{h.hookName}</span>
+                <span className="text-[10px] font-mono text-muted-foreground">{h.score}/100 · click to use</span>
+              </div>
+              {h.scoreReason && <p className="mt-1 text-xs text-muted-foreground">{h.scoreReason}</p>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <DecisionRow label="Strategy" value={strat?.name ?? prettyId(strategyId)} reason={analysis.strategyReason} />
+        <DecisionRow label="CTA pattern" value={cta?.name ?? prettyId(ctaId)} reason={analysis.ctaReason} />
+      </div>
+
+      {/* Golden Key — equal weight whether used or not */}
+      {gk && (
+        <div className="mt-4 rounded-lg border border-gold/25 bg-gold/[0.05] p-3">
+          <div className="flex items-center gap-2">
+            <Key className="h-3.5 w-3.5 text-gold" />
+            <p className="text-[10px] font-mono uppercase tracking-wider text-gold/70">Golden Key</p>
+            <span className={cn("ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium", gk.use ? "bg-gold/15 text-gold" : "bg-white/5 text-muted-foreground")}>
+              {gk.use ? `Used · ${gk.placement ?? "?"}` : "Not used"}
+            </span>
+          </div>
+          {gkKey && <p className="mt-2 text-sm italic text-white/90">"{gkKey.text}"</p>}
+          <p className="mt-1.5 text-xs text-muted-foreground">{gk.reason}</p>
+        </div>
+      )}
+
+      {/* Portfolio match */}
+      <div className="mt-4">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Portfolio match</p>
+        {matchDetail?.kind === "match" ? (
+          <div className="space-y-2">
+            {matchDetail.items.map((it) => (
+              <div key={it.id} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-white">{it.title}</span>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium",
+                    confidenceLabel(it.score) === "High" ? "bg-teal/15 text-teal" : confidenceLabel(it.score) === "Medium" ? "bg-gold/15 text-gold" : "bg-white/5 text-muted-foreground")}>
+                    {confidenceLabel(it.score)} confidence
+                  </span>
+                </div>
+                {it.tags.length > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">Matched tags: {it.tags.join(", ")}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-gold/25 bg-gold/[0.05] px-3 py-2 text-xs text-gold">
+            No portfolio item scored a confident match for this job's niche. Add a relevant tagged piece under Portfolio, or pick one manually below.
+          </div>
+        )}
+      </div>
+
+      <Button
+        onClick={onGenerate}
+        disabled={generating}
+        className="mt-5 w-full bg-gradient-to-r from-teal to-teal/70 text-white font-semibold"
+      >
+        {generating ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Generating…</> : <><Sparkles className="mr-1.5 h-4 w-4" /> Generate Proposal</>}
+      </Button>
     </CropCard>
   );
 }
