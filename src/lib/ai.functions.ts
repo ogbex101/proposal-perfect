@@ -172,12 +172,17 @@ const AnalysisSchema = z.object({
   extractedEntities: z.array(z.string()).default([]),
   strategyWorthy: z.boolean().default(true),
   strategyWorthyReason: z.string().default(""),
-  // True when the 4-engine intelligence pipeline failed and this analysis came from
-  // the legacy single-engine fallback (no `intelligence`, weaker hook/strategy/CTA,
-  // no Golden Key). The UI surfaces this so the user knows why quality may differ.
-  usedFallbackEngine: z.boolean().default(false),
 });
 export type JobAnalysis = z.infer<typeof AnalysisSchema>;
+
+// Batch 1 — analyzeJob returns a discriminated result. There is NO fallback engine:
+// either the 4-engine pipeline succeeds (ok:true with the intelligence object attached)
+// or it fails loudly (ok:false with the real error). Nothing downstream can run off a
+// failure state, and a failure is never shaped like a success.
+export type AnalyzedJob = JobAnalysis & { intelligence: ProposalIntelligenceObject };
+export type AnalyzeJobSuccess = { ok: true; analysis: AnalyzedJob };
+export type AnalyzeJobFailure = { ok: false; error: string };
+export type AnalyzeJobResult = AnalyzeJobSuccess | AnalyzeJobFailure;
 
 export const analyzeJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -227,7 +232,7 @@ export const analyzeJob = createServerFn({ method: "POST" })
         scoreReason: "Derived from client psychology analysis",
       }];
 
-      const analysis: JobAnalysis & { intelligence: ProposalIntelligenceObject } = {
+      const analysis: AnalyzedJob = {
         summary: biz.coreBusinessInsight ?? ci.projectSummary,
         painPoint: biz.coreBusinessProblem,
         hiddenNeeds: psych.realReasonForHiring,
@@ -256,139 +261,21 @@ export const analyzeJob = createServerFn({ method: "POST" })
         strategyWorthyReason: intelligence.requiresHumanReview
           ? `Confidence ${intelligence.overallConfidence.toFixed(0)}% — human review recommended`
           : `Confidence ${intelligence.overallConfidence.toFixed(0)}% — high-quality analysis`,
-        usedFallbackEngine: false,
         intelligence,
       };
 
-      return analysis;
+      return { ok: true as const, analysis };
     } catch (err) {
-      // The 4-engine intelligence pipeline threw. Log the REAL error in full before
-      // falling back, so we can diagnose which engine/schema is failing (Fix 0 step 4).
+      // Batch 1: NO silent fallback. The 4-engine intelligence pipeline is the ONLY
+      // analysis path. If it throws, we log the real error in full and return a typed
+      // FAILURE state — never an object shaped like a successful analysis. The frontend
+      // shows the real message + a Retry button and blocks everything downstream.
+      const message = err instanceof Error ? err.message : String(err);
       console.error(
-        "[analyzeJob] intelligence pipeline failed — falling back to legacy single-engine analysis. Original error:",
+        "[analyzeJob] intelligence pipeline failed:",
         err instanceof Error ? `${err.name}: ${err.message}\n${err.stack ?? ""}` : err,
       );
-      // Fall back to legacy single-engine analysis if pipeline fails
-      try {
-        const hookList = HOOKS.map((h) => `- ${h.id}: ${h.name} — ${h.description}`).join("\n");
-        const strategyList = STRATEGIES.map((s) => `- ${s.id}: ${s.name} — ${s.description}`).join("\n");
-        const ctaList = CTAS.map((c) => `- ${c.id}: ${c.name} — ${c.description}`).join("\n");
-        const legacy = await structuredWith(
-          "analyzer",
-          AnalysisSchema,
-        `You are an expert freelance proposal strategist who has won hundreds of proposals. Your analysis is what separates winning proposals from generic ones. You must read between the lines.
-
-DEEP ANALYSIS REQUIREMENTS:
-1. PAIN POINT: What is the client's REAL problem (not what they said, but what they mean)? Why is this urgent NOW? What is the downstream cost if it stays unsolved?
-2. HIDDEN NEEDS: What has the client NOT said but clearly needs? What are they afraid of? What does "success" actually look like to them beyond the deliverable?
-3. WHAT WILL WIN THIS PROPOSAL: Based on this specific job post — what ONE insight, angle, or approach would make the client think "this person understands my situation"? Not generic advice — specific to THIS job.
-4. WHAT TO AVOID: What generic responses will this client receive from everyone else? What should you NOT say to stand out?
-5. TECHNICAL DIFFICULTIES: What are the actual hard parts of this project that a junior freelancer would underestimate?
-6. HOOK SELECTION: Choose hooks that feel like genuine insights about THEIR situation — not clever openers. The openingLine must be a sentence the client would read and think "how did they know that?"
-7. STRATEGY SELECTION: The strategy should define the ENTIRE proposal arc — not just the opening.
-8. CTA SELECTION: The CTA should match the client's decision-making style evident from how they wrote the job post.
-9. ENTITY EXTRACTION: Pull out every concrete, specific anchor from the job post — named tools (e.g. "Webflow", "Stripe", "Notion"), exact numbers ("10,000 subscribers", "$5k budget", "2-week deadline"), client's exact phrasing of their problem, proper nouns (company name, product name), and explicit constraints. These become grounding requirements for the proposal. Minimum 4 entities, maximum 10.
-10. HOOK SELECTION — this is critical. Do NOT default to "Sharp Observation" (i_noticed) for every job. Match the hook to the client's emotional state and job type:
-  - Use "Red Flag Warning" when the client's approach has an obvious flaw they haven't spotted
-  - Use "Cost of Inaction" when the problem is clearly costing them money or users right now
-  - Use "Curiosity Gap" when you can tease a specific insight from their industry that they'd value
-  - Use "Founder Mode" for founder-run businesses where the stakes are personal
-  - Use "Pattern Interrupt" for overposted job types (logos, basic websites, content writing) where standing out is everything
-  - Use "Future Pacing" when the outcome is vivid and easy to paint (launches, redesigns, revenue uplift)
-  - Use "Stack Realist" when the job has technical realities the client is probably underestimating
-  - Use "Sharp Observation" ONLY when there is a genuinely specific, non-obvious detail worth pointing out
-  - The hookSuggestions array MUST have 3 different hooks — never repeat the same one
-11. STRATEGY DOCUMENT WORTHINESS: Decide if this job deserves a strategy document.
-  WORTHY (strategyWorthy: true): multi-phase projects, budget implied or stated over $500, complex technical builds (web app, SaaS, custom software, full redesign), long-term or retainer work, sophisticated clients who write detailed posts.
-  NOT WORTHY (strategyWorthy: false): simple quick-turnaround tasks (logo tweak, copy edit, one-page site, small bug fix, content writing under $200, VA tasks), jobs where the client signals they want fast delivery over depth, anything that would be over-engineered by a strategy doc.
-  Be honest — a strategy doc on a $50 task wastes everyone's time and signals poor judgment.
-
-Be ruthlessly specific. Every answer must reference details from THIS job post. No generic observations.
-
-Choose the best matching hook id, strategy id, AND cta id from these exact lists:
-HOOKS:
-${hookList}
-STRATEGIES:
-${strategyList}
-CTAS (closing call-to-action styles):
-${ctaList}
-
-Return a JSON object with these exact keys:
-{
-  "summary": "...",
-  "painPoint": "...",
-  "hiddenNeeds": "...",
-  "technicalDifficulties": [{"title": "...", "explanation": "..."}],
-  "recommendedApproach": "...",
-  "suggestedHookId": "<the #1 best hook id from list>",
-  "hookReason": "...",
-  "hookSuggestions": [
-    {
-      "hookId": "<exact hook id from list>",
-      "hookName": "<hook name>",
-      "openingLine": "<a ready-to-use opening sentence or two the freelancer can paste directly — specific to THIS job, not generic>",
-      "score": <integer 1-100>,
-      "scoreReason": "<one sentence: why this score>"
-    },
-    {
-      "hookId": "<second best hook id — different from first>",
-      "hookName": "<hook name>",
-      "openingLine": "<ready-to-use opening line for this job>",
-      "score": <integer 1-100>,
-      "scoreReason": "..."
-    },
-    {
-      "hookId": "<third hook id — different from first two>",
-      "hookName": "<hook name>",
-      "openingLine": "<ready-to-use opening line for this job>",
-      "score": <integer 1-100>,
-      "scoreReason": "..."
-    }
-  ],
-  "suggestedStrategyId": "<exact id from list>",
-  "strategyReason": "...",
-  "suggestedCtaId": "<exact cta id from list>",
-  "ctaReason": "<one sentence: why this CTA fits this specific job and client>",
-  "ctaSuggestions": [
-    {
-      "ctaId": "<exact cta id from list>",
-      "ctaName": "<cta name>",
-      "closingLine": "<a ready-to-use closing sentence or two — specific to THIS job, not generic>",
-      "score": <integer 1-100>,
-      "scoreReason": "<one sentence: why this score>"
-    },
-    {
-      "ctaId": "<second cta id — different from first>",
-      "ctaName": "<cta name>",
-      "closingLine": "<ready-to-use closing line>",
-      "score": <integer 1-100>,
-      "scoreReason": "..."
-    },
-    {
-      "ctaId": "<third cta id — different from first two>",
-      "ctaName": "<cta name>",
-      "closingLine": "<ready-to-use closing line>",
-      "score": <integer 1-100>,
-      "scoreReason": "..."
-    }
-  ],
-  "detectedLanguage": "<full English name of the language this job post is written in>",
-  "suggestedLength": "<brief|robust|explanatory>",
-  "detectedNiche": "<the primary freelance niche>",
-  "extractedEntities": ["<specific tool/tech name>", "<exact number or metric>", "<client's exact pain point phrase>", "<proper noun>", "<explicit constraint>"],
-  "strategyWorthy": <true if this job deserves a strategy document, false if it's too simple>,
-  "strategyWorthyReason": "<one sentence explaining why a strategy doc is or isn't appropriate for this specific job>"
-}
-
-IMPORTANT for hookSuggestions / ctaSuggestions: The openingLine and closingLine must be specific, concrete sentences written for THIS job — not templates. Ready to paste directly. Score 85-100 = excellent fit, 70-84 = good fit, 50-69 = workable.${redFlagPromptBlock()}`,
-          `Analyze this job post:\n\n${data.jobDescription}`,
-        );
-        // Flag the fallback so the UI can tell the user quality will differ and the
-        // Golden Key card won't appear (no intelligence object on this path).
-        return { ...legacy, usedFallbackEngine: true };
-      } catch (fallbackErr) {
-        handleAiError(fallbackErr);
-      }
+      return { ok: false as const, error: message } satisfies AnalyzeJobFailure;
     }
   });
 

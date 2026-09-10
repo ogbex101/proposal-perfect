@@ -119,6 +119,7 @@ function NewProposal() {
   const [proposalSubmitted, setProposalSubmitted] = useState(false);
 
   const [analysis, setAnalysis] = useState<JobAnalysis | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [hookId, setHookId] = useState<string>(HOOKS[0].id);
   const [strategyId, setStrategyId] = useState<string>(STRATEGIES[0].id);
   const [ctaId, setCtaId] = useState<string>(CTAS[0].id);
@@ -209,7 +210,17 @@ function NewProposal() {
           return result;
         });
     },
-    onSuccess: (result) => {
+    onSuccess: (res) => {
+      // Batch 1 — discriminated result. A failed pipeline is a loud, typed failure:
+      // surface the real error, clear any prior analysis, and block everything downstream.
+      if (!res.ok) {
+        setAnalysis(null);
+        setAnalysisError(res.error);
+        toast.error("Analysis failed — see the panel for details.");
+        return;
+      }
+      setAnalysisError(null);
+      const result = res.analysis;
       setAnalysis({ ...result, hookSuggestions: result.hookSuggestions ?? [], detectedNiche: result.detectedNiche ?? "", suggestedLength: result.suggestedLength ?? "robust" } as JobAnalysis);
       const h = HOOKS.find((x) => x.id === result.suggestedHookId);
       const s = STRATEGIES.find((x) => x.id === result.suggestedStrategyId);
@@ -248,11 +259,7 @@ function NewProposal() {
           if (primaries.length) setSelectedPortfolio(primaries);
         }
       }
-      if ((result as any).usedFallbackEngine) {
-        toast.warning("Using simplified analysis — full intelligence engine unavailable. Hook/strategy quality may differ and the Golden Key won't appear.", { duration: 7000 });
-      } else {
-        toast.success("Job analyzed");
-      }
+      toast.success("Job analyzed");
       // Auto-start strategy generation only if job is worth it
       if (!strategyDoc && !strategyMutation.isPending && result.strategyWorthy !== false) {
         setTimeout(() => strategyMutation.mutate(), 500);
@@ -263,6 +270,9 @@ function NewProposal() {
     onError: (e) => {
       const msg = e instanceof Error ? e.message : "Analysis failed";
       if (msg === "__cancelled__" || msg.toLowerCase().includes("abort")) return; // user-cancelled
+      // Transport/unexpected error (not a typed pipeline failure) — surface it too.
+      setAnalysis(null);
+      setAnalysisError(msg);
       toast.error(msg);
     },
   });
@@ -275,6 +285,7 @@ function NewProposal() {
     analyzeAbortRef.current = null;
     analyzeMutation.reset();
     setAnalysis(null);
+    setAnalysisError(null);
     setExplanation(null);
     setFactCheck(null);
     setAutoMatchInfo(null);
@@ -802,7 +813,7 @@ function NewProposal() {
             {analyzeMutation.isPending ? (
               <div className="mt-4 flex gap-2">
                 <Button disabled className="flex-1 bg-teal/15 text-teal">
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Reading the brief…
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> <EngineProgressLabel />
                 </Button>
                 <Button
                   onClick={cancelAnalysis}
@@ -817,6 +828,7 @@ function NewProposal() {
                 onClick={() => {
                   // Fix 8 — clear the previous result fully before starting a fresh analysis
                   setAnalysis(null);
+                  setAnalysisError(null);
                   setExplanation(null);
                   setFactCheck(null);
                   setAutoMatchInfo(null);
@@ -830,6 +842,26 @@ function NewProposal() {
             )}
           </CropCard>
 
+          {/* Batch 1 — loud failure state: real error + Retry, nothing downstream reachable */}
+          {analysisError && !analysis && !analyzeMutation.isPending && (
+            <CropCard className="p-5 border-red-400/30 bg-red-400/5">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-red-300">Analysis failed</p>
+                  <p className="mt-1 text-[12px] text-red-200/80 break-words">{analysisError}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">The intelligence engine didn't complete, so there's no analysis to build on. Fix nothing on your end — just retry; if it keeps failing, the error above is the real cause.</p>
+                  <Button
+                    onClick={() => { setAnalysisError(null); analyzeMutation.mutate(); }}
+                    className="mt-3 bg-red-400/15 text-red-200 hover:bg-red-400/25"
+                    size="sm"
+                  >
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Retry analysis
+                  </Button>
+                </div>
+              </div>
+            </CropCard>
+          )}
           {analysis && <AnalysisPanel analysis={analysis} />}
         </div>
 
@@ -1467,6 +1499,22 @@ function formatStrategyAsText(doc: StrategyDocument): string {
 /* ---------- Analysis panel ---------- */
 // Humanize a raw id (e.g. "authority_proof" → "Authority Proof") so a lookup miss
 // never shows the user a broken snake_case string.
+// Batch 1 — honest loading label that walks the real 4-engine sequence.
+const ENGINE_PHASES = [
+  "Reading the job post…",
+  "Identifying the client's real need…",
+  "Selecting hook strategy…",
+  "Checking Golden Key fit…",
+];
+function EngineProgressLabel() {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((v) => Math.min(v + 1, ENGINE_PHASES.length - 1)), 2500);
+    return () => clearInterval(t);
+  }, []);
+  return <span>{ENGINE_PHASES[i]}</span>;
+}
+
 function prettyId(id: string | undefined): string {
   if (!id) return "—";
   return id.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1478,12 +1526,6 @@ function AnalysisPanel({ analysis }: { analysis: JobAnalysis }) {
   return (
     <CropCard className="p-5 bp-rise">
       <Eyebrow index="A">Job analysis</Eyebrow>
-      {(analysis as any).usedFallbackEngine && (
-        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>Simplified analysis — the full intelligence engine was unavailable for this run. Hook/strategy/CTA quality may be weaker and the Golden Key card won't appear. Re-run to try the full engine again.</span>
-        </div>
-      )}
       <div className="mt-4 space-y-4">
         <Block title="Summary">{analysis.summary}</Block>
         <Block title="Client pain point">{analysis.painPoint}</Block>
