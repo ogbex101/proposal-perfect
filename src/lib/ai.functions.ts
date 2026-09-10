@@ -1788,7 +1788,8 @@ Do NOT rephrase, reorder, shorten, or change any words. Return the proposal with
 Return JSON: { "content": "<the cleaned proposal text>" }`,
         `PROPOSAL TO POLISH:\n${data.proposal}`,
       );
-      return result;
+      return { ...result, content: stripMarkers(result.content) };
+
     } catch (err) {
       handleAiError(err);
     }
