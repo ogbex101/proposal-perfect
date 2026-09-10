@@ -38,9 +38,10 @@ export function useAuth(): AuthState {
         .from("user_access")
         .select("verified_at")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
       return !!data;
     }
+
 
     async function apply(session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]) {
       if (!active) return;
