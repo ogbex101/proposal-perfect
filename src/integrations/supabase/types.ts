@@ -299,6 +299,8 @@ export type Database = {
           id: string
           is_favorite: boolean
           is_primary: boolean
+          niche: string | null
+          niche_tags: string[]
           title: string
           updated_at: string
           url: string
@@ -310,6 +312,8 @@ export type Database = {
           id?: string
           is_favorite?: boolean
           is_primary?: boolean
+          niche?: string | null
+          niche_tags?: string[]
           title: string
           updated_at?: string
           url: string
@@ -321,6 +325,8 @@ export type Database = {
           id?: string
           is_favorite?: boolean
           is_primary?: boolean
+          niche?: string | null
+          niche_tags?: string[]
           title?: string
           updated_at?: string
           url?: string
