@@ -161,21 +161,50 @@ function buildProviders(): ModelEntry[] {
 
 // ─── Core waterfall functions ─────────────────────────────────────────────────
 
+const CREDIT_RE = /402|payment required|out of credit|insufficient|quota|billing/i;
+const AUTH_RE = /401|403|invalid.*(api|key|token)|unauthorized|authentication/i;
+
+/**
+ * Turn the collected per-provider failures into an accurate, actionable error.
+ * Every failure is logged (so the real cause is inspectable), and the message only
+ * blames "out of credits" when EVERY tried provider actually returned a
+ * payment/credit error — otherwise it surfaces the real last error.
+ */
+function summarizeProviderFailures(kind: string, errors: string[]): Error {
+  console.error(
+    `[ai-gateway] ${kind} failed on all ${errors.length} provider(s):\n` +
+      errors.map((e, i) => `  ${i + 1}. ${e}`).join("\n"),
+  );
+
+  const allCredit = errors.length > 0 && errors.every((e) => CREDIT_RE.test(e));
+  const anyAuth = errors.some((e) => AUTH_RE.test(e));
+  const last = errors[errors.length - 1] ?? "Unknown error";
+
+  if (allCredit) {
+    return new Error(
+      "All configured AI providers are out of credits/quota. Top up your Lovable AI credits, or add your own provider key (e.g. GOOGLE_GENERATIVE_AI_API_KEY — free) in Lovable Cloud → Settings → Secrets.",
+    );
+  }
+  if (anyAuth) {
+    return new Error(
+      `AI request failed — a provider rejected the API key or model. Check your keys/model in Settings → Secrets. Details: ${last}`,
+    );
+  }
+  return new Error(`All AI providers failed. Last error: ${last}`);
+}
+
+const NO_PROVIDER_MSG =
+  "No AI provider configured. Add at least one API key in Lovable Cloud → Settings → Secrets.\n" +
+  "Options: GOOGLE_GENERATIVE_AI_API_KEY (free), GROQ_API_KEY (free), MISTRAL_API_KEY (free), OPENROUTER_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, LOVABLE_API_KEY";
+
 export async function generateWithFallback(params: {
   system: string;
   prompt: string;
 }): Promise<string> {
   const providers = buildProviders();
-
-  if (providers.length === 0) {
-    throw new Error(
-      "No AI provider configured. Add at least one API key in Lovable Cloud → Settings → Secrets.\n" +
-      "Options: GOOGLE_GENERATIVE_AI_API_KEY (free), GROQ_API_KEY (free), MISTRAL_API_KEY (free), OPENROUTER_API_KEY, OPENAI_API_KEY"
-    );
-  }
+  if (providers.length === 0) throw new Error(NO_PROVIDER_MSG);
 
   const errors: string[] = [];
-
   for (const provider of providers) {
     try {
       const model = await provider.load();
@@ -186,12 +215,7 @@ export async function generateWithFallback(params: {
       errors.push(`${provider.name}: ${msg}`);
     }
   }
-
-  const lastError = errors[errors.length - 1] ?? "Unknown error";
-  if (lastError.includes("402") || lastError.includes("Payment") || lastError.includes("credit")) {
-    throw new Error("All AI providers exhausted or out of credits. Add a new API key in Lovable Cloud → Settings → Secrets.");
-  }
-  throw new Error(`All AI providers failed. Last error: ${lastError}`);
+  throw summarizeProviderFailures("generateText", errors);
 }
 
 export async function generateObjectWithFallback<T>(params: {
@@ -200,13 +224,9 @@ export async function generateObjectWithFallback<T>(params: {
   schema: z.ZodType<T>;
 }): Promise<T> {
   const providers = buildProviders();
-
-  if (providers.length === 0) {
-    throw new Error("No AI provider configured. Add at least one API key in Lovable Cloud → Settings → Secrets.");
-  }
+  if (providers.length === 0) throw new Error(NO_PROVIDER_MSG);
 
   const errors: string[] = [];
-
   for (const provider of providers) {
     try {
       const model = await provider.load();
@@ -217,8 +237,7 @@ export async function generateObjectWithFallback<T>(params: {
       errors.push(`${provider.name}: ${msg}`);
     }
   }
-
-  throw new Error(`AI structured output failed. Last error: ${errors[errors.length - 1] ?? "Unknown"}`);
+  throw summarizeProviderFailures("generateObject", errors);
 }
 
 // ─── Role-routed functions ────────────────────────────────────────────────────
@@ -241,8 +260,9 @@ export async function generateObjectWithProvider<T>(role: ProviderRole, params: 
       const model = await roleProvider.load();
       const { object } = await generateObject({ model, schema: params.schema, system: params.system, prompt: params.prompt });
       return object;
-    } catch {
-      // Fall through to waterfall
+    } catch (err) {
+      // Log why the preferred provider failed, then fall through to the waterfall.
+      console.error(`[ai-gateway] role "${role}" preferred provider (${roleProvider.name}) failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -266,8 +286,8 @@ export async function generateWithProvider(role: ProviderRole, params: {
       const model = await roleProvider.load();
       const { text } = await generateText({ model, system: params.system, prompt: params.prompt });
       return text;
-    } catch {
-      // Fall through to waterfall
+    } catch (err) {
+      console.error(`[ai-gateway] role "${role}" preferred provider (${roleProvider.name}) failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
