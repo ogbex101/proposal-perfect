@@ -481,7 +481,17 @@ function NewProposal() {
     onSuccess: (res) => {
       if (res?.text) {
         setContent(res.text);
-        toast.success("Voice edit applied");
+        // Batch 5 — keep the Decision Panel in sync with what actually changed.
+        if ((res as any).hookChanged && (res as any).resultingHookId) {
+          setHookId((res as any).resultingHookId);
+          const h = HOOKS.find((x) => x.id === (res as any).resultingHookId);
+          toast.success(h ? `Hook pattern updated to "${h.name}"` : "Voice edit applied");
+        } else {
+          toast.success("Voice edit applied");
+        }
+        // Run the same fabrication warning on edits.
+        const fc = (res as any).factCheck;
+        if (fc) { setFactCheck(fc); setFactCheckAck(false); }
       }
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Voice edit failed"),
@@ -1647,7 +1657,13 @@ function DecisionPanel({
 
   // Chosen hook first, then up to 2 alternatives — all from Engine 4's scored options.
   const hooks = (analysis.hookSuggestions ?? []);
-  const chosen = hooks.find((h) => h.hookId === hookId) ?? hooks[0];
+  // Batch 5 — the current hookId may have been changed by an edit to a pattern that
+  // wasn't among the original 3 suggestions; synthesize a "chosen" from HOOKS so the
+  // panel reflects the edit instead of silently falling back to suggestion #1.
+  const suggestionForHook = hooks.find((h) => h.hookId === hookId);
+  const hookMeta = HOOKS.find((h) => h.id === hookId);
+  const chosen = suggestionForHook
+    ?? (hookMeta ? { hookId: hookMeta.id, hookName: hookMeta.name, openingLine: "", score: 0, scoreReason: "Set via edit" } : hooks[0]);
   const alternatives = hooks.filter((h) => h.hookId !== chosen?.hookId).slice(0, 2);
 
   const confidenceLabel = (score: number) => (score >= 3 ? "High" : score === 2 ? "Medium" : "Low");
@@ -1672,7 +1688,7 @@ function DecisionPanel({
             <div className="rounded-lg border border-teal/40 bg-teal/10 p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-teal">{chosen.hookName} · selected</span>
-                <span className="text-[10px] font-mono text-teal/70">{chosen.score}/100</span>
+                <span className="text-[10px] font-mono text-teal/70">{chosen.score > 0 ? `${chosen.score}/100` : "via edit"}</span>
               </div>
               {chosen.openingLine && <p className="mt-1 text-xs italic text-foreground/80">"{chosen.openingLine}"</p>}
               {chosen.scoreReason && <p className="mt-1 text-xs text-muted-foreground">{chosen.scoreReason}</p>}

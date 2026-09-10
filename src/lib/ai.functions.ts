@@ -1340,11 +1340,15 @@ export const applyProposalEdit = createServerFn({ method: "POST" })
       if (bp && (bp.mappedHookId || bp.openingLine || bp.ctaLine)) {
         const reg = data.registerId ? resolveRegister(data.registerId) : null;
         const hookLib = HOOKS.map((h) => `  - ${h.id}: ${h.name} — ${h.description}`).join("\n");
+        const gk = (bp as any).goldenKey as { use?: boolean; keyId?: string | null; placement?: string | null } | undefined;
+        const gkLine = gk?.use
+          ? `\n- A Golden Key framing sentence IS used (${gk.keyId ?? "?"}, placed at the ${gk.placement ?? "?"}). Preserve it unless the instruction is about it.`
+          : `\n- No Golden Key framing sentence is used. Do not add one unless the instruction asks.`;
         structuralContext = `
 STRUCTURAL CONTEXT (for your reference — the proposal was built from this blueprint):
 - The HOOK is the opening paragraph. It uses pattern: ${bp.mappedHookId || "(unspecified)"}${bp.openingLine ? `\n  Its text begins near: "${bp.openingLine.slice(0, 120)}"` : ""}
 - Strategy pattern: ${bp.mappedStrategyId || "(unspecified)"}
-- The CTA is the final paragraph (a question). CTA pattern: ${bp.mappedCtaId || "(unspecified)"}${bp.ctaLine ? `\n  Its text is near: "${bp.ctaLine.slice(0, 120)}"` : ""}${reg ? `\n- Register (voice): ${reg.name} — ${reg.description}` : ""}
+- The CTA is the final paragraph (a question). CTA pattern: ${bp.mappedCtaId || "(unspecified)"}${bp.ctaLine ? `\n  Its text is near: "${bp.ctaLine.slice(0, 120)}"` : ""}${reg ? `\n- Register (voice): ${reg.name} — ${reg.description}` : ""}${gkLine}
 
 When the instruction names a structural element ("the hook", "the opening", "the CTA", "the closing"), use the text hints above to LOCATE that exact paragraph rather than guessing by position, and rewrite only that paragraph.
 
@@ -1353,8 +1357,15 @@ ${hookLib}
 `;
       }
 
-      const text = await generateWithProvider("writer", {
-        system: `You are a professional proposal editor. The user gives you a freelance proposal and an instruction to improve it. Apply the instruction surgically — change ONLY what is asked. Preserve the overall structure and voice unless instructed otherwise. Return ONLY the revised proposal text with no commentary, no preamble, no "Here is the revised..." prefix. Just the proposal text itself.
+      const hookIdList = HOOKS.map((h) => h.id).join(", ");
+      const edited = await structuredWith(
+        "writer",
+        z.object({
+          content: z.string(),
+          resultingHookId: z.string(), // the HOOKS id the (possibly rewritten) opening paragraph now follows
+          hookChanged: z.boolean(),    // did this edit change the hook pattern?
+        }),
+        `You are a professional proposal editor. The user gives you a freelance proposal and an instruction to improve it. Apply the instruction surgically — change ONLY what is asked. Preserve the overall structure and voice unless instructed otherwise.
 ${structuralContext}
 Rules:
 - Never add greeting lines ("Hi", "Hello", "Dear")
@@ -1364,10 +1375,37 @@ Rules:
 - If asked to change tone, apply it throughout consistently
 - When asked to change a specific paragraph's style (e.g. the hook), change ONLY that paragraph and make it genuinely follow the named pattern — not just a tone tweak
 - NO FABRICATION: never introduce a statistic, percentage, case study, or named client result that isn't already in the proposal or the instruction
-- Return the complete revised proposal, not just the changed part`,
-        prompt: `INSTRUCTION: ${data.instruction}\n\nCURRENT PROPOSAL:\n${data.proposalText}`,
+
+After editing, report the structure so the UI stays in sync:
+- resultingHookId: the id (from this list: ${hookIdList}) that the FINAL opening paragraph now follows.
+- hookChanged: true if this edit changed the hook's pattern from what it was, false otherwise.
+
+Return JSON: { "content": "<full revised proposal text>", "resultingHookId": "<hook id>", "hookChanged": <true|false> }`,
+        `INSTRUCTION: ${data.instruction}\n\nCURRENT PROPOSAL:\n${data.proposalText}`,
+      );
+
+      let finalText = scrubRedFlags(edited.content.trim(), customFlags);
+
+      // Batch 5 — run the no-fabrication guard on the EDIT output too, not just initial
+      // generation. Sources = the original proposal + the instruction (the only facts an
+      // edit may draw on). Anything invented is flagged back for the UI to warn on.
+      const check = await verifyFactualClaims({
+        proposal: finalText,
+        sources: `ORIGINAL PROPOSAL:\n${data.proposalText}\n\nINSTRUCTION:\n${data.instruction}`,
       });
-      return { text: scrubRedFlags(text.trim(), customFlags) };
+      const factCheck: ProposalFactCheck = {
+        flagged: check?.flagged ?? [],
+        allTraceable: check ? check.allTraceable : true,
+        remediated: false,
+      };
+
+      const validHook = HOOKS.some((h) => h.id === edited.resultingHookId);
+      return {
+        text: finalText,
+        resultingHookId: validHook ? edited.resultingHookId : undefined,
+        hookChanged: !!edited.hookChanged && validHook,
+        factCheck,
+      };
     } catch (err) {
       handleAiError(err);
     }
