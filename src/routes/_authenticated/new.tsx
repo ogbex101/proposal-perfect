@@ -13,6 +13,7 @@ import {
   X,
   Languages,
   Key,
+  BadgeDollarSign,
   Wand2,
   Plus,
   Trash2,
@@ -45,7 +46,7 @@ import { resolveRegister } from "@/lib/prompts/shared/registers";
 import { scorePortfolioMatches } from "@/lib/portfolio-match";
 import { listCustomHooks, listCustomStrategies } from "@/lib/profile.functions";
 import { listSubProfiles } from "@/lib/sub-profile.functions";
-import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, craftHookLine, craftCtaLine, translateToEnglish, type JobAnalysis, type StrategyDocument } from "@/lib/ai.functions";
+import { analyzeJob, generateProposal, generateMilestones, generateStrategyDocument, applyProposalEdit, polishProposal, injectPortfolioLinks, craftHookLine, craftCtaLine, translateToEnglish, suggestPricing, type JobAnalysis, type StrategyDocument, type PricingSuggestion } from "@/lib/ai.functions";
 import { VoiceEditPrompt } from "@/components/VoiceEditPrompt";
 import { StrategyDocumentView } from "@/components/StrategyDocument";
 import { saveProposal, getProposalAnalytics } from "@/lib/proposals.functions";
@@ -141,6 +142,8 @@ function NewProposal() {
   const [avatar, setAvatar] = useState<{ path: string; url: string } | null>(null);
 
   const [content, setContent] = useState("");
+  // Batch 4 — pricing lives in its own state (never blended into the copyable proposal text).
+  const [pricing, setPricing] = useState<PricingSuggestion | null>(null);
   const [aiGeneratedContent, setAiGeneratedContent] = useState("");
   const [explanation, setExplanation] = useState<{
     hook: string;
@@ -289,6 +292,7 @@ function NewProposal() {
     setFactCheck(null);
     setAutoMatchInfo(null);
     setMatchDetail(null);
+    setPricing(null);
     toast.info("Analysis cancelled");
   }
 
@@ -382,6 +386,11 @@ function NewProposal() {
       writeDayStats(updated);
       setDayStats(updated);
       toast.success("Proposal generated");
+      // Batch 4 — pricing as a separate artifact (its own card, never in the copy text).
+      setPricing(null);
+      suggestPricing({ data: { jobDescription: effectiveJob, budget: budget || undefined, detectedNiche: analysis?.detectedNiche || undefined } })
+        .then((p) => setPricing(p))
+        .catch(() => {});
       // auto-polish with fresh content passed directly (avoid stale closure)
       setTimeout(() => polishMutation.mutate(proposalResult!.content), 150);
     },
@@ -833,6 +842,7 @@ function NewProposal() {
                   setFactCheck(null);
                   setAutoMatchInfo(null);
                   setMatchDetail(null);
+                  setPricing(null);
                   analyzeMutation.mutate();
                 }}
                 disabled={!canAnalyze}
@@ -1344,6 +1354,30 @@ function NewProposal() {
             polishing={polishMutation.isPending}
             detectedLanguage={analysis?.detectedLanguage ?? null}
           />
+
+          {/* Batch 4 — pricing card: visually + structurally separate from the proposal
+              text. Copying the proposal never includes these numbers. */}
+          {pricing && (
+            <CropCard className="p-5 border-gold/25 bg-gold/[0.04]">
+              <div className="flex items-center gap-2 mb-3">
+                <BadgeDollarSign className="h-4 w-4 text-gold" />
+                <Eyebrow>Suggested pricing</Eyebrow>
+                <span className="text-[11px] text-muted-foreground">Not part of the proposal text — for your reference</span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Standard rate</p>
+                  <p className="mt-1 text-2xl font-bold text-white">{pricing.standardRate.amount}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{pricing.standardRate.reason}</p>
+                </div>
+                <div className="rounded-lg border border-gold/30 bg-gold/10 p-4">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-gold/70">Win bid rate</p>
+                  <p className="mt-1 text-2xl font-bold text-gold">{pricing.winBidRate.amount}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-gold/80">{pricing.winBidRate.reason}</p>
+                </div>
+              </div>
+            </CropCard>
+          )}
         </div>
       )}
 

@@ -286,6 +286,44 @@ const MilestonesSchema = z.object({
   ),
 });
 
+// ---------- Batch 4 — Pricing suggestion (separate from proposal text) ----------
+const PricingSchema = z.object({
+  currency: z.string().default("$"),
+  standardRate: z.object({ amount: z.string(), reason: z.string() }),
+  winBidRate: z.object({ amount: z.string(), reason: z.string() }),
+});
+export type PricingSuggestion = z.infer<typeof PricingSchema>;
+
+export const suggestPricing = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { jobDescription: string; budget?: string; detectedNiche?: string }) =>
+    z.object({
+      jobDescription: z.string().min(10).max(15000),
+      budget: z.string().max(200).optional(),
+      detectedNiche: z.string().max(120).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }): Promise<PricingSuggestion> => {
+    try {
+      return await structuredWith(
+        "challenger",
+        PricingSchema,
+        `You recommend two prices for a freelancer bidding on a job: a STANDARD rate (what the work is genuinely worth for a skilled freelancer) and a WIN BID rate (a slightly more competitive number to win a crowded bid without underselling). Each gets ONE short reason.
+
+Rules:
+- Ground the numbers in the job's stated or implied budget, scope, and niche. If a budget is stated, anchor to it; if not, estimate from scope and typical ${data.detectedNiche || "freelance"} market rates.
+- Give a concrete number or tight range (e.g. "$450" or "$400–500"), not a vague "it depends".
+- Win Bid is LOWER than Standard but never a race-to-the-bottom; the reason should say why it's competitive yet fair.
+- These are pricing RECOMMENDATIONS, not claimed facts — do not invent what the client has paid before.
+
+Return JSON: { "currency": "$", "standardRate": { "amount": "...", "reason": "..." }, "winBidRate": { "amount": "...", "reason": "..." } }`,
+        `Job post:\n${data.jobDescription.slice(0, 4000)}\n\nStated budget: ${data.budget || "not specified"}\nNiche: ${data.detectedNiche || "unspecified"}`,
+      );
+    } catch (err) {
+      handleAiError(err);
+    }
+  });
+
 export const generateMilestones = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { jobDescription: string; budget?: string }) =>
@@ -779,6 +817,18 @@ Before returning the proposal, verify each of these. If any fail, regenerate:
   ✅ REQUIRED — reveals something they didn't already state outright, drawn from a detail in their post they didn't explicitly connect themselves.
 ✓ The hook states an actual position, not a hedge. Banned: "you might want to consider," "it could be worth thinking about," "one option might be." State the real position, even if the client could disagree with it.
 ✓ The hook names a real consequence — what breaks, gets wasted, or fails silently if this specific insight is ignored — not just that the insight exists. "This matters" is weaker than "this is why X won't work in 30 days."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE HOOK STANDARD — all six must pass (this is the bar the user rejects drafts against)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. LITERAL ANCHOR: opens on a real, specific detail from THIS job post (a named tool, number, constraint, phrase they used) — not a generic observation.
+2. NON-OBVIOUS: reveals something they didn't state outright. NEVER restate their own sentence back to them.
+   ❌ Client wrote "We need help with X" → Hook "You said you need help with X, and that's exactly…" (that's paraphrase, not insight)
+   ✅ Connect a detail they mentioned to a consequence or cause they didn't spell out themselves.
+3. REAL CONVICTION: states an actual position. Banned hedges: "you might want to consider", "it could be worth thinking about", "one option might be", "perhaps", "maybe you could". Say the real thing even if they could disagree.
+4. CONCRETE CONSEQUENCE: names what breaks / gets wasted / fails silently if the insight is ignored — not just "this matters".
+5. DIRECTLY RELEVANT: tied to the client's actual stated goal, not a tangent.
+6. REGISTER MATCHED: written in the assigned register and in a voice that matches how THEY wrote (terse vs detailed, casual vs formal).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 NO FABRICATION — ABSOLUTE HARD RULE (overrides "be specific")
