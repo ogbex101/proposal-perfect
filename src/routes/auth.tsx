@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CropCard, Eyebrow, Logo } from "@/components/blueprint";
+import { useAuth } from "@/lib/use-auth";
 type Mode = "login" | "signup";
 
 export const Route = createFileRoute("/auth")({
@@ -26,6 +27,12 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
 
   const isSignup = mode === "signup";
+  const auth = useAuth();
+
+  // Already signed in? Don't show the sign-in form again.
+  useEffect(() => {
+    if (auth.status === "in") navigate({ to: "/dashboard" });
+  }, [auth.status, navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

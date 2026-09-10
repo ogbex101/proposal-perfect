@@ -1747,6 +1747,18 @@ Return JSON:
     }
   });
 
+// Proposals are prose-only: never emit bullet points, hyphen/number list markers,
+// or horizontal rules. Applied to every AI step that returns proposal text.
+function stripMarkers(t: string): string {
+  return t
+    .split("\n")
+    .filter((line) => !/^\s*([_\-*]{3,})\s*$/.test(line))
+    .map((line) => line.replace(/^\s*[-•*]\s+/, "").replace(/^\s*\d+[).]\s+/, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 // ---------- Proposal Polisher ----------
 export const polishProposal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1776,7 +1788,8 @@ Do NOT rephrase, reorder, shorten, or change any words. Return the proposal with
 Return JSON: { "content": "<the cleaned proposal text>" }`,
         `PROPOSAL TO POLISH:\n${data.proposal}`,
       );
-      return result;
+      return { ...result, content: stripMarkers(result.content) };
+
     } catch (err) {
       handleAiError(err);
     }
@@ -1803,18 +1816,22 @@ export const injectPortfolioLinks = createServerFn({ method: "POST" })
         });
         return { content: filtered.join("\n").replace(/\n{3,}/g, "\n\n").trim() };
       }
-      const portfolioBlock = data.portfolioItems.map((p) => `- ${p.title}: ${p.url} — ${p.description}`).join("\n");
+      const portfolioBlock = data.portfolioItems
+        .map((p, i) => `${i + 1}) ${p.title} — ${p.url} — ${p.description}`)
+        .join("\n");
       const result = await structuredWith("verifier",
         z.object({ content: z.string() }),
         `You are editing a freelance proposal. Your ONLY task: update the portfolio paragraph (paragraph 2, right after the hook) to include EXACTLY these portfolio links, each with a one-line relevance note. Keep every other sentence and paragraph 100% identical — word for word. Do not add, remove, or change anything else. If there's no portfolio paragraph yet, insert one as paragraph 2.
 
-Portfolio links to include:
+Portfolio links to include (this numbered list is INPUT DATA ONLY — never reproduce it as a list):
 ${portfolioBlock}
+
+FORMATTING (absolute): the portfolio paragraph must be flowing prose in complete sentences. NO bullet points, NO hyphens or dashes as list markers, NO numbered lists, NO line breaks inside the paragraph. Weave each link into a sentence, e.g. "Closest to this is <title> (<url>), where <one-line relevance>." Keep it to one paragraph.
 
 Return JSON: { "content": "<the full updated proposal text>" }`,
         `CURRENT PROPOSAL:\n${data.proposal}`,
       );
-      return result;
+      return { ...result, content: stripMarkers(result.content) };
     } catch (err) {
       handleAiError(err);
     }

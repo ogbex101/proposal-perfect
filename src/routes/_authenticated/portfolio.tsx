@@ -58,6 +58,7 @@ type Item = {
   description: string;
   is_primary: boolean;
   is_favorite: boolean;
+  niche_tags?: string[] | null;
   created_at: string;
 };
 
@@ -153,6 +154,7 @@ function PortfolioPage() {
       description: item.description,
       is_primary: item.is_primary,
       is_favorite: item.is_favorite,
+      niche_tags: item.niche_tags ?? [],
       ...patch,
     });
 
