@@ -564,7 +564,7 @@ Based on the business intelligence, UX psychology analysis, and reverse-engineer
           ? `\n\nCOMPETITIVE INTELLIGENCE:\n${formatCompetitiveIntel(competitiveIntelligence)}`
           : "";
 
-        decisionEngine = await generateObjectWithProvider("writer", {
+        decisionEngine = (await generateObjectWithProvider("writer", {
           system:
             "This is the most important engine. Before recommending anything, force yourself to answer one question: 'If I could only change ONE thing on this website that would create the biggest business impact, what would it be?' That answer goes in singleBiggestImpactChange. Then evaluate every major section individually. Never recommend change for its own sake — respect good work. Every change must have a business justification tied to the core business insight.",
           prompt: `Make the final strategic decisions for this website redesign.
@@ -587,7 +587,7 @@ Never default to Redesign if Preserve or Improve would serve the business better
 
 STEP 3 — Build the complete decision framework: what should change, what should never change, biggest ROI, lowest effort for highest impact. The redesign strategy must be a single clear paragraph any designer could execute from. Every decision must tie back to: "${businessIntelligence.coreBusinessInsight}"`,
           schema: DecisionEngineSchema,
-        });
+        })) as DecisionEngineType;
       } catch {
         // Engine 7 failed; continue with undefined
       }
@@ -629,7 +629,7 @@ Write a creative brief that could be handed directly to a world-class design tea
           ? `\n\nCREATIVE BRIEF SUMMARY:\n${formatLovableBrief(lovablePrompt)}`
           : "";
 
-        outreach = await generateObjectWithProvider("writer", {
+        outreach = (await generateObjectWithProvider("writer", {
           system:
             "You are a senior creative director writing personally to a founder. You have done serious homework. You are NOT selling anything — you are starting a real conversation. Rules you must follow without exception: Never say 'The biggest issue is...' or 'The analysis shows...' or 'This website has...' or 'Your website could...'. Never compliment generically. Never sound like a freelancer or AI. Write like you spent time looking through their site and one thing genuinely stood out. Every sentence must feel specific to THIS company. The CTA must always be a question, never a statement. Think: 'I spent some time looking through your website.' 'One thing kept standing out.' 'It made me wonder...' 'I put together something.' Write naturally. Write humanly.",
           prompt: `Write a complete cold outreach package for this prospect.
@@ -667,7 +667,7 @@ Generate the following:
 
 6. SPAM AVOIDANCE TIPS specific to this outreach's content (not generic tips).`,
           schema: OutreachEngineSchema,
-        });
+        })) as OutreachEngineType;
       } catch {
         // Engine 9 failed; continue with undefined
       }
